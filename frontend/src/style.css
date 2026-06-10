@@ -142,13 +142,14 @@ input:focus {
   border-color: #36d9c7;
 }
 
-.quickmarks {
+.playback {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: auto auto 1fr;
   gap: 8px;
+  align-items: end;
 }
 
-.quickmarks button {
+.playback button {
   min-height: 42px;
   border: 1px solid rgba(54, 217, 199, 0.2);
   background: rgba(54, 217, 199, 0.08);
@@ -156,9 +157,22 @@ input:focus {
   cursor: pointer;
 }
 
-.quickmarks button:hover {
+.playback button:hover:not(:disabled),
+.playback button.active {
   border-color: rgba(54, 217, 199, 0.65);
   background: rgba(54, 217, 199, 0.14);
+}
+
+.playback button:disabled {
+  color: #697d82;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.speed-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .scrub {
@@ -207,8 +221,19 @@ input[type="range"] {
   line-height: 1;
 }
 
-.timing-card {
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.timing-card,
+.insight-feed {
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(9, 15, 18, 0.82);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.28);
 }
 
 .card-head {
@@ -231,7 +256,7 @@ input[type="range"] {
 
 table {
   width: 100%;
-  min-width: 880px;
+  min-width: 980px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -306,6 +331,43 @@ tbody tr:hover {
   border-color: rgba(255, 126, 46, 0.45);
 }
 
+.insight-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.insight {
+  display: grid;
+  gap: 6px;
+  min-height: 78px;
+  padding: 12px 12px 12px 14px;
+  border-left: 4px solid rgba(238, 183, 75, 0.85);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.insight-high {
+  border-left-color: rgba(242, 86, 86, 0.95);
+}
+
+.insight p,
+.no-insights {
+  margin: 0;
+}
+
+.insight p {
+  color: #f3fbfd;
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.insight span,
+.no-insights {
+  color: #8fa4aa;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .empty {
   display: grid;
   gap: 8px;
@@ -348,8 +410,9 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .quickmarks {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .playback,
+  .layout {
+    grid-template-columns: 1fr;
   }
 
   .metric {
