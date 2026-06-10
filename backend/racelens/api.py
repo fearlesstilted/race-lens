@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from racelens.events.models import load_jsonl
-from racelens.insights.traffic import detect_traffic_risk
+from racelens.insights.registry import detect_all
 from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
@@ -49,7 +49,7 @@ def state(session_id: str, at_ms: int) -> dict:
 def insights(session_id: str, at_ms: int) -> dict:
     """Active insights at a timestamp, computed from state <= at_ms only."""
     state = _engine(session_id).state_at(at_ms)
-    return {"at_ms": at_ms, "insights": detect_traffic_risk(state)}
+    return {"at_ms": at_ms, "insights": detect_all(state)}
 
 
 @app.get("/api/sessions/{session_id}/stream")
@@ -70,7 +70,7 @@ async def stream(
         while True:
             cur = min(t, end_ms)  # always emit the final state exactly at end_ms
             state = eng.state_at(cur)
-            state["active_insights"] = detect_traffic_risk(state)
+            state["active_insights"] = detect_all(state)
             yield f"data: {json.dumps(state)}\n\n"
             if cur >= end_ms:
                 break
