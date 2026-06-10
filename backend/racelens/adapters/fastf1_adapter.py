@@ -55,6 +55,7 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
               total_laps=int(total_laps) if total_laps else None)
     )
 
+    by_lap: dict[int, list[tuple[int, int, str]]] = {}  # lap → [(position, t_end, driver)]
     for _, lap in ses.laps.iterlaps():
         drv = str(lap["Driver"])
         lap_no = int(lap["LapNumber"])
@@ -67,10 +68,27 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
                   lap_time_ms=_ms(lap["LapTime"]))
         )
         if not pd.isna(lap["Position"]):
+            pos = int(lap["Position"])
             events.append(
                 event(sid, "PositionChanged", t_end, drv, lap=lap_no, source=src,
-                      position=int(lap["Position"]))
+                      position=pos)
             )
+            by_lap.setdefault(lap_no, []).append((pos, t_end, drv))
+
+    # Timing-screen gaps/intervals, derived from line-crossing times on the
+    # same lap number. Approximation: exact for cars on the lead lap, coarse
+    # for lapped cars — good enough for MVP strategy insights.
+    for lap_no, rows in by_lap.items():
+        rows.sort()
+        leader_t = rows[0][1]
+        prev_t = leader_t
+        for pos, t, drv in rows:
+            if pos > 1:
+                events.append(event(sid, "GapUpdated", t, drv, lap=lap_no, source=src,
+                                    gap_s=round((t - leader_t) / 1000, 3)))
+                events.append(event(sid, "IntervalUpdated", t, drv, lap=lap_no, source=src,
+                                    interval_s=round((t - prev_t) / 1000, 3)))
+            prev_t = t
 
         t_pit_in = _ms(lap["PitInTime"])
         if t_pit_in is not None:
@@ -107,6 +125,15 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
                       category=str(msg.get("Category", "")),
                       message=str(msg.get("Message", "")))
             )
+
+    # Rebase to race start: FastF1 session time begins with the data feed,
+    # ~1.5h before lights out. t0 = earliest lap-1 start (Time - LapTime).
+    lap1 = ses.laps[ses.laps["LapNumber"] == 1]
+    starts = (lap1["Time"] - lap1["LapTime"]).dropna()
+    t0_ms = _ms(starts.min()) if len(starts) else 0
+    if t0_ms:
+        for e in events:
+            e.session_time_ms = max(e.session_time_ms - t0_ms, 0)
 
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events

@@ -21,12 +21,14 @@ Full design: [PLAN.md](PLAN.md).
 - [x] Event envelope with deterministic IDs (`backend/racelens/events/`)
 - [x] Replay engine: `state_at(t)`, dedupe, stable ordering (`backend/racelens/replay/`)
 - [x] Determinism / dirty-data / no-future-leakage tests (`backend/tests/`)
-- [x] FastF1 ingestion adapter + CLI (`ingest`, `state`)
-- [ ] Fixture: real Monaco race ingested and committed
-- [ ] FastAPI: `/sessions/{id}/state?at_ms=...`
-- [ ] Simulated-live stream (SSE)
-- [ ] Insight engine MVP
-- [ ] Frontend (Vite + React + TS)
+- [x] FastF1 ingestion adapter + CLI (`ingest`, `state`) — session time rebased
+      to race start, gaps/intervals derived from line-crossing times
+- [x] Real fixture: Monaco 2024 race, 4919 events (regenerate via `ingest`)
+- [x] FastAPI: `/sessions`, `/state`, `/timeline`, `/insights`
+- [x] Simulated-live stream (SSE, `/stream?speed=N`)
+- [x] First insight: traffic risk (deterministic, no AI)
+- [ ] Insights: DRS train, pit window, undercut risk
+- [ ] Frontend (Vite + React + TS) — in progress, see CODEX_FRONTEND_PLAN.md
 
 ## Quickstart
 

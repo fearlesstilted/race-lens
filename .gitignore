@@ -8,3 +8,6 @@ venv/
 fastf1_cache/
 backend/fixtures/*.jsonl
 .env
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
