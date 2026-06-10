@@ -28,6 +28,7 @@ Full design: [PLAN.md](PLAN.md).
 - [x] Simulated-live stream (SSE, `/stream?speed=N`)
 - [x] First insight: traffic risk (deterministic, no AI)
 - [ ] Insights: DRS train, pit window, undercut risk
+- [x] Commentary renderer: EN/RU × beginner/pro templates, /commentary endpoint, no AI required
 - [ ] Frontend (Vite + React + TS) — in progress, see CODEX_FRONTEND_PLAN.md
 
 ## Quickstart

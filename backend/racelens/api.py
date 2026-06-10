@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
+from racelens.commentary.renderer import render_all
 from racelens.events.models import load_jsonl
 from racelens.insights.registry import detect_all
 from racelens.replay.engine import ReplayEngine
@@ -52,9 +53,17 @@ def insights(session_id: str, at_ms: int) -> dict:
     return {"at_ms": at_ms, "insights": detect_all(state)}
 
 
+@app.get("/api/sessions/{session_id}/commentary")
+def commentary(session_id: str, at_ms: int, lang: str = "en", level: str = "pro") -> dict:
+    """Active insights rendered as text. lang: en|ru, level: beginner|pro."""
+    state = _engine(session_id).state_at(at_ms)
+    return {"at_ms": at_ms, "items": render_all(detect_all(state), lang, level)}
+
+
 @app.get("/api/sessions/{session_id}/stream")
 async def stream(
-    session_id: str, speed: float = 10.0, from_ms: int = 0, tick_ms: int = 1000
+    session_id: str, speed: float = 10.0, from_ms: int = 0, tick_ms: int = 1000,
+    lang: str = "en", level: str = "pro",
 ) -> StreamingResponse:
     """Simulated live: replay the session as an SSE stream of states.
 
@@ -71,6 +80,7 @@ async def stream(
             cur = min(t, end_ms)  # always emit the final state exactly at end_ms
             state = eng.state_at(cur)
             state["active_insights"] = detect_all(state)
+            state["commentary"] = render_all(state["active_insights"], lang, level)
             yield f"data: {json.dumps(state)}\n\n"
             if cur >= end_ms:
                 break

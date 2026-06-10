@@ -52,6 +52,8 @@ def test_stream_simulated_live(client):
     last_state = json.loads(chunks[3].removeprefix("data:"))
     assert last_state["session_status"] == "finished"
     assert last_state["active_insights"][0]["driver_ids"] == ["LEC", "NOR"]
+    assert "commentary" in last_state
+    assert len(last_state["commentary"]) == len(last_state["active_insights"])
 
 
 def test_timeline(client):
