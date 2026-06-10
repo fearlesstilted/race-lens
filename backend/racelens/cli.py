@@ -19,6 +19,16 @@ def main() -> None:
     p_ingest.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
     p_ingest.add_argument("-o", "--out", required=True, help="output .jsonl path")
 
+    p_ingest_openf1 = sub.add_parser(
+        "ingest-openf1", help="ingest a session via OpenF1 (no API key required)"
+    )
+    p_ingest_openf1.add_argument("year", type=int)
+    p_ingest_openf1.add_argument("country", help='Country or circuit, e.g. "Monaco"')
+    p_ingest_openf1.add_argument(
+        "session", nargs="?", default="Race", help='Session name, e.g. "Race"'
+    )
+    p_ingest_openf1.add_argument("-o", "--out", required=True, help="output .jsonl path")
+
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
@@ -30,6 +40,18 @@ def main() -> None:
         from racelens.events.models import dump_jsonl
 
         events = ingest_session(args.year, args.gp, args.session)
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(dump_jsonl(events), encoding="utf-8")
+        print(f"{len(events)} events → {out}", file=sys.stderr)
+
+    elif args.cmd == "ingest-openf1":
+        from racelens.adapters.openf1_adapter import find_session, ingest_openf1
+        from racelens.events.models import dump_jsonl
+
+        session_key = find_session(args.year, args.country, args.session)
+        print(f"session_key={session_key}", file=sys.stderr)
+        events = ingest_openf1(session_key)
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_jsonl(events), encoding="utf-8")
