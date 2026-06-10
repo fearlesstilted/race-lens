@@ -5007,7 +5007,7 @@
 {"event_id":"9d34fe3584af7bfe","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":8655795,"lap":77,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"interval_s":6.189}}
 {"event_id":"a22239551e6333c0","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":8655795,"lap":77,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"lap_time_ms":75625}}
 {"event_id":"af76c53c653007a0","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":8655795,"lap":77,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"gap_s":138.877}}
+{"event_id":"24167722fc87d0e5","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":8785727,"source":"fastf1","confidence":"high","payload":{"status":"finished"}}
 {"event_id":"97446091ddd84d51","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":8785727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CHEQUERED FLAG"}}
-{"event_id":"b0130300a1e904a2","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":8785727,"source":"fastf1","confidence":"high","payload":{"status":"red_flag"}}
 {"event_id":"eea8fa3f9d42311f","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":8789727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 17:26:30"}}
 {"event_id":"bbde185fb1c5a502","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":8806727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"CAR 4 (NOR) TIME 1:17.296 DELETED - TRACK LIMITS AT TURN 10 LAP 78 17:26:06"}}

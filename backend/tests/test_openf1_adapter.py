@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -70,28 +71,44 @@ _STINTS = [
     {"driver_number": 4, "lap_start": 1, "lap_end": 2, "compound": "MEDIUM", "tyre_age_at_start": 0},
 ]
 
+# Interval fixture: 30 rows per driver at 3-second intervals starting 60 s
+# after session zero (13:01:00 = T0 + 60 s).  Timestamps are generated via
+# datetime + timedelta so seconds never exceed 59.
+_INTERVAL_BASE = datetime(2024, 5, 26, 13, 1, 0, tzinfo=timezone.utc)
+_INTERVAL_STEP_S = 3
+_INTERVAL_COUNT = 30  # 0..87 s → 30 rows, covering a 87-second window
+
 _INTERVALS = [
-    # dense stream — 30 entries per driver at 3-second intervals → only 2 should
-    # survive per driver (sampled ≤ 1 per 30 s)
     *(
         {
             "driver_number": 16,
-            "date": f"2024-05-26T13:01:{i:02d}.000",
-            "gap_to_leader": round(1.0 + i * 0.05, 3),
-            "interval": round(0.5 + i * 0.02, 3),
+            "date": (_INTERVAL_BASE + timedelta(seconds=i * _INTERVAL_STEP_S)).strftime(
+                "%Y-%m-%dT%H:%M:%S.000"
+            ),
+            "gap_to_leader": round(1.0 + i * _INTERVAL_STEP_S * 0.05, 3),
+            "interval": round(0.5 + i * _INTERVAL_STEP_S * 0.02, 3),
         }
-        for i in range(0, 90, 3)
+        for i in range(_INTERVAL_COUNT)
     ),
     *(
         {
             "driver_number": 4,
-            "date": f"2024-05-26T13:01:{i:02d}.000",
-            "gap_to_leader": round(2.0 + i * 0.05, 3),
-            "interval": round(1.0 + i * 0.02, 3),
+            "date": (_INTERVAL_BASE + timedelta(seconds=i * _INTERVAL_STEP_S)).strftime(
+                "%Y-%m-%dT%H:%M:%S.000"
+            ),
+            "gap_to_leader": round(2.0 + i * _INTERVAL_STEP_S * 0.05, 3),
+            "interval": round(1.0 + i * _INTERVAL_STEP_S * 0.02, 3),
         }
-        for i in range(0, 90, 3)
+        for i in range(_INTERVAL_COUNT)
     ),
 ]
+# Window: 0s .. 87s (step=3s, count=30).  T0 is lap-1 start = 13:00:00,
+# so interval rows land at session_time_ms 60_000 .. 147_000.
+# Sampling period = 30_000 ms.
+# Gate emits at: 60_000 (first), 90_000 (+30s), 120_000 (+30s).
+# After the loop the last valid row is at 147_000; it was not the last emitted
+# sample (120_000 ≠ 147_000), so the flush adds one more → 4 emits total.
+_EXPECTED_INTERVAL_EMITS = 4
 
 _RACE_CONTROL = [
     {"date": "2024-05-26T13:00:00.500", "category": "Flag", "message": "GREEN LIGHT - PIT EXIT OPEN", "flag": "GREEN"},
@@ -157,16 +174,23 @@ def test_lap1_start_rebased_to_zero():
 
 
 def test_interval_sampling():
-    """Intervals should be sampled to at most 1 per driver per 30 s."""
-    events = _ingest()
-    intervals = [e for e in events if e.type == "GapUpdated"]
-    lec_intervals = [e for e in intervals if e.driver_id == "LEC"]
-    nor_intervals = [e for e in intervals if e.driver_id == "NOR"]
+    """Intervals are sampled ≤ 1 per driver per 30 s, plus a final flush.
 
-    # 90 seconds of data at 3-second intervals → floor(90/30) = 3 samples
-    # (at t=0s, t=30s, t=60s of the interval window; actual counts may vary by 1)
-    assert len(lec_intervals) <= 4, f"Too many LEC intervals: {len(lec_intervals)}"
-    assert len(nor_intervals) <= 4, f"Too many NOR intervals: {len(nor_intervals)}"
+    Fixture: 30 rows × 3 s = 0..87 s window starting at session_time 60 s.
+    Sampling gates emit at 60_000, 90_000, 120_000 ms.
+    End-of-stream flush adds the last row (147_000 ms) → 4 GapUpdated per driver.
+    """
+    events = _ingest()
+    gaps = [e for e in events if e.type == "GapUpdated"]
+    lec_gaps = [e for e in gaps if e.driver_id == "LEC"]
+    nor_gaps = [e for e in gaps if e.driver_id == "NOR"]
+
+    assert len(lec_gaps) == _EXPECTED_INTERVAL_EMITS, (
+        f"Expected {_EXPECTED_INTERVAL_EMITS} LEC GapUpdated, got {len(lec_gaps)}"
+    )
+    assert len(nor_gaps) == _EXPECTED_INTERVAL_EMITS, (
+        f"Expected {_EXPECTED_INTERVAL_EMITS} NOR GapUpdated, got {len(nor_gaps)}"
+    )
 
 
 def test_ingest_seq_monotonic():

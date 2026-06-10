@@ -20,6 +20,7 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
+from racelens.adapters._common import STATUS_TABLE as _STATUS, message_to_status
 from racelens.events.models import Event, event
 
 _BASE = "https://api.openf1.org/v1"
@@ -41,12 +42,11 @@ def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
             with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data if isinstance(data, list) else []
-        except (urllib.error.URLError, OSError) as exc:
-            if attempt < _MAX_RETRIES:
-                time.sleep(1)
-                continue
+        except urllib.error.HTTPError:
+            # HTTP-level errors (4xx/5xx) are not transient — don't retry.
             raise
-        except Exception:
+        except (urllib.error.URLError, OSError):
+            # Network-level errors may be transient — retry once.
             if attempt < _MAX_RETRIES:
                 time.sleep(1)
                 continue
@@ -111,18 +111,7 @@ def _parse_iso(s: str | None) -> float | None:
     return None
 
 
-# ── Flag → session status mapping (mirrors fastf1_adapter) ───────────────────
-
-_STATUS = (
-    # More specific patterns must come before shorter ones that are substrings of them.
-    ("CHEQUERED FLAG", "finished"),
-    ("VIRTUAL SAFETY CAR DEPLOYED", "vsc"),
-    ("SAFETY CAR DEPLOYED", "safety_car"),
-    ("RED FLAG", "red_flag"),
-    ("GREEN LIGHT", "started"),
-    ("TRACK CLEAR", "started"),
-)
-
+# ── Flag → session status mapping (shared with fastf1_adapter via _common) ────
 
 _FLAG_MAP = {
     "RED": "red_flag",
@@ -309,7 +298,23 @@ def ingest_openf1(session_key: int) -> list[Event]:
     # ── Intervals → GapUpdated / IntervalUpdated (sampled ≤ 1 per driver / 30 s) ──
     interval_rows = _get("/intervals", {"session_key": session_key}) or []
     last_interval_t: dict[str, int] = {}  # driver → last emitted session_time_ms
+    # Track the last valid row seen per driver so we can emit a final sample.
+    last_interval_row: dict[str, tuple[int, Any, Any]] = {}  # driver → (t_ms, gap, interval)
     _INTERVAL_SAMPLE_MS = 30_000
+
+    def _parse_gap_value(x: Any) -> float | None:
+        """Parse a gap/interval value: numeric, "+N.NNN", or "+N LAP" formats.
+
+        Returns None for non-numeric values such as "+1 LAP".
+        Negative values (e.g. leader or timing artefacts) are valid and returned.
+        """
+        if x is None:
+            return None
+        s = str(x).lstrip("+")
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return None
 
     for row in interval_rows:
         dn = row.get("driver_number")
@@ -321,31 +326,30 @@ def ingest_openf1(session_key: int) -> list[Event]:
             continue
         t_ms = to_ms(date)
 
+        gap = _parse_gap_value(row.get("gap_to_leader"))
+        interval = _parse_gap_value(row.get("interval"))
+
+        # Record last valid row for this driver (for end-of-stream flush)
+        if gap is not None or interval is not None:
+            last_interval_row[drv] = (t_ms, gap, interval)
+
         # Sampling gate
         if t_ms - last_interval_t.get(drv, -_INTERVAL_SAMPLE_MS) < _INTERVAL_SAMPLE_MS:
             continue
         last_interval_t[drv] = t_ms
 
-        gap = row.get("gap_to_leader")
-        interval = row.get("interval")
+        if gap is not None:
+            events.append(mk(sid, "GapUpdated", t_ms, drv, gap_s=round(gap, 3)))
+        if interval is not None:
+            events.append(mk(sid, "IntervalUpdated", t_ms, drv, interval_s=round(interval, 3)))
 
-        if gap is not None and str(gap).replace(".", "", 1).lstrip("+").isdigit() or (
-            gap is not None and isinstance(gap, (int, float))
-        ):
-            try:
-                events.append(mk(sid, "GapUpdated", t_ms, drv,
-                                 gap_s=round(float(gap), 3)))
-            except (TypeError, ValueError):
-                pass
-
-        if interval is not None and str(interval).replace(".", "", 1).lstrip("+").isdigit() or (
-            interval is not None and isinstance(interval, (int, float))
-        ):
-            try:
-                events.append(mk(sid, "IntervalUpdated", t_ms, drv,
-                                 interval_s=round(float(interval), 3)))
-            except (TypeError, ValueError):
-                pass
+    # Emit final measurement for each driver if it was not the last sampled point
+    for drv, (t_ms, gap, interval) in last_interval_row.items():
+        if last_interval_t.get(drv) != t_ms:
+            if gap is not None:
+                events.append(mk(sid, "GapUpdated", t_ms, drv, gap_s=round(gap, 3)))
+            if interval is not None:
+                events.append(mk(sid, "IntervalUpdated", t_ms, drv, interval_s=round(interval, 3)))
 
     # ── Race control → RaceControlMessage + SessionStatusChanged ─────────────
     rc_rows = _get("/race_control", {"session_key": session_key}) or []
@@ -362,11 +366,7 @@ def ingest_openf1(session_key: int) -> list[Event]:
                          category=category, message=message, flag=flag))
 
         # Try message text first (for descriptive messages), then flag field
-        status: str | None = None
-        for needle, st in _STATUS:
-            if needle in message.upper():
-                status = st
-                break
+        status: str | None = message_to_status(message)
         if status is None:
             status = _flag_to_status(flag)
         if status:
