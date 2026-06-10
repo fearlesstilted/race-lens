@@ -26,8 +26,7 @@ Full design: [PLAN.md](PLAN.md).
 - [x] Real fixture: Monaco 2024 race, 4919 events (regenerate via `ingest`)
 - [x] FastAPI: `/sessions`, `/state`, `/timeline`, `/insights`
 - [x] Simulated-live stream (SSE, `/stream?speed=N`)
-- [x] First insight: traffic risk (deterministic, no AI)
-- [ ] Insights: DRS train, pit window, undercut risk
+- [x] Insights: traffic risk, DRS train, pit window, undercut risk
 - [x] Commentary renderer: EN/RU × beginner/pro templates, /commentary endpoint, no AI required
 - [ ] Frontend (Vite + React + TS) — in progress, see CODEX_FRONTEND_PLAN.md
 

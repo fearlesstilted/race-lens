@@ -56,6 +56,14 @@ def test_stream_simulated_live(client):
     assert len(last_state["commentary"]) == len(last_state["active_insights"])
 
 
+def test_stream_speed_zero_returns_422(client):
+    r = client.get(
+        "/api/sessions/2024_mini_race/stream",
+        params={"speed": 0, "tick_ms": 1000},
+    )
+    assert r.status_code == 422
+
+
 def test_timeline(client):
     t = client.get("/api/sessions/2024_mini_race/timeline").json()
     assert t["start_ms"] == 0

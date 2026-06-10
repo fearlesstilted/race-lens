@@ -12,7 +12,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from racelens.commentary.renderer import render_all
@@ -42,19 +42,19 @@ def list_sessions() -> list[dict]:
 
 
 @app.get("/api/sessions/{session_id}/state")
-def state(session_id: str, at_ms: int) -> dict:
+def state(session_id: str, at_ms: int = Query(ge=0)) -> dict:
     return _engine(session_id).state_at(at_ms)
 
 
 @app.get("/api/sessions/{session_id}/insights")
-def insights(session_id: str, at_ms: int) -> dict:
+def insights(session_id: str, at_ms: int = Query(ge=0)) -> dict:
     """Active insights at a timestamp, computed from state <= at_ms only."""
     state = _engine(session_id).state_at(at_ms)
     return {"at_ms": at_ms, "insights": detect_all(state)}
 
 
 @app.get("/api/sessions/{session_id}/commentary")
-def commentary(session_id: str, at_ms: int, lang: str = "en", level: str = "pro") -> dict:
+def commentary(session_id: str, at_ms: int = Query(ge=0), lang: str = "en", level: str = "pro") -> dict:
     """Active insights rendered as text. lang: en|ru, level: beginner|pro."""
     state = _engine(session_id).state_at(at_ms)
     return {"at_ms": at_ms, "items": render_all(detect_all(state), lang, level)}
@@ -71,6 +71,8 @@ async def stream(
     Each message carries full state + active insights, so the frontend
     treats replay and live identically.
     """
+    if speed <= 0 or tick_ms <= 0:
+        raise HTTPException(422, "speed and tick_ms must be positive")
     eng = _engine(session_id)
     end_ms = eng.events[-1].session_time_ms if eng.events else 0
 

@@ -75,6 +75,19 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
             )
             by_lap.setdefault(lap_no, []).append((pos, t_end, drv))
 
+        t_pit_in = _ms(lap["PitInTime"])
+        if t_pit_in is not None:
+            events.append(event(sid, "PitIn", t_pit_in, drv, lap=lap_no, source=src))
+        t_pit_out = _ms(lap["PitOutTime"])
+        if t_pit_out is not None:
+            events.append(event(sid, "PitOut", t_pit_out, drv, lap=lap_no, source=src))
+            if not pd.isna(lap["Compound"]):
+                events.append(
+                    event(sid, "TyreStintUpdated", t_pit_out, drv, lap=lap_no, source=src,
+                          compound=str(lap["Compound"]),
+                          age_laps=int(lap["TyreLife"]) if not pd.isna(lap["TyreLife"]) else 0)
+                )
+
     # Timing-screen gaps/intervals, derived from line-crossing times on the
     # same lap number. Approximation: exact for cars on the lead lap, coarse
     # for lapped cars — good enough for MVP strategy insights.
@@ -89,19 +102,6 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
                 events.append(event(sid, "IntervalUpdated", t, drv, lap=lap_no, source=src,
                                     interval_s=round((t - prev_t) / 1000, 3)))
             prev_t = t
-
-        t_pit_in = _ms(lap["PitInTime"])
-        if t_pit_in is not None:
-            events.append(event(sid, "PitIn", t_pit_in, drv, lap=lap_no, source=src))
-        t_pit_out = _ms(lap["PitOutTime"])
-        if t_pit_out is not None:
-            events.append(event(sid, "PitOut", t_pit_out, drv, lap=lap_no, source=src))
-            if not pd.isna(lap["Compound"]):
-                events.append(
-                    event(sid, "TyreStintUpdated", t_pit_out, drv, lap=lap_no, source=src,
-                          compound=str(lap["Compound"]),
-                          age_laps=int(lap["TyreLife"]) if not pd.isna(lap["TyreLife"]) else 0)
-                )
 
     # Starting tyres: first stint per driver has no preceding PitOut
     for drv in ses.laps["Driver"].unique():

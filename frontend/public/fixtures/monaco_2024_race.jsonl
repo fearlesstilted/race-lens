@@ -48,6 +48,22 @@
 {"event_id":"f01ccbb2b0784dc9","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 12"}}
 {"event_id":"f38681fdf56d1f7e","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"position":8}}
 {"event_id":"f5bd3db3da66b2c1","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
+{"event_id":"d842215d38da3efb","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":99480,"lap":1,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"c4d38144d3659ef2","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":102147,"lap":1,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"82d1ba4215c51b1b","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":103606,"lap":1,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"38464cc5931a102f","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":105376,"lap":1,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"bcbfba24e45bdbf6","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":107229,"lap":1,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"fbf6742b300f38c5","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":109520,"lap":1,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"577d90cd9645192d","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":112100,"lap":1,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"f035496ac344802a","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":114715,"lap":1,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"03afd0c2431ad3e5","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":116981,"lap":1,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"7cf1894e3af173ec","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":120220,"lap":1,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"eb585d0078789747","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":123076,"lap":1,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"ad0f689d79dc92c6","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":124829,"lap":1,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"fd9aa98e476c933a","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":126324,"lap":1,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"dcc14f1ad2f50770","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":128655,"lap":1,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"3a2375a49a441d0e","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":136788,"lap":1,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"85ffe9496a392bec","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":140580,"lap":1,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"28f3d35c2cb3a56c","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":190727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"GREEN LIGHT - PIT EXIT OPEN"}}
 {"event_id":"ff26c0fc9a1b6709","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":190727,"source":"fastf1","confidence":"high","payload":{"status":"started"}}
 {"event_id":"4f8b1ac2d54ed806","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":215727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 3"}}
@@ -87,67 +103,99 @@
 {"event_id":"7944f58f1f84cc69","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2456366,"lap":1,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2456330}}
 {"event_id":"7c87045894d25d5c","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2456366,"lap":1,"driver_id":"PER","source":"fastf1","confidence":"high","payload":{"lap_time_ms":null}}
 {"event_id":"9e8ba2d73f65e295","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2456366,"lap":1,"driver_id":"MAG","source":"fastf1","confidence":"high","payload":{"lap_time_ms":null}}
+{"event_id":"aca6e708259e31ce","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2457229,"lap":2,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":1}}
+{"event_id":"f8b3b1458bf6edf6","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2457229,"lap":2,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"0673965849414189","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2458867,"lap":1,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2458744}}
 {"event_id":"80a7d36e0d867391","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2458867,"lap":1,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"gap_s":2.501}}
 {"event_id":"8eb85ce18bb9bf3c","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2458867,"lap":1,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"position":2}}
 {"event_id":"cad8c8a84f2104bd","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2458867,"lap":1,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"interval_s":2.501}}
+{"event_id":"98dde767775055f6","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2459588,"lap":2,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"d81512196319f068","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2459588,"lap":2,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
 {"event_id":"2736b2493c5b670a","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2462787,"lap":1,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2462721}}
 {"event_id":"47198dc5aa2be2a9","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2462787,"lap":1,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"position":3}}
 {"event_id":"517cc0ca5b337cc6","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2462787,"lap":1,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"interval_s":3.92}}
 {"event_id":"b3a7be06d2a07843","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2462787,"lap":1,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"gap_s":6.421}}
+{"event_id":"c94592b56e88d613","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2463601,"lap":2,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":1}}
+{"event_id":"f790a2be187cd41b","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2463601,"lap":2,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"92f862d2ac9d2e25","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2468288,"lap":1,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"interval_s":5.501}}
 {"event_id":"e3a8b2b98869a23a","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2468288,"lap":1,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2468042}}
 {"event_id":"e6ac4d201c29a61d","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2468288,"lap":1,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"gap_s":11.922}}
 {"event_id":"ff35044de7692f30","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2468288,"lap":1,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"position":4}}
+{"event_id":"5fe177953eadf324","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2468940,"lap":2,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"c81e9c5a5c17c9bb","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2468940,"lap":2,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
 {"event_id":"1ce94e6b740debbd","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2474014,"lap":1,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"interval_s":5.726}}
 {"event_id":"5f6cb8db351f02cd","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2474014,"lap":1,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"position":5}}
 {"event_id":"8d6d169ee4289fb5","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2474014,"lap":1,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"gap_s":17.648}}
 {"event_id":"e06f70e8ded55fa1","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2474014,"lap":1,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2473884}}
+{"event_id":"24997af8cdd33c8b","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2474859,"lap":2,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"6600881c0dd7a9bf","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2474859,"lap":2,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
 {"event_id":"0db4ce8dc0ab13b6","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2479120,"lap":1,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2478944}}
 {"event_id":"0f41105c384c84c1","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2479120,"lap":1,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"position":6}}
 {"event_id":"a5ae62cb83f159f6","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2479120,"lap":1,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"gap_s":22.754}}
 {"event_id":"b59753a808425606","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2479120,"lap":1,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"interval_s":5.106}}
+{"event_id":"10a752e99a703295","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2479708,"lap":2,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
+{"event_id":"64e1be8a5860fc56","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2479708,"lap":2,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"462fcc5194b4e550","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2483956,"lap":1,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"gap_s":27.59}}
 {"event_id":"4c9419984e15b4a6","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2483956,"lap":1,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"interval_s":4.836}}
 {"event_id":"56ba4c394987d020","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2483956,"lap":1,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2483804}}
 {"event_id":"6cb84f06baf78de1","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2483956,"lap":1,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"position":7}}
+{"event_id":"59f8ae10569f7863","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2484663,"lap":2,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"f592ab6f0cabbbe7","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2484663,"lap":2,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
 {"event_id":"01df9b43e1e644b1","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2488609,"lap":1,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"position":8}}
 {"event_id":"723398a2b6b31f65","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2488609,"lap":1,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"interval_s":4.653}}
 {"event_id":"d75e83fa4ac4dbe9","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2488609,"lap":1,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2488609}}
 {"event_id":"f0066a1372f391df","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2488609,"lap":1,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"gap_s":32.243}}
+{"event_id":"932ec2b52d001608","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2489437,"lap":2,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
+{"event_id":"c734345870cfae77","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2489437,"lap":2,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"3b6b404b35cfa9fe","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2494817,"lap":1,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2494817}}
 {"event_id":"3c317b74ef70695e","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2494817,"lap":1,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"position":9}}
 {"event_id":"e25344fbe9bb9119","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2494817,"lap":1,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"gap_s":38.451}}
 {"event_id":"f8cedd3889a0858b","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2494817,"lap":1,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"interval_s":6.208}}
+{"event_id":"b52357a9b54d3ebe","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2495769,"lap":2,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":1}}
+{"event_id":"db5bca8fc4dd8e56","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2495769,"lap":2,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"3267b0bd4e822995","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2497695,"lap":1,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"gap_s":41.329}}
 {"event_id":"871c21f14b855ed9","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2497695,"lap":1,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2497695}}
 {"event_id":"93cae5f571f0c832","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2497695,"lap":1,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"position":10}}
 {"event_id":"ff9a096e55902feb","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2497695,"lap":1,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"interval_s":2.878}}
+{"event_id":"6c71e3aabb0121cf","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2498572,"lap":2,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
+{"event_id":"ce47ec5a349d9030","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2498572,"lap":2,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"113a23569fb507ed","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2502648,"lap":1,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"position":11}}
 {"event_id":"41b726ef6c59f8dd","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2502648,"lap":1,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"interval_s":4.953}}
 {"event_id":"5477660c385e276e","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2502648,"lap":1,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"gap_s":46.282}}
 {"event_id":"b15a0e89faf0dcbe","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2502648,"lap":1,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2502648}}
+{"event_id":"353f693233afb478","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2503588,"lap":2,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"f7b82f464e5ce884","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2503588,"lap":2,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":2}}
 {"event_id":"644cc239588c9c07","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2507607,"lap":1,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"position":12}}
 {"event_id":"6532692b822b8200","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2507607,"lap":1,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2507607}}
 {"event_id":"dc019498cc24114d","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2507607,"lap":1,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"interval_s":4.959}}
 {"event_id":"df7ebb5857749e61","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2507607,"lap":1,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"gap_s":51.241}}
+{"event_id":"732d85538db5c41a","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2508551,"lap":2,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
+{"event_id":"f5c80ca19772b4db","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2508551,"lap":2,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"71f5a5f17550e535","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2513184,"lap":1,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"position":13}}
 {"event_id":"8978024708026f1b","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2513184,"lap":1,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"interval_s":5.577}}
 {"event_id":"8a87e976385ca70d","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2513184,"lap":1,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"gap_s":56.818}}
 {"event_id":"e2605ccdb5bfba3d","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2513184,"lap":1,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2513184}}
+{"event_id":"7d6c4dc9ae7de204","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2514078,"lap":2,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"d3baa465c2a0c7d1","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2514078,"lap":2,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":2}}
 {"event_id":"52ce1e6c6f220f67","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2516858,"lap":1,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"gap_s":60.492}}
 {"event_id":"6074d3425613e957","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2516858,"lap":1,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2516858}}
 {"event_id":"bdd0aa20d481cc99","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2516858,"lap":1,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"position":14}}
 {"event_id":"bec353f7d1fd6e84","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2516858,"lap":1,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"interval_s":3.674}}
+{"event_id":"a054face23ca025d","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2517752,"lap":2,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"ff9b0fcb154c6c70","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2517752,"lap":2,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
 {"event_id":"a16d6e17e837f93c","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2520727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"RACE WILL RESUME AT 15:44 - STANDING START PROCEDURE"}}
 {"event_id":"13fc362bfd8b3edb","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2521748,"lap":1,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"position":15}}
 {"event_id":"8b717afcf2d03172","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2521748,"lap":1,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"interval_s":4.89}}
 {"event_id":"ee0ce1ef9da39959","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2521748,"lap":1,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"gap_s":65.382}}
 {"event_id":"fa4a4f588d74d55a","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2521748,"lap":1,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2521748}}
+{"event_id":"3e489da19c736220","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2522488,"lap":2,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
+{"event_id":"727e0f82deecd4eb","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2522488,"lap":2,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"08c40ac35decfb4e","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":2526253,"lap":1,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"interval_s":4.505}}
 {"event_id":"599342266c03efc5","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":2526253,"lap":1,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"gap_s":69.887}}
 {"event_id":"7f1d2dd8c35a986a","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2526253,"lap":1,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":2526253}}
 {"event_id":"890b7a219c9e2282","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2526253,"lap":1,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"position":16}}
+{"event_id":"109028c8173cda9d","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":2527097,"lap":2,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":1}}
+{"event_id":"2d9d0309ebb703a2","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":2527097,"lap":2,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"e8cccfbc2bb138f2","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2624727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"ALL CARS MAY OVERTAKE THE SAFETY CAR"}}
 {"event_id":"c88e688b38d8b090","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":2634187,"lap":2,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"lap_time_ms":null}}
 {"event_id":"d084224bc5860e41","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":2634187,"lap":2,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"position":1}}
@@ -990,6 +1038,7 @@
 {"event_id":"57e9aa9c7e377da0","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":3705865,"lap":15,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"gap_s":18.524}}
 {"event_id":"b8b2bcf1c035cda3","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":3705865,"lap":15,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"position":8}}
 {"event_id":"bca5ba253ca95b41","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":3705865,"lap":15,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"interval_s":2.686}}
+{"event_id":"7db03700e879de8f","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":3706521,"lap":15,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"09f799fb9b37c78d","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":3706929,"lap":15,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"interval_s":1.064}}
 {"event_id":"2b28d7a087591af7","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":3706929,"lap":15,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"gap_s":19.588}}
 {"event_id":"7c82a2bd92a9f8af","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":3706929,"lap":15,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"lap_time_ms":80591}}
@@ -1022,6 +1071,8 @@
 {"event_id":"8896eb24339e3f0c","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":3730017,"lap":15,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"interval_s":15.53}}
 {"event_id":"a302821e391e4c66","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":3730017,"lap":15,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"position":16}}
 {"event_id":"a49edfbe5b432f87","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":3730017,"lap":15,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"gap_s":42.676}}
+{"event_id":"6e96b177d5fdf8e8","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":3730788,"lap":16,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"a25d52b8d9ae58ac","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":3730788,"lap":16,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
 {"event_id":"567a95f6e7f666e7","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":3767497,"lap":16,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"lap_time_ms":80156}}
 {"event_id":"f2956c4b689e7841","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":3767497,"lap":16,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"position":1}}
 {"event_id":"1600af4e8fdce81c","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":3768058,"lap":16,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"interval_s":0.561}}
@@ -2672,6 +2723,7 @@
 {"event_id":"70a3a25af6a9256f","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":5875021,"lap":42,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"position":9}}
 {"event_id":"a1dda38630364dd1","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":5875021,"lap":42,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"interval_s":2.314}}
 {"event_id":"afe7ab30242bc3ab","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":5875021,"lap":42,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"gap_s":57.469}}
+{"event_id":"2038aad1e24154bc","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":5875137,"lap":42,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"091c46fd38f55a88","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":5880782,"lap":42,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"position":10}}
 {"event_id":"5ea601da852b40a1","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":5880782,"lap":42,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"interval_s":5.761}}
 {"event_id":"b8a868c36927df11","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":5880782,"lap":42,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"lap_time_ms":79977}}
@@ -2686,6 +2738,8 @@
 {"event_id":"681c34e5e0bd5cb8","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":5898457,"lap":42,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"gap_s":80.905}}
 {"event_id":"71997321942c66f4","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":5898457,"lap":42,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"lap_time_ms":97062}}
 {"event_id":"d41ac8dc7ca48726","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":5898457,"lap":42,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"position":11}}
+{"event_id":"6fdd4f885c663426","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":5899214,"lap":43,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"a8d33963cedf950c","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":5899214,"lap":43,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":3}}
 {"event_id":"2217a795c410b63f","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":5900026,"lap":43,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"interval_s":2.012}}
 {"event_id":"3624dc5354ece6fb","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":5900026,"lap":43,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"position":3}}
 {"event_id":"4e72f3ba3454441d","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":5900026,"lap":43,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"lap_time_ms":79594}}
@@ -3072,6 +3126,7 @@
 {"event_id":"4a8344c50f0e6552","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6370470,"lap":49,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"interval_s":0.772}}
 {"event_id":"79d84ff087dc583c","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6370470,"lap":49,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"position":4}}
 {"event_id":"ad2c5fc8706b952f","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":6370470,"lap":49,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"gap_s":4.037}}
+{"event_id":"4c51349a87bd015d","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":6376709,"lap":48,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"6af6b00d2816f14a","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6380526,"lap":48,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":80315}}
 {"event_id":"d1743e0465a5e2bc","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6380526,"lap":48,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"position":11}}
 {"event_id":"d69ca2e2d726ce2d","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6380526,"lap":48,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"interval_s":19.423}}
@@ -3108,6 +3163,8 @@
 {"event_id":"0a110d70ba5bdc8f","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6404079,"lap":48,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"position":16}}
 {"event_id":"264238f344a153b2","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":6404079,"lap":48,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"gap_s":116.152}}
 {"event_id":"bf8b645218e9c828","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6404079,"lap":48,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"interval_s":13.676}}
+{"event_id":"0b67ed5181c88730","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":6404834,"lap":49,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"compound":"SOFT","age_laps":1}}
+{"event_id":"33df078f54fd391f","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":6404834,"lap":49,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"1e3cd726213f3e5e","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6434752,"lap":49,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"position":8}}
 {"event_id":"30c4dcd6e1c5b92e","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6434752,"lap":49,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"lap_time_ms":80109}}
 {"event_id":"6f9c1536d16ae312","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6434752,"lap":49,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"interval_s":45.165}}
@@ -3200,6 +3257,7 @@
 {"event_id":"94f180c2e7f55c8d","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":6539697,"lap":50,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"gap_s":95.079}}
 {"event_id":"aae75bc839566b45","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6539697,"lap":50,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"position":11}}
 {"event_id":"f1d1f6525bf78afc","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6539697,"lap":50,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":79334}}
+{"event_id":"210f705e39e18a5e","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":6539911,"lap":51,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"4ac78e633aa770e4","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6540547,"lap":50,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"interval_s":0.85}}
 {"event_id":"623c3adad7e5b83c","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6540547,"lap":50,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"lap_time_ms":79796}}
 {"event_id":"7162274aabb6ea47","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":6540547,"lap":50,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"gap_s":95.929}}
@@ -3234,6 +3292,8 @@
 {"event_id":"35086725e9c7971c","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6563257,"lap":51,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"lap_time_ms":95209}}
 {"event_id":"be258e86f28badef","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6563257,"lap":51,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"interval_s":18.509}}
 {"event_id":"d2a4f340fc016bfa","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6563257,"lap":51,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"position":7}}
+{"event_id":"09288179451a8b00","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":6564002,"lap":52,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"14ded0595cd6f127","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":6564002,"lap":52,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
 {"event_id":"53de006999c83522","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":6568727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"WAVED BLUE FLAG FOR CAR 2 (SAR) TIMED AT 16:49:29"}}
 {"event_id":"e6e1a347d959d920","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":6572727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 16:49:32"}}
 {"event_id":"61e9e30e1a01b8e3","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":6576727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"WAVED BLUE FLAG FOR CAR 24 (ZHO) TIMED AT 16:49:37"}}
@@ -3266,6 +3326,7 @@
 {"event_id":"a525ffb3553c435b","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6607133,"lap":51,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"interval_s":13.299}}
 {"event_id":"d78e3673151406d7","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6607133,"lap":51,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"position":10}}
 {"event_id":"98c5cdbbcfe36926","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":6607727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"CAR 18 (STR) TIME 1:49.132 DELETED - TRACK LIMITS AT TURN 16 LAP 48 16:49:14"}}
+{"event_id":"60a12e0f5d559877","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":6615803,"lap":52,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"19cc72ed5f254329","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6620333,"lap":51,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"position":11}}
 {"event_id":"789c56dbd824ad93","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6620333,"lap":51,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":80636}}
 {"event_id":"9b1a9bd24d10d8b1","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6620333,"lap":51,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"interval_s":13.2}}
@@ -3298,6 +3359,8 @@
 {"event_id":"8bf86ae014b0dc95","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":6638653,"lap":52,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"lap_time_ms":93905}}
 {"event_id":"9aa257d2e17d8214","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":6638653,"lap":52,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"gap_s":37.934}}
 {"event_id":"c9a528d2011d12f9","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6638653,"lap":52,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"interval_s":17.044}}
+{"event_id":"89b38ebfaf657f86","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":6639469,"lap":53,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{}}
+{"event_id":"9231eb62f2238681","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":6639469,"lap":53,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":2}}
 {"event_id":"5a313bcefc7d666d","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":6642959,"lap":52,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"interval_s":4.306}}
 {"event_id":"77aa03c4b6706325","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":6642959,"lap":52,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"gap_s":42.24}}
 {"event_id":"9b54715aff159837","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":6642959,"lap":52,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"position":7}}
@@ -3684,6 +3747,7 @@
 {"event_id":"5fa1d2adc778cc2a","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":7111562,"lap":57,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"position":14}}
 {"event_id":"6b8429e25a6febd4","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":7111562,"lap":57,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"lap_time_ms":76914}}
 {"event_id":"f4f9d70b609f6f5b","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":7111562,"lap":57,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"gap_s":123.388}}
+{"event_id":"fbe584cbb159d842","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":7112946,"lap":57,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"638d944047c5dcd3","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":7120029,"lap":57,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":81119}}
 {"event_id":"73f7d165140f8eea","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":7120029,"lap":57,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"gap_s":131.855}}
 {"event_id":"916f6623fe6fcb51","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":7120029,"lap":57,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"position":15}}
@@ -3693,6 +3757,8 @@
 {"event_id":"88aa71c272a38958","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":7136487,"lap":57,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"interval_s":16.458}}
 {"event_id":"a0044ee76e83bbc9","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":7136487,"lap":57,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"position":16}}
 {"event_id":"ab0febbd78baa39a","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":7136487,"lap":57,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"lap_time_ms":97746}}
+{"event_id":"b8537e4890e8f965","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":7137327,"lap":58,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
+{"event_id":"e1185d3d6d647e41","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":7137327,"lap":58,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"10a6ebba9c51e3ec","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":7142236,"lap":59,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"position":1}}
 {"event_id":"580d35cb229aff89","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":7142236,"lap":59,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"lap_time_ms":77034}}
 {"event_id":"29102cd0a726f3e2","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":7142727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"WAVED BLUE FLAG FOR CAR 3 (RIC) TIMED AT 16:59:03"}}
@@ -4530,6 +4596,7 @@
 {"event_id":"9682d245ea7a2c27","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":8145098,"lap":70,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"position":15}}
 {"event_id":"cb593768d047f088","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":8145098,"lap":70,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"gap_s":161.341}}
 {"event_id":"d7a993cf0b6bcfd4","session_id":"2024_monaco_r","type":"IntervalUpdated","session_time_ms":8145098,"lap":70,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"interval_s":16.446}}
+{"event_id":"67b5f497e3bfa37e","session_id":"2024_monaco_r","type":"PitIn","session_time_ms":8153735,"lap":70,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"3ab49fc42bdb1bfb","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":8155146,"lap":72,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"position":5}}
 {"event_id":"6af2c01a44e16447","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":8155146,"lap":72,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"lap_time_ms":75839}}
 {"event_id":"7475c0a952f051e8","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":8155146,"lap":72,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"gap_s":20.68}}
@@ -4546,6 +4613,8 @@
 {"event_id":"90f85f042a97c796","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":8177337,"lap":70,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"lap_time_ms":100898}}
 {"event_id":"a34a900830f8a6a7","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":8177337,"lap":70,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"gap_s":193.58}}
 {"event_id":"ac83b49f55e56cca","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":8177337,"lap":70,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"position":16}}
+{"event_id":"63d0b7bea70ef75d","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":8178183,"lap":71,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"compound":"SOFT","age_laps":1}}
+{"event_id":"867513e5979e89d4","session_id":"2024_monaco_r","type":"PitOut","session_time_ms":8178183,"lap":71,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{}}
 {"event_id":"7c74354a9336cc62","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":8181628,"lap":71,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"gap_s":122.709}}
 {"event_id":"9d33b18310f0bed9","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":8181628,"lap":71,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"lap_time_ms":78258}}
 {"event_id":"c37b3f4741f242d7","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":8181628,"lap":71,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"position":8}}
