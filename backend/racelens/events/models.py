@@ -38,6 +38,10 @@ class Event(BaseModel):
     driver_id: Optional[str] = None
     source: str = "fixture"
     confidence: str = "high"
+    # Monotonic arrival order, assigned at ingestion. Replay uses session_time_ms
+    # (event time); near-live watermarks use ingest_seq (processing time), so
+    # late-arriving events can revise state without breaking determinism.
+    ingest_seq: Optional[int] = None
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

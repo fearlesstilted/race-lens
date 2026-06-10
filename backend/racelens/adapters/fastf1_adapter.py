@@ -20,6 +20,15 @@ def _ms(td) -> int | None:
     return int(td.total_seconds() * 1000)
 
 
+def _timestamp_to_session_ms(ts, session_zero) -> int | None:
+    """Absolute timestamp → session-relative milliseconds."""
+    import pandas as pd
+
+    if ts is None or pd.isna(ts):
+        return None
+    return _ms(pd.Timestamp(ts) - session_zero)
+
+
 def session_id_for(year: int, gp: str, session: str) -> str:
     return f"{year}_{gp.lower().replace(' ', '_')}_{session.lower()}"
 
@@ -88,8 +97,9 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
 
     # Race control messages ride along for the future insight engine
     if ses.race_control_messages is not None:
+        session_zero = pd.Timestamp(ses.date) - pd.Timedelta(ses.session_start_time)
         for _, msg in ses.race_control_messages.iterrows():
-            t = _ms(msg.get("Time") - ses.session_start_time) if "Time" in msg else None
+            t = _timestamp_to_session_ms(msg.get("Time"), session_zero) if "Time" in msg else None
             if t is None or t < 0:
                 continue
             events.append(

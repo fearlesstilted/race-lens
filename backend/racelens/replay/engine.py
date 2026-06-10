@@ -9,6 +9,8 @@ possible at the API layer: serve state_at(t) and nothing else.
 """
 from __future__ import annotations
 
+import bisect
+import copy
 import hashlib
 import json
 from typing import Any, Iterable
@@ -39,7 +41,7 @@ class ReplayEngine:
     order regardless of input order.
     """
 
-    def __init__(self, events: Iterable[Event]):
+    def __init__(self, events: Iterable[Event], snapshot_interval: int = 200):
         seen: set[str] = set()
         unique: list[Event] = []
         duplicates = 0
@@ -52,13 +54,25 @@ class ReplayEngine:
         self.events = sorted(unique, key=lambda e: (e.session_time_ms, e.event_id))
         self.duplicates_dropped = duplicates
         self.session_id = self.events[0].session_id if self.events else None
+        self._times = [e.session_time_ms for e in self.events]
 
-    # ── State construction ────────────────────────────────────────────────
+        # Snapshots every N applied events make state_at ~O(N) instead of
+        # O(total events) — replay determinism is unaffected, the snapshot is
+        # just a memoized prefix.
+        self._snap_keys: list[int] = [0]
+        self._snapshots: list[dict[str, Any]] = [self._initial_state()]
+        if snapshot_interval > 0:
+            state = copy.deepcopy(self._snapshots[0])
+            for i, e in enumerate(self.events, start=1):
+                self._apply(state, e)
+                if i % snapshot_interval == 0:
+                    self._snap_keys.append(i)
+                    self._snapshots.append(copy.deepcopy(state))
 
-    def state_at(self, at_ms: int) -> dict[str, Any]:
-        state: dict[str, Any] = {
+    def _initial_state(self) -> dict[str, Any]:
+        return {
             "session_id": self.session_id,
-            "at_ms": at_ms,
+            "at_ms": None,
             "lap": 0,
             "session_status": "unknown",
             "total_laps": None,
@@ -72,17 +86,21 @@ class ReplayEngine:
             },
         }
 
-        applied = 0
-        last_ms = None
-        for e in self.events:
-            if e.session_time_ms > at_ms:
-                break
-            self._apply(state, e)
-            applied += 1
-            last_ms = e.session_time_ms
+    # ── State construction ────────────────────────────────────────────────
 
+    def state_at(self, at_ms: int) -> dict[str, Any]:
+        idx = bisect.bisect_right(self._times, at_ms)  # events to apply
+        snap_pos = bisect.bisect_right(self._snap_keys, idx) - 1
+        start = self._snap_keys[snap_pos]
+        state = copy.deepcopy(self._snapshots[snap_pos])
+
+        for e in self.events[start:idx]:
+            self._apply(state, e)
+
+        state["at_ms"] = at_ms
+        last_ms = self._times[idx - 1] if idx else None
         dq = state["data_quality"]
-        dq["events_applied"] = applied
+        dq["events_applied"] = idx
         dq["last_event_ms"] = last_ms
         if last_ms is None:
             dq["status"] = "unknown"
