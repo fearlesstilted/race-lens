@@ -1,33 +1,55 @@
+{"event_id":"00f00e6b4076b504","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"position":3}}
 {"event_id":"03e5889d73b219fe","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"GREEN LIGHT - PIT EXIT OPEN"}}
 {"event_id":"045f745303464ceb","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
 {"event_id":"063a61bd9767bd8e","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
 {"event_id":"0aa61c55d71f3636","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"OCO","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
 {"event_id":"0c43c08363a009f8","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"HUL","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
+{"event_id":"0ecb1050e4d735cf","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"PER","source":"fastf1","confidence":"high","payload":{"position":16}}
 {"event_id":"0ff19bf63c6b64ca","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
+{"event_id":"16f2319edac5aec0","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"HUL","source":"fastf1","confidence":"high","payload":{"position":19}}
 {"event_id":"1c6d9396d5155bed","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
 {"event_id":"296adb0605717851","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
+{"event_id":"2a8952d1fe68dc4e","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"position":12}}
 {"event_id":"2b9a45c6a730bfe4","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 7"}}
 {"event_id":"2c9525b8b31c9506","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":1}}
 {"event_id":"3841a35287773777","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
 {"event_id":"39a15865edc84191","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CLEAR IN TRACK SECTOR 12"}}
 {"event_id":"44d40a19c61aacaa","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
 {"event_id":"451ab390bd905c57","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"PIT EXIT CLOSED"}}
+{"event_id":"49c8419fd526bf7a","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"position":4}}
+{"event_id":"4ad1c6c5bb7ce85f","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"position":15}}
 {"event_id":"5d12044a66295a18","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"RIC","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
+{"event_id":"5f84f03b1074498f","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"OCO","source":"fastf1","confidence":"high","payload":{"position":11}}
 {"event_id":"665595e6831ce41a","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"RISK OF RAIN FOR F1 RACE IS 0%"}}
+{"event_id":"68b4a575bb3736c6","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"MAG","source":"fastf1","confidence":"high","payload":{"position":20}}
+{"event_id":"77ad7edcf65f1f8a","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"position":10}}
 {"event_id":"77bcd818dbe1f448","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"PER","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
 {"event_id":"84fa21513e37b9c2","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"MAG","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
+{"event_id":"87073b5c598e7695","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"position":5}}
+{"event_id":"883168d51fbe8222","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"STR","source":"fastf1","confidence":"high","payload":{"position":13}}
+{"event_id":"8a4127efeb733dae","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"position":14}}
+{"event_id":"8c7a794b7624b04e","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"LEC","source":"fastf1","confidence":"high","payload":{"position":1}}
 {"event_id":"8f3a8051e761cafb","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"NOR","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":1}}
+{"event_id":"9dd9795738557a6b","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"PIA","source":"fastf1","confidence":"high","payload":{"position":2}}
 {"event_id":"a064f58a7a54076a","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CLEAR IN TRACK SECTOR 7"}}
 {"event_id":"a177ac9b1cba66ba","session_id":"2024_monaco_r","type":"SessionStarted","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"total_laps":78}}
+{"event_id":"a4e62e9331938b99","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"ALB","source":"fastf1","confidence":"high","payload":{"position":9}}
 {"event_id":"ae64a19ebc591c9d","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
 {"event_id":"aed5e85f3f931481","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
 {"event_id":"afc9510ab1242915","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Drs","message":"DRS DISABLED"}}
+{"event_id":"c8f7fe3abedf8f24","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"VER","source":"fastf1","confidence":"high","payload":{"position":6}}
+{"event_id":"ca0a3edb0caff625","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"HAM","source":"fastf1","confidence":"high","payload":{"position":7}}
 {"event_id":"d802aaa22c4b1d36","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"RUS","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
+{"event_id":"ddc27d49de87fe0b","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"ZHO","source":"fastf1","confidence":"high","payload":{"position":18}}
 {"event_id":"df40d70cb2a52db6","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"ALO","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":1}}
 {"event_id":"dfb03f9f0181c18b","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"SAR","source":"fastf1","confidence":"high","payload":{"compound":"HARD","age_laps":0}}
+{"event_id":"e24bbb162301afda","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"BOT","source":"fastf1","confidence":"high","payload":{"position":17}}
+{"event_id":"e731ecc69b6a166f","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"status":"started"}}
 {"event_id":"f01ccbb2b0784dc9","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":0,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 12"}}
+{"event_id":"f38681fdf56d1f7e","session_id":"2024_monaco_r","type":"PositionChanged","session_time_ms":0,"driver_id":"TSU","source":"fastf1","confidence":"high","payload":{"position":8}}
 {"event_id":"f5bd3db3da66b2c1","session_id":"2024_monaco_r","type":"TyreStintUpdated","session_time_ms":0,"driver_id":"SAI","source":"fastf1","confidence":"high","payload":{"compound":"MEDIUM","age_laps":0}}
 {"event_id":"28f3d35c2cb3a56c","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":190727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"GREEN LIGHT - PIT EXIT OPEN"}}
+{"event_id":"ff26c0fc9a1b6709","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":190727,"source":"fastf1","confidence":"high","payload":{"status":"started"}}
 {"event_id":"4f8b1ac2d54ed806","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":215727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 3"}}
 {"event_id":"305d4909f5d00717","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":217727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"YELLOW IN TRACK SECTOR 6"}}
 {"event_id":"e1d9653ebc65228c","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":218727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 4"}}
@@ -41,6 +63,7 @@
 {"event_id":"c271d91c25b1abe2","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":243727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"YELLOW IN TRACK SECTOR 9"}}
 {"event_id":"1045df0ae60df75a","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":244727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"YELLOW IN TRACK SECTOR 11"}}
 {"event_id":"e17e8d29f1598735","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":244727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CLEAR IN TRACK SECTOR 10"}}
+{"event_id":"14ec2489e8cad678","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":247727,"source":"fastf1","confidence":"high","payload":{"status":"red_flag"}}
 {"event_id":"5ba1abbdb896ecfd","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":247727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CLEAR IN TRACK SECTOR 3"}}
 {"event_id":"6d17ae4876e5c1ef","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":247727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CLEAR IN TRACK SECTOR 9"}}
 {"event_id":"97f999356aa0cd1e","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":247727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"RED FLAG"}}
@@ -53,6 +76,7 @@
 {"event_id":"e99e45d32af5c2a9","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":1771727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"RACE WILL RESUME AT 15:44"}}
 {"event_id":"30b8e558d23bcfc0","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2095727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"FIA STEWARDS: TURN 8 INCIDENT INVOLVING CARS 10 (GAS) AND 31 (OCO) UNDER INVESTIGATION - CAUSING A COLLISION"}}
 {"event_id":"0537f327889293e7","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2143727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"TRACK CLEAR"}}
+{"event_id":"6a6ae759093a12f7","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":2143727,"source":"fastf1","confidence":"high","payload":{"status":"started"}}
 {"event_id":"011e3738c5cd975b","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2186727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 13"}}
 {"event_id":"38aab28c8b22ec1c","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2211727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CLEAR IN TRACK SECTOR 13"}}
 {"event_id":"041ed999f700f1ce","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":2302727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"DOUBLE YELLOW IN TRACK SECTOR 3"}}
@@ -4915,5 +4939,6 @@
 {"event_id":"a22239551e6333c0","session_id":"2024_monaco_r","type":"LapCompleted","session_time_ms":8655795,"lap":77,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"lap_time_ms":75625}}
 {"event_id":"af76c53c653007a0","session_id":"2024_monaco_r","type":"GapUpdated","session_time_ms":8655795,"lap":77,"driver_id":"GAS","source":"fastf1","confidence":"high","payload":{"gap_s":138.877}}
 {"event_id":"97446091ddd84d51","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":8785727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"CHEQUERED FLAG"}}
+{"event_id":"b0130300a1e904a2","session_id":"2024_monaco_r","type":"SessionStatusChanged","session_time_ms":8785727,"source":"fastf1","confidence":"high","payload":{"status":"red_flag"}}
 {"event_id":"eea8fa3f9d42311f","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":8789727,"source":"fastf1","confidence":"high","payload":{"category":"Flag","message":"WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 17:26:30"}}
 {"event_id":"bbde185fb1c5a502","session_id":"2024_monaco_r","type":"RaceControlMessage","session_time_ms":8806727,"source":"fastf1","confidence":"high","payload":{"category":"Other","message":"CAR 4 (NOR) TIME 1:17.296 DELETED - TRACK LIMITS AT TURN 10 LAP 78 17:26:06"}}

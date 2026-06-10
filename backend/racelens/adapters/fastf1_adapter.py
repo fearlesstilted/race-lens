@@ -113,18 +113,42 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
                       age_laps=int(first["TyreLife"]) - 1 if not pd.isna(first["TyreLife"]) else 0)
             )
 
-    # Race control messages ride along for the future insight engine
+    # Starting grid at t=0, so the timing table is populated before lap 1
+    if ses.results is not None:
+        for _, row in ses.results.iterrows():
+            if not pd.isna(row.get("GridPosition")) and row["GridPosition"] > 0:
+                events.append(
+                    event(sid, "PositionChanged", 0, str(row["Abbreviation"]), source=src,
+                          position=int(row["GridPosition"]))
+                )
+
+    # Race control messages ride along; flag messages also become session
+    # status changes so the UI can show RED FLAG / SC / VSC instead of silence
+    _STATUS = (
+        ("RED FLAG", "red_flag"),
+        ("VIRTUAL SAFETY CAR DEPLOYED", "vsc"),
+        ("SAFETY CAR DEPLOYED", "safety_car"),
+        ("GREEN LIGHT", "started"),
+        ("TRACK CLEAR", "started"),
+        ("CHEQUERED FLAG", "finished"),
+    )
     if ses.race_control_messages is not None:
         session_zero = pd.Timestamp(ses.date) - pd.Timedelta(ses.session_start_time)
         for _, msg in ses.race_control_messages.iterrows():
             t = _timestamp_to_session_ms(msg.get("Time"), session_zero) if "Time" in msg else None
             if t is None or t < 0:
                 continue
+            text = str(msg.get("Message", ""))
             events.append(
                 event(sid, "RaceControlMessage", t, source=src,
-                      category=str(msg.get("Category", "")),
-                      message=str(msg.get("Message", "")))
+                      category=str(msg.get("Category", "")), message=text)
             )
+            for needle, status in _STATUS:
+                if needle in text:
+                    events.append(
+                        event(sid, "SessionStatusChanged", t, source=src, status=status)
+                    )
+                    break
 
     # Rebase to race start: FastF1 session time begins with the data feed,
     # ~1.5h before lights out. t0 = earliest lap-1 start (Time - LapTime).
