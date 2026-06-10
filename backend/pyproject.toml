@@ -1,0 +1,26 @@
+[project]
+name = "racelens"
+version = "0.1.0"
+description = "Open-source motorsport replay and intelligence engine"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+]
+
+[project.optional-dependencies]
+fastf1 = ["fastf1>=3.3"]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["racelens*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
