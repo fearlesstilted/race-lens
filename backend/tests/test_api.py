@@ -28,6 +28,32 @@ def test_sessions_and_state(client):
     assert client.get("/api/sessions/nope/state", params={"at_ms": 0}).status_code == 404
 
 
+def test_insights_endpoint(client):
+    r = client.get("/api/sessions/2024_mini_race/insights", params={"at_ms": 247_000}).json()
+    assert r["insights"][0]["driver_ids"] == ["LEC", "NOR"]
+    early = client.get("/api/sessions/2024_mini_race/insights", params={"at_ms": 100_000}).json()
+    assert early["insights"] == []
+
+
+def test_stream_simulated_live(client):
+    chunks = []
+    with client.stream(
+        "GET",
+        "/api/sessions/2024_mini_race/stream",
+        params={"speed": 100_000, "from_ms": 245_000, "tick_ms": 2_000},
+    ) as r:
+        for line in r.iter_lines():
+            if line.startswith("data:"):
+                chunks.append(line)
+    # 245s, 247s, 249s + clamped final 250s = 4 states, then the end marker's data line
+    assert len(chunks) == 5
+    import json
+
+    last_state = json.loads(chunks[3].removeprefix("data:"))
+    assert last_state["session_status"] == "finished"
+    assert last_state["active_insights"][0]["driver_ids"] == ["LEC", "NOR"]
+
+
 def test_timeline(client):
     t = client.get("/api/sessions/2024_mini_race/timeline").json()
     assert t["start_ms"] == 0

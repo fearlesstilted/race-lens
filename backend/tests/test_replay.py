@@ -40,6 +40,8 @@ def mini_race():
     e.append(event(SID, "LapCompleted", 238_000, "VER", lap=3, lap_time_ms=77_900))
     e.append(event(SID, "LapCompleted", 242_000, "NOR", lap=3, lap_time_ms=79_800))
     e.append(event(SID, "LapCompleted", 245_000, "LEC", lap=3, lap_time_ms=77_000))
+    # LEC on fresh hards catches NOR — traffic scenario for the insight engine
+    e.append(event(SID, "IntervalUpdated", 246_000, "LEC", interval_s=0.7))
     e.append(event(SID, "SessionStatusChanged", 250_000, status="finished"))
     return e
 

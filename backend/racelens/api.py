@@ -6,13 +6,17 @@ Sessions are .jsonl files in RACELENS_FIXTURES (default: ./fixtures).
 Spoiler-free by construction: every response is built only from events
 at or before the requested timestamp.
 """
+import asyncio
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 
 from racelens.events.models import load_jsonl
+from racelens.insights.traffic import detect_traffic_risk
 from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
@@ -39,6 +43,42 @@ def list_sessions() -> list[dict]:
 @app.get("/api/sessions/{session_id}/state")
 def state(session_id: str, at_ms: int) -> dict:
     return _engine(session_id).state_at(at_ms)
+
+
+@app.get("/api/sessions/{session_id}/insights")
+def insights(session_id: str, at_ms: int) -> dict:
+    """Active insights at a timestamp, computed from state <= at_ms only."""
+    state = _engine(session_id).state_at(at_ms)
+    return {"at_ms": at_ms, "insights": detect_traffic_risk(state)}
+
+
+@app.get("/api/sessions/{session_id}/stream")
+async def stream(
+    session_id: str, speed: float = 10.0, from_ms: int = 0, tick_ms: int = 1000
+) -> StreamingResponse:
+    """Simulated live: replay the session as an SSE stream of states.
+
+    One message per `tick_ms` of session time, paced at `speed`x real time.
+    Each message carries full state + active insights, so the frontend
+    treats replay and live identically.
+    """
+    eng = _engine(session_id)
+    end_ms = eng.events[-1].session_time_ms if eng.events else 0
+
+    async def gen():
+        t = from_ms
+        while True:
+            cur = min(t, end_ms)  # always emit the final state exactly at end_ms
+            state = eng.state_at(cur)
+            state["active_insights"] = detect_traffic_risk(state)
+            yield f"data: {json.dumps(state)}\n\n"
+            if cur >= end_ms:
+                break
+            await asyncio.sleep(tick_ms / 1000.0 / speed)
+            t += tick_ms
+        yield "event: end\ndata: {}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @app.get("/api/sessions/{session_id}/timeline")
