@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from racelens.adapters.openf1_adapter import find_session, ingest_openf1
+from racelens.commentary.feed import render_feed
 from racelens.commentary.renderer import render_all
 from racelens.events.models import load_jsonl
 from racelens.insights.registry import detect_all
@@ -196,6 +197,18 @@ def live_stop() -> dict:
     _live.stop()
     _live = None
     return final_status
+
+
+@app.get("/api/sessions/{session_id}/feed")
+def feed(
+    session_id: str,
+    until_ms: int = Query(ge=0),
+    lang: str = "en",
+    limit: int = 30,
+) -> list:
+    """Event feed for the frontend: spoiler-free, newest-first human-readable items."""
+    eng = _engine(session_id)
+    return render_feed(eng.events, until_ms, lang=lang, limit=limit)
 
 
 @app.get("/api/sessions/{session_id}/timeline")

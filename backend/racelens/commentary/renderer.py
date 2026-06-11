@@ -61,9 +61,22 @@ TEMPLATES: dict[tuple[str, str, str], str] = {
     ("UNDERCUT_RISK", "ru", "beginner"):
         "{a} достаточно близко для ундерката: заехать в боксы первым, взять "
         "свежую резину и опередить {b} за счёт пит-стопов.",
+
+    ("DEGRADATION_TREND", "en", "pro"):
+        "{a}'s pace has dropped {drift_s:.1f}s over 3 laps on {age}-lap tyres "
+        "— degradation accelerating, a stop is overdue.",
+    ("DEGRADATION_TREND", "en", "beginner"):
+        "{a}'s tyres are going off — each lap is slower than the last. "
+        "The team will likely pit soon.",
+    ("DEGRADATION_TREND", "ru", "pro"):
+        "Темп {a} упал на {drift_s:.1f}с за 3 круга на резине {age} кругов "
+        "— деградация ускоряется, пит-стоп давно назрел.",
+    ("DEGRADATION_TREND", "ru", "beginner"):
+        "Резина {a} сдаёт — каждый круг медленнее предыдущего. "
+        "Команда скорее всего скоро вызовет в боксы.",
 }
 
-_BASE_TYPES = ("TRAFFIC_RISK", "DRS_TRAIN", "PIT_WINDOW", "UNDERCUT_RISK")
+_BASE_TYPES = ("TRAFFIC_RISK", "DRS_TRAIN", "PIT_WINDOW", "UNDERCUT_RISK", "DEGRADATION_TREND")
 
 
 def _params(base: str, ins: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +92,8 @@ def _params(base: str, ins: dict[str, Any]) -> dict[str, Any]:
     if base == "UNDERCUT_RISK":
         return {"a": ids[0], "b": ids[1],
                 "gap": ev["interval_s"], "age": ev["attacker_tyre_age_laps"]}
+    if base == "DEGRADATION_TREND":
+        return {"a": ids[0], "drift_s": ev["drift_ms"] / 1000, "age": ev["tyre_age_laps"]}
     return {}
 
 

@@ -89,6 +89,7 @@ docker compose up
 | `GET` | `/api/sessions/{id}/timeline` | Full event timeline |
 | `GET` | `/api/sessions/{id}/insights?at_ms=N` | Structured strategy insights |
 | `GET` | `/api/sessions/{id}/commentary?at_ms=N&lang=en&level=pro` | Human-readable commentary |
+| `GET` | `/api/sessions/{id}/feed?until_ms=N&lang=en&limit=30` | Spoiler-free event ticker (newest first) |
 | `GET` | `/api/sessions/{id}/stream?speed=N` | SSE simulated-live stream |
 | `POST` | `/api/live/start` | Start near-live polling runner |
 | `GET` | `/api/live/state` | Current near-live state |

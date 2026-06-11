@@ -30,6 +30,7 @@ def _new_driver() -> dict[str, Any]:
         "tyre_age_laps": None,
         "pit_count": 0,
         "in_pit": False,
+        "recent_laps_ms": [],
     }
 
 
@@ -143,6 +144,7 @@ class ReplayEngine:
                 d["last_lap_ms"] = lap_ms
                 if d["best_lap_ms"] is None or lap_ms < d["best_lap_ms"]:
                     d["best_lap_ms"] = lap_ms
+                d["recent_laps_ms"] = (d["recent_laps_ms"] + [lap_ms])[-3:]
             if d["tyre_age_laps"] is not None:
                 d["tyre_age_laps"] += 1
             state["lap"] = max(state["lap"], e.lap or 0)
