@@ -18,6 +18,8 @@ BATTLE_PACE_DIFF_MAX_MS = 600        # lap-time difference cap (real wheel-to-wh
 def detect_battles(state: dict[str, Any]) -> list[dict[str, Any]]:
     if state.get("session_status") != "started":
         return []
+    if state.get("lap", 0) < 3:
+        return []
 
     drivers = state["drivers"]
     order = state["classification"]

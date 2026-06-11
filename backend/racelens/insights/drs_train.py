@@ -9,9 +9,13 @@ from typing import Any
 
 CHAIN_INTERVAL_S = 1.0
 MIN_TRAIN_SIZE = 3  # cars including the head
+MAX_TRAIN_SIZE = 8  # larger chains are SC/race-start compression, not a DRS train
 
 
 def detect_drs_train(state: dict[str, Any]) -> list[dict[str, Any]]:
+    if state["lap"] < 3:
+        return []
+
     drivers = state["drivers"]
     order = state["classification"]
     insights = []
@@ -30,10 +34,10 @@ def detect_drs_train(state: dict[str, Any]) -> list[dict[str, Any]]:
                 chain = [ahead_id]
             chain.append(behind_id)
         else:
-            if len(chain) >= MIN_TRAIN_SIZE:
+            if MIN_TRAIN_SIZE <= len(chain) <= MAX_TRAIN_SIZE:
                 insights.append(_train(state, chain))
             chain = []
-    if len(chain) >= MIN_TRAIN_SIZE:
+    if MIN_TRAIN_SIZE <= len(chain) <= MAX_TRAIN_SIZE:
         insights.append(_train(state, chain))
     return insights
 

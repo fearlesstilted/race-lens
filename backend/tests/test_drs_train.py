@@ -38,3 +38,22 @@ def test_five_plus_cars_is_high_severity():
     trains = detect_drs_train(s)
     assert trains[0]["severity"] == "high"
     assert trains[0]["evidence"]["head"] == "A"
+
+
+def test_lap_1_suppressed():
+    s = _state({"VER": None, "LEC": 0.5, "NOR": 0.8, "PIA": 0.9})
+    s["lap"] = 1
+    assert detect_drs_train(s) == []
+
+
+def test_lap_2_suppressed():
+    s = _state({"VER": None, "LEC": 0.5, "NOR": 0.8, "PIA": 0.9})
+    s["lap"] = 2
+    assert detect_drs_train(s) == []
+
+
+def test_large_peloton_suppressed():
+    """9+ car chain is SC/race-start compression, not a DRS train — must not emit."""
+    drivers = {chr(65 + i): (0.4 if i > 0 else None) for i in range(9)}
+    s = _state(drivers)
+    assert detect_drs_train(s) == []

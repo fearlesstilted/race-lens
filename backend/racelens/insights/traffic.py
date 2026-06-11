@@ -13,6 +13,9 @@ PACE_DELTA_HIGH_MS = 700
 
 
 def detect_traffic_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
+    if state["lap"] < 3:
+        return []
+
     drivers = state["drivers"]
     order = state["classification"]
     insights = []

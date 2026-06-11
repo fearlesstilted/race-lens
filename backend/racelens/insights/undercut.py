@@ -16,6 +16,9 @@ MAX_PACE_DEFICIT_MS = 300 # attacker must not be clearly slower
 
 
 def detect_undercut_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
+    if state["lap"] < 3:
+        return []
+
     drivers = state["drivers"]
     order = state["classification"]
     insights = []
