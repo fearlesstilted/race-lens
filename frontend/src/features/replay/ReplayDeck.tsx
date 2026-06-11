@@ -90,6 +90,9 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
     return buildPhase(feed, startMs, endMs)
   }, [feed, startMs, endMs, timeline])
 
+  // When spoiler-free, compute the progress fraction for splitting future/past
+  const cursorPct = progress * 100
+
   const currentLap = timeline ? lapFromTimeline(timeline, atMs) : null
 
   const handleRailClick = useCallback(
@@ -113,13 +116,39 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
   const sessionTime = formatRaceTime(atMs)
   const totalTime = formatRaceTime(endMs)
 
+  // Spoiler-free: build phase segments split at cursor position
+  const visiblePhases = useMemo(() => {
+    if (!spoilerFree) return phases.map((seg, i) => ({ ...seg, key: i, neutral: false }))
+    // Walk through segments and mark future ones neutral
+    const result: { kind: string; pct: number; key: number; neutral: boolean }[] = []
+    let accumulated = 0
+    for (let i = 0; i < phases.length; i++) {
+      const seg = phases[i]
+      const segEnd = accumulated + seg.pct
+      if (accumulated >= cursorPct) {
+        // Fully future
+        result.push({ ...seg, key: i, neutral: true })
+      } else if (segEnd > cursorPct) {
+        // Straddles cursor — split into past portion and future portion
+        const pastPct = cursorPct - accumulated
+        const futurePct = segEnd - cursorPct
+        result.push({ kind: seg.kind, pct: pastPct, key: i * 100, neutral: false })
+        result.push({ kind: seg.kind, pct: futurePct, key: i * 100 + 1, neutral: true })
+      } else {
+        result.push({ ...seg, key: i, neutral: false })
+      }
+      accumulated = segEnd
+    }
+    return result
+  }, [phases, spoilerFree, cursorPct])
+
   return (
     <div className="deck">
       <div className="phase">
-        {phases.map((seg, i) => (
+        {visiblePhases.map((seg) => (
           <i
-            key={i}
-            className={`ph-${seg.kind === 'red' ? 'r' : seg.kind === 'amber' ? 's' : 'g'}`}
+            key={seg.key}
+            className={seg.neutral ? 'ph-neutral' : `ph-${seg.kind === 'red' ? 'r' : seg.kind === 'amber' ? 's' : 'g'}`}
             style={{ width: `${seg.pct}%` }}
           />
         ))}
@@ -133,9 +162,11 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
             transition: playing ? `width ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
           }}
         />
-        {[10, 20, 30, 40, 50, 60, 70, 80, 90].map((pct) => (
-          <div key={pct} className="tick" style={{ left: `${pct}%` }} />
-        ))}
+        {[10, 20, 30, 40, 50, 60, 70, 80, 90]
+          .filter((pct) => !spoilerFree || pct <= cursorPct)
+          .map((pct) => (
+            <div key={pct} className="tick" style={{ left: `${pct}%` }} />
+          ))}
         <div
           className="cursor"
           style={{
@@ -171,7 +202,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
         </div>
         <span className="clock">
           <small>SESSION</small>
-          {sessionTime}&thinsp;/&thinsp;{totalTime}
+          {spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
         </span>
       </div>
     </div>

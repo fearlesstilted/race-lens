@@ -568,6 +568,7 @@ body {
 .ph-g { background: #3a3a44; }
 .ph-r { background: var(--red); }
 .ph-s { background: var(--amber); }
+.ph-neutral { background: #1d1d24; }
 
 .rail {
   position: relative;
