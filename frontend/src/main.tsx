@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { listSessions } from './api/client'
 import type { SessionSummary } from './api/types'
+import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
 import { RaceFeed } from './features/replay/RaceFeed'
 import { ReplayDeck } from './features/replay/ReplayDeck'
@@ -16,6 +17,10 @@ function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
+
+  // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const prevSessionRef = useRef<string | null>(null)
 
   const replay = useReplay(sessionId)
 
@@ -32,6 +37,37 @@ function App() {
         setSessionError(err instanceof Error ? err.message : 'Could not load sessions')
       })
     return () => { cancelled = true }
+  }, [])
+
+  // Reset selection when session changes
+  useEffect(() => {
+    if (sessionId !== prevSessionRef.current) {
+      setSelectedIds([])
+      prevSessionRef.current = sessionId
+    }
+  }, [sessionId])
+
+  // Esc to clear selection
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedIds([])
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  const handleSelectDriver = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        // Deselect
+        return prev.filter((x) => x !== id)
+      }
+      if (prev.length >= 2) {
+        // Replace oldest (first) with new
+        return [prev[1], id]
+      }
+      return [...prev, id]
+    })
   }, [])
 
   const state = replay.state
@@ -65,6 +101,8 @@ function App() {
     )
   }
 
+  const hasFocus = selectedIds.length > 0
+
   return (
     <>
       <TopBar
@@ -85,7 +123,12 @@ function App() {
       )}
 
       <div className="wrap">
-        <TimingTower rows={rows} battles={replay.battles} />
+        <TimingTower
+          rows={rows}
+          battles={replay.battles}
+          selectedIds={selectedIds}
+          onSelectDriver={handleSelectDriver}
+        />
 
         <div className="col col-center">
           <TrackMap
@@ -97,11 +140,23 @@ function App() {
             drivers={state?.drivers ?? {}}
             classification={state?.classification ?? []}
             sessionStatus={sessionStatus}
+            selectedIds={selectedIds}
           />
-          <RaceFeed items={replay.feed} />
+          {hasFocus ? (
+            <FocusPanel
+              selectedIds={selectedIds}
+              drivers={state?.drivers ?? {}}
+            />
+          ) : (
+            <RaceFeed items={replay.feed} />
+          )}
         </div>
 
-        <InsightPanel insights={replay.insights} commentary={replay.commentary} />
+        <InsightPanel
+          insights={replay.insights}
+          commentary={replay.commentary}
+          selectedIds={selectedIds}
+        />
       </div>
 
       <ReplayDeck

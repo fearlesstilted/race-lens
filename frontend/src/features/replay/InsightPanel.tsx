@@ -4,6 +4,7 @@ import type { CommentaryItem, Insight } from '../../api/types'
 type Props = {
   insights: Insight[]
   commentary: CommentaryItem[]
+  selectedIds?: string[]
 }
 
 /** Stable key: strip trailing :number from insight_id, or fall back to type+drivers. */
@@ -43,14 +44,16 @@ const InsightCard = React.memo(function InsightCard({
   ins,
   text,
   leaving,
+  focused,
 }: {
   ins: Insight
   text: string
   leaving: boolean
+  focused: boolean
 }) {
   const data = evidenceData(ins)
   return (
-    <div className={[severityClass(ins.severity), leaving ? 'ins-leaving' : 'ins-entering'].join(' ')}>
+    <div className={[severityClass(ins.severity), leaving ? 'ins-leaving' : 'ins-entering', focused ? 'ins-focused' : ''].filter(Boolean).join(' ')}>
       <h4>
         {insightTitle(ins)}
         <small>{insightSubtitle(ins)}</small>
@@ -69,7 +72,7 @@ const InsightCard = React.memo(function InsightCard({
   )
 })
 
-export const InsightPanel = React.memo(function InsightPanel({ insights, commentary }: Props) {
+export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [] }: Props) {
   // Build commentary map keyed by stable key (strip trailing :ms from insight_id)
   const commentaryMap: Record<string, string> = useMemo(() => {
     const m: Record<string, string> = {}
@@ -82,16 +85,24 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
     return m
   }, [commentary])
 
-  // Sort: severity desc, then stable key alphabetical; limit to 4
+  // Helper: does this insight involve any selected driver?
+  const isFocused = (ins: Insight) =>
+    selectedIds.length > 0 && ins.driver_ids.some((id) => selectedIds.includes(id))
+
+  // Sort: focused first, then severity desc, then stable key alphabetical; limit to 4
   const sorted = useMemo(() => {
     return [...insights]
       .sort((a, b) => {
+        const af = isFocused(a) ? 0 : 1
+        const bf = isFocused(b) ? 0 : 1
+        if (af !== bf) return af - bf
         const sd = (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
         if (sd !== 0) return sd
         return stableKey(a).localeCompare(stableKey(b))
       })
       .slice(0, 4)
-  }, [insights])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insights, selectedIds])
 
   // CSS-only enter/leave animation: track which keys are "leaving"
   const prevKeysRef = useRef<Set<string>>(new Set())
@@ -117,31 +128,33 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   // Combine current + leaving (leaving cards retain their last known data)
   const prevInsightsRef = useRef<Map<string, { ins: Insight; text: string }>>(new Map())
   const displayItems = useMemo(() => {
-    const items: Array<{ key: string; ins: Insight; text: string; leaving: boolean }> = []
+    const items: Array<{ key: string; ins: Insight; text: string; leaving: boolean; focused: boolean }> = []
     for (const ins of sorted) {
       const key = stableKey(ins)
       const text = commentaryMap[key] ?? ''
       prevInsightsRef.current.set(key, { ins, text })
-      items.push({ key, ins, text, leaving: false })
+      items.push({ key, ins, text, leaving: false, focused: isFocused(ins) })
     }
     for (const key of leavingKeys) {
       const cached = prevInsightsRef.current.get(key)
       if (cached) {
-        items.push({ key, ins: cached.ins, text: cached.text, leaving: true })
+        items.push({ key, ins: cached.ins, text: cached.text, leaving: true, focused: false })
       }
     }
     return items
-  }, [sorted, commentaryMap, leavingKeys])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sorted, commentaryMap, leavingKeys, selectedIds])
 
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
-      {displayItems.map(({ key, ins, text, leaving }) => (
+      {displayItems.map(({ key, ins, text, leaving, focused }) => (
         <InsightCard
           key={key}
           ins={ins}
           text={text}
           leaving={leaving}
+          focused={focused}
         />
       ))}
       {sorted.length === 0 && leavingKeys.size === 0 && (

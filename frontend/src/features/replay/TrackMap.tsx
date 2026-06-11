@@ -14,6 +14,7 @@ type Props = {
   drivers: Record<string, DriverState>
   classification: string[]
   sessionStatus?: string
+  selectedIds?: string[]
 }
 
 // Pit lane: a horizontal row below the map bottom edge
@@ -101,7 +102,7 @@ function computeTargetFractions(
 }
 
 export const TrackMap = React.memo(function TrackMap({
-  sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus,
+  sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, selectedIds = [],
 }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const [trackData, setTrackData] = useState<TrackData | null>(null)
@@ -267,6 +268,7 @@ export const TrackMap = React.memo(function TrackMap({
 
   const watermark = statusWatermark(sessionStatus ?? '')
   const top3 = classification.slice(0, 3)
+  const hasFocus = selectedIds.length > 0
 
   const [vw, vh] = trackData?.viewbox ?? [600, 400]
   const pathD = trackData ? buildPathD(trackData.points) : ''
@@ -370,6 +372,10 @@ export const TrackMap = React.memo(function TrackMap({
           .map((driverId) => {
             const color = teamColor(driverId)
             const isTop3 = top3.includes(driverId)
+            const isSelected = selectedIds.includes(driverId)
+            const isDimmed = hasFocus && !isSelected
+            const r = isSelected ? 9 : 7
+            const showLabel = isSelected || isTop3
             return (
               <g
                 key={driverId}
@@ -378,20 +384,21 @@ export const TrackMap = React.memo(function TrackMap({
                   else carGroupRefs.current.delete(driverId)
                 }}
                 transform="translate(0,0)"
+                opacity={isDimmed ? 0.5 : 1}
               >
                 <circle
-                  r={7}
+                  r={r}
                   fill={color}
-                  stroke={isTop3 ? '#fff' : 'none'}
-                  strokeWidth={isTop3 ? 1.5 : 0}
+                  stroke={isSelected ? '#fff' : isTop3 ? '#fff' : 'none'}
+                  strokeWidth={isSelected ? 2 : isTop3 ? 1.5 : 0}
                 />
-                {isTop3 && (
+                {showLabel && (
                   <text
                     x={0}
-                    y={-11}
+                    y={-13}
                     textAnchor="middle"
                     fill="#fff"
-                    fontSize={12}
+                    fontSize={isSelected ? 13 : 12}
                     fontStyle="italic"
                     fontWeight={700}
                     fontFamily="'Barlow Condensed', sans-serif"
