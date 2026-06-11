@@ -40,7 +40,7 @@ construction: state at time `t` uses only events up to `t`.
 ```bash
 cd backend
 pip install -e ".[dev,api]"
-python -m pytest -q          # 71 tests, all pass
+python -m pytest -q          # 126 tests, all pass
 ```
 
 **Ingest a session (FastF1):**
@@ -72,7 +72,7 @@ cd rust/race-core && cargo build --release
 **Ingest via OpenF1 (near-live source, no extra deps):**
 
 ```bash
-python -m racelens.cli ingest --source openf1 2024 Monaco R -o fixtures/monaco_2024_openf1.jsonl
+python -m racelens.cli ingest-openf1 2024 Monaco -o fixtures/monaco_2024_openf1.jsonl
 ```
 
 **Run the API server:**
