@@ -9,6 +9,7 @@ at or before the requested timestamp.
 import asyncio
 import json
 import os
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -25,10 +26,21 @@ from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 
-app = FastAPI(title="Race Lens", version="0.1.0")
-
 # Global live runner — None when no live session is active.
 _live: Optional[LiveRunner] = None
+
+# Lock to prevent concurrent start requests.
+_start_lock: asyncio.Lock = asyncio.Lock()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    if _live is not None:
+        _live.stop()
+
+
+app = FastAPI(title="Race Lens", version="0.1.0", lifespan=lifespan)
 
 
 @lru_cache(maxsize=8)
@@ -115,19 +127,20 @@ async def live_start(
     just keep receiving the same complete snapshot.
     """
     global _live
-    if _live is not None and _live._task is not None and not _live._task.done():
-        raise HTTPException(409, "A live session is already running. Stop it first.")
+    async with _start_lock:
+        if _live is not None and _live.is_running:
+            raise HTTPException(409, "A live session is already running. Stop it first.")
 
-    try:
-        session_key = find_session(year, country, session)
-    except ValueError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        try:
+            session_key = find_session(year, country, session)
+        except ValueError as exc:
+            raise HTTPException(404, str(exc)) from exc
 
-    def fetch() -> list:
-        return ingest_openf1(session_key)
+        def fetch() -> list:
+            return ingest_openf1(session_key)
 
-    _live = LiveRunner(fetch, poll_interval_s=poll_s)
-    await _live.start()
+        _live = LiveRunner(fetch, poll_interval_s=poll_s)
+        await _live.start()
     return {"session_key": session_key, "poll_interval_s": poll_s, "status": "started"}
 
 
@@ -157,7 +170,12 @@ async def live_stream(
 
     async def gen():
         while True:
-            if _live is None or _live.engine is None:
+            if _live is None or not _live.is_running:
+                # Runner stopped — signal end to the client and close the stream.
+                yield "event: end\ndata: {}\n\n"
+                return
+            if _live.engine is None:
+                # Runner alive but no data yet — send empty heartbeat and keep waiting.
                 yield "data: {}\n\n"
             else:
                 state = _live.state_now()

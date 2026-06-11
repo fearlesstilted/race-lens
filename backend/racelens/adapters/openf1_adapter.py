@@ -68,12 +68,11 @@ def find_session(year: int, country_or_circuit: str, session_name: str = "Race")
                 or needle in str(row.get("circuit_short_name", "")).lower()
                 or needle in str(row.get("location", "")).lower()):
             return int(row["session_key"])
-    # Fallback: return the first result for the year/session if any
-    if rows:
-        return int(rows[0]["session_key"])
+    available = sorted({str(row.get("country_name", "")) for row in rows if row.get("country_name")})
     raise ValueError(
         f"No OpenF1 session found for year={year}, location={country_or_circuit!r}, "
-        f"session_name={session_name!r}"
+        f"session_name={session_name!r}. "
+        f"Available countries: {available if available else '(none — check year/session_name)'}"
     )
 
 

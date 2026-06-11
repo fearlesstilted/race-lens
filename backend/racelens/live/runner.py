@@ -67,6 +67,11 @@ class LiveRunner:
             self._task.cancel()
 
     @property
+    def is_running(self) -> bool:
+        """True if the background polling task exists and has not finished."""
+        return self._task is not None and not self._task.done()
+
+    @property
     def polls(self) -> int:
         return self._polls
 

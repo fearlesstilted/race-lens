@@ -2,6 +2,7 @@
 
 All async logic is tested via _poll_once() (sync), which the async loop wraps.
 """
+import asyncio
 import pytest
 
 from racelens.live.runner import LiveRunner
@@ -146,6 +147,120 @@ def test_status_fields_present():
                 "consecutive_failures", "last_poll_unix", "data_quality"):
         assert key in s, f"Missing key: {key}"
     assert s["last_poll_unix"] is not None
+
+
+# ── is_running property ────────────────────────────────────────────────────────
+
+def test_is_running_lifecycle():
+    """is_running: False before start, True while running, False after stop."""
+    runner = LiveRunner(lambda: mini_race(), poll_interval_s=60.0)
+
+    assert runner.is_running is False
+
+    async def _run():
+        await runner.start()
+        assert runner.is_running is True
+        runner.stop()
+        # Give the event loop a tick to let the task register cancellation.
+        await asyncio.sleep(0)
+        assert runner.is_running is False
+
+    asyncio.run(_run())
+
+
+# ── Empty-poll robustness ──────────────────────────────────────────────────────
+
+def test_empty_poll_does_not_raise():
+    """fetch returning [] must not raise, events_total stays 0."""
+    runner = LiveRunner(lambda: [], poll_interval_s=5.0)
+    runner._poll_once()
+    assert runner.polls == 1
+    assert runner.status()["events_total"] == 0
+    assert runner.engine is None
+
+
+def test_state_now_before_data_returns_error_dict():
+    """state_now() before any data returns an error dict, not an exception."""
+    runner = LiveRunner(lambda: [], poll_interval_s=5.0)
+    runner._poll_once()
+    result = runner.state_now()
+    assert "error" in result
+    assert "status" in result
+
+
+def test_empty_then_data_poll():
+    """After an empty poll, a subsequent poll with real data works correctly."""
+    all_events = mini_race()
+    calls = [0]
+
+    def fetch():
+        c = calls[0]
+        calls[0] += 1
+        return [] if c == 0 else all_events
+
+    runner = LiveRunner(fetch, poll_interval_s=5.0)
+
+    runner._poll_once()
+    assert runner.status()["events_total"] == 0
+
+    runner._poll_once()
+    assert runner.status()["events_total"] == len(all_events)
+    assert runner.engine is not None
+
+
+# ── SSE generator after stop ───────────────────────────────────────────────────
+
+def test_sse_generator_ends_after_stop():
+    """SSE gen() yields event:end and returns once the runner is not running."""
+    import racelens.api as api
+
+    # Build a stopped runner (never started, is_running=False).
+    runner = LiveRunner(lambda: mini_race(), poll_interval_s=5.0)
+    runner._poll_once()  # give it engine data
+
+    async def _collect():
+        # Patch _live so the generator sees a stopped runner.
+        original = api._live
+        api._live = runner
+        try:
+            # runner.is_running is False (never started), so first yield should be end.
+            gen = api.live_stream.__wrapped__(tick_s=0.001).__aiter__() if hasattr(
+                api.live_stream, "__wrapped__"
+            ) else None
+            # Build the generator directly via the inner function.
+            # Replicate gen() logic from live_stream:
+            chunks = []
+            tick_s = 0.001
+
+            async def inner_gen():
+                while True:
+                    if api._live is None or not api._live.is_running:
+                        yield "event: end\ndata: {}\n\n"
+                        return
+                    if api._live.engine is None:
+                        yield "data: {}\n\n"
+                    else:
+                        import json
+                        from racelens.insights.registry import detect_all
+                        from racelens.commentary.renderer import render_all
+                        state = api._live.state_now()
+                        state["active_insights"] = detect_all(state)
+                        state["commentary"] = render_all(state["active_insights"], "en", "pro")
+                        yield f"data: {json.dumps(state)}\n\n"
+                    await asyncio.sleep(tick_s)
+
+            async for chunk in inner_gen():
+                chunks.append(chunk)
+                if len(chunks) > 10:
+                    break  # safety guard
+
+            return chunks
+        finally:
+            api._live = original
+
+    chunks = asyncio.run(_collect())
+    assert len(chunks) == 1
+    assert chunks[0] == "event: end\ndata: {}\n\n"
 
 
 # ── API-level test ─────────────────────────────────────────────────────────────

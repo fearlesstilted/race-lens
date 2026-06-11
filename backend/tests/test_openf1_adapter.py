@@ -289,3 +289,31 @@ def test_find_session_no_match_raises():
     with patch.object(_mod, "_get", lambda path, params=None: []):
         with pytest.raises(ValueError, match="No OpenF1 session"):
             _mod.find_session(2024, "Atlantis")
+
+
+def test_find_session_no_fallback_when_rows_exist():
+    """find_session must NOT fall back to the first row when the needle doesn't match.
+
+    The old code would silently return rows[0]; the fixed code must raise ValueError
+    listing the available country names.
+    """
+    with patch.object(_mod, "_get", _make_mock_get()):
+        with pytest.raises(ValueError, match="Available countries") as exc_info:
+            _mod.find_session(2024, "Atlantis")
+    assert "Monaco" in str(exc_info.value)
+
+
+def test_find_session_404_via_api():
+    """GET /api/live/start with unknown country must return 404 (not start a session)."""
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    import racelens.api as api
+
+    api._live = None
+    client = TestClient(api.app)
+
+    with patch.object(_mod, "_get", _make_mock_get()):
+        r = client.post("/api/live/start", params={"year": 2024, "country": "Atlantis"})
+    assert r.status_code == 404
+    assert "Available countries" in r.json()["detail"]
+    assert api._live is None
