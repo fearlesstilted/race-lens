@@ -29,6 +29,7 @@ Full design: [PLAN.md](PLAN.md).
 - [x] Insights: traffic risk, DRS train, pit window, undercut risk
 - [x] Commentary renderer: EN/RU × beginner/pro templates, /commentary endpoint, no AI required
 - [x] OpenF1 adapter — same envelope from a second source (near-live foundation)
+- [x] Near-live mode: polling runner over the OpenF1 adapter, /api/live/*
 - [ ] Frontend (Vite + React + TS) — in progress, see CODEX_FRONTEND_PLAN.md
 
 ## Quickstart

@@ -11,18 +11,24 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from racelens.adapters.openf1_adapter import find_session, ingest_openf1
 from racelens.commentary.renderer import render_all
 from racelens.events.models import load_jsonl
 from racelens.insights.registry import detect_all
+from racelens.live.runner import LiveRunner
 from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 
 app = FastAPI(title="Race Lens", version="0.1.0")
+
+# Global live runner — None when no live session is active.
+_live: Optional[LiveRunner] = None
 
 
 @lru_cache(maxsize=8)
@@ -91,6 +97,87 @@ async def stream(
         yield "event: end\ndata: {}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ── Near-live endpoints ───────────────────────────────────────────────────────
+
+
+@app.post("/api/live/start")
+async def live_start(
+    year: int = Query(...),
+    country: str = Query(...),
+    session: str = Query(default="Race"),
+    poll_s: float = Query(default=5.0, gt=0),
+) -> dict:
+    """Find the OpenF1 session and start polling.
+
+    Works for both live and historical (finished) sessions — the poller will
+    just keep receiving the same complete snapshot.
+    """
+    global _live
+    if _live is not None and _live._task is not None and not _live._task.done():
+        raise HTTPException(409, "A live session is already running. Stop it first.")
+
+    try:
+        session_key = find_session(year, country, session)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    def fetch() -> list:
+        return ingest_openf1(session_key)
+
+    _live = LiveRunner(fetch, poll_interval_s=poll_s)
+    await _live.start()
+    return {"session_key": session_key, "poll_interval_s": poll_s, "status": "started"}
+
+
+@app.get("/api/live/state")
+def live_state() -> dict:
+    if _live is None or _live.engine is None:
+        raise HTTPException(404, "No live session active or no data yet")
+    return _live.state_now()
+
+
+@app.get("/api/live/status")
+def live_status() -> dict:
+    if _live is None:
+        raise HTTPException(404, "No live session active")
+    return _live.status()
+
+
+@app.get("/api/live/stream")
+async def live_stream(
+    tick_s: float = Query(default=5.0, gt=0),
+    lang: str = "en",
+    level: str = "pro",
+) -> StreamingResponse:
+    """SSE stream: emits state_now() every *tick_s* seconds."""
+    if _live is None:
+        raise HTTPException(404, "No live session active")
+
+    async def gen():
+        while True:
+            if _live is None or _live.engine is None:
+                yield "data: {}\n\n"
+            else:
+                state = _live.state_now()
+                state["active_insights"] = detect_all(state)
+                state["commentary"] = render_all(state["active_insights"], lang, level)
+                yield f"data: {json.dumps(state)}\n\n"
+            await asyncio.sleep(tick_s)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.post("/api/live/stop")
+def live_stop() -> dict:
+    global _live
+    if _live is None:
+        raise HTTPException(404, "No live session active")
+    final_status = _live.status()
+    _live.stop()
+    _live = None
+    return final_status
 
 
 @app.get("/api/sessions/{session_id}/timeline")
