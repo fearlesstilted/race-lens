@@ -8,6 +8,8 @@ type Props = {
   sessionId: string | null
   atMs: number
   playing: boolean
+  /** Wall-clock ms between stream frames — used to set CSS transition duration. */
+  frameMs: number
   drivers: Record<string, DriverState>
   classification: string[]
   sessionStatus?: string
@@ -42,7 +44,7 @@ function buildPathD(points: [number, number][]): string {
 }
 
 export const TrackMap = React.memo(function TrackMap({
-  sessionId, atMs, playing, drivers, classification, sessionStatus,
+  sessionId, atMs, playing, frameMs, drivers, classification, sessionStatus,
 }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const [positions, setPositions] = useState<Record<string, CarPos>>({})
@@ -236,7 +238,7 @@ export const TrackMap = React.memo(function TrackMap({
             <g
               key={driverId}
               transform={`translate(${pos.x},${pos.y})`}
-              style={playing && !isInPit ? { transition: 'transform 0.8s linear' } : undefined}
+              style={playing && !isInPit ? { transition: `transform ${(frameMs / 1000).toFixed(2)}s linear` } : undefined}
             >
               <circle
                 r={isInPit ? 5 : 7}

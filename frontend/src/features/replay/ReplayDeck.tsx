@@ -10,6 +10,8 @@ type Props = {
   atMs: number
   playing: boolean
   speed: Speed
+  /** Wall-clock ms between stream frames — for cursor transition. */
+  frameMs: number
   feed: FeedItem[]
   onScrub: (ms: number) => void
   onPlay: () => void
@@ -71,7 +73,7 @@ function lapFromTimeline(timeline: Timeline, atMs: number): number | null {
 
 const SPOILER_KEY = 'racelens_spoiler_free'
 
-export function ReplayDeck({ timeline, atMs, playing, speed, feed, onScrub, onPlay, onPause, onSpeed }: Props) {
+export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
     try { return localStorage.getItem(SPOILER_KEY) === '1' } catch { return false }
   })
@@ -124,13 +126,22 @@ export function ReplayDeck({ timeline, atMs, playing, speed, feed, onScrub, onPl
       </div>
       <div className="rail" ref={railRef} onClick={handleRailClick}>
         <div className="line" />
-        <div className="played" style={{ width: `${progress * 100}%` }} />
+        <div
+          className="played"
+          style={{
+            width: `${progress * 100}%`,
+            transition: playing ? `width ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
+          }}
+        />
         {[10, 20, 30, 40, 50, 60, 70, 80, 90].map((pct) => (
           <div key={pct} className="tick" style={{ left: `${pct}%` }} />
         ))}
         <div
           className="cursor"
-          style={{ left: `${progress * 100}%` }}
+          style={{
+            left: `${progress * 100}%`,
+            transition: playing ? `left ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
+          }}
           data-lap={currentLap !== null ? `LAP ${currentLap}` : ''}
         />
       </div>

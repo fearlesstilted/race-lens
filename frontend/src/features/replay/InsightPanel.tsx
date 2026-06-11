@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { CommentaryItem, Insight } from '../../api/types'
 
 type Props = {
@@ -42,13 +42,15 @@ function severityClass(severity: string): string {
 const InsightCard = React.memo(function InsightCard({
   ins,
   text,
+  leaving,
 }: {
   ins: Insight
   text: string
+  leaving: boolean
 }) {
   const data = evidenceData(ins)
   return (
-    <div className={severityClass(ins.severity)}>
+    <div className={[severityClass(ins.severity), leaving ? 'ins-leaving' : 'ins-entering'].join(' ')}>
       <h4>
         {insightTitle(ins)}
         <small>{insightSubtitle(ins)}</small>
@@ -80,7 +82,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
     return m
   }, [commentary])
 
-  // Sort: severity desc, then stable key alphabetical; limit to 6
+  // Sort: severity desc, then stable key alphabetical; limit to 4
   const sorted = useMemo(() => {
     return [...insights]
       .sort((a, b) => {
@@ -88,23 +90,61 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
         if (sd !== 0) return sd
         return stableKey(a).localeCompare(stableKey(b))
       })
-      .slice(0, 6)
+      .slice(0, 4)
   }, [insights])
+
+  // CSS-only enter/leave animation: track which keys are "leaving"
+  const prevKeysRef = useRef<Set<string>>(new Set())
+  const [leavingKeys, setLeavingKeys] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const newKeys = new Set(sorted.map(stableKey))
+    const gone = [...prevKeysRef.current].filter((k) => !newKeys.has(k))
+    if (gone.length > 0) {
+      setLeavingKeys((prev) => new Set([...prev, ...gone]))
+      const timer = window.setTimeout(() => {
+        setLeavingKeys((prev) => {
+          const next = new Set(prev)
+          for (const k of gone) next.delete(k)
+          return next
+        })
+      }, 400)
+      return () => clearTimeout(timer)
+    }
+    prevKeysRef.current = newKeys
+  }, [sorted])
+
+  // Combine current + leaving (leaving cards retain their last known data)
+  const prevInsightsRef = useRef<Map<string, { ins: Insight; text: string }>>(new Map())
+  const displayItems = useMemo(() => {
+    const items: Array<{ key: string; ins: Insight; text: string; leaving: boolean }> = []
+    for (const ins of sorted) {
+      const key = stableKey(ins)
+      const text = commentaryMap[key] ?? ''
+      prevInsightsRef.current.set(key, { ins, text })
+      items.push({ key, ins, text, leaving: false })
+    }
+    for (const key of leavingKeys) {
+      const cached = prevInsightsRef.current.get(key)
+      if (cached) {
+        items.push({ key, ins: cached.ins, text: cached.text, leaving: true })
+      }
+    }
+    return items
+  }, [sorted, commentaryMap, leavingKeys])
 
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
-      {sorted.map((ins) => {
-        const key = stableKey(ins)
-        return (
-          <InsightCard
-            key={key}
-            ins={ins}
-            text={commentaryMap[key] ?? ''}
-          />
-        )
-      })}
-      {sorted.length === 0 && (
+      {displayItems.map(({ key, ins, text, leaving }) => (
+        <InsightCard
+          key={key}
+          ins={ins}
+          text={text}
+          leaving={leaving}
+        />
+      ))}
+      {sorted.length === 0 && leavingKeys.size === 0 && (
         <div className="ins pace">
           <h4>
             No active insights<small>INFO</small>

@@ -25,6 +25,8 @@ export type ReplayModel = {
   timeline: Timeline | null
   playing: boolean
   speed: Speed
+  /** Wall-clock ms between stream frames (for CSS transitions). */
+  frameMs: number
   atMs: number
   loading: boolean
   error: string | null
@@ -152,7 +154,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeStream, loadSnapshot, sessionId])
 
-  // Re-fetch feed + commentary when lang/level change (without resetting position)
+  // Re-fetch feed + commentary when lang/level change (without resetting position).
+  // If currently playing, also reopen the stream so commentary in SSE uses new lang/level.
   useEffect(() => {
     if (!sessionId || atMs === 0) return
     setFeedError(null)
@@ -162,6 +165,11 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     getCommentary(sessionId, atMs, lang, level)
       .then((r) => setCommentary(r.items))
       .catch(() => undefined)
+
+    // Reopen stream with same position but new lang/level so live commentary updates
+    if (sourceRef.current) {
+      openStream(speed, atMs, lang, level)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, level])
 
@@ -177,6 +185,13 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     [closeStream, lang, level, loadSnapshot],
   )
 
+  // Adaptive tick: keep wall-clock interval ~200-500ms for smooth playback
+  const tickMs = useCallback((s: Speed): number => {
+    if (s === 1) return 500
+    if (s === 5) return 1000
+    return 2000
+  }, [])
+
   const openStream = useCallback(
     (nextSpeed: Speed, startMs: number, nextLang: Lang, nextLevel: Level) => {
       if (!sessionId) return
@@ -184,7 +199,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       setError(null)
       setPlaying(true)
 
-      const source = new EventSource(streamUrl(sessionId, nextSpeed, startMs))
+      const tick = tickMs(nextSpeed)
+      const source = new EventSource(streamUrl(sessionId, nextSpeed, startMs, tick))
       sourceRef.current = source
 
       source.onmessage = (event) => {
@@ -245,6 +261,9 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setLevelState(nextLevel)
   }, [])
 
+  // Wall-clock interval between frames: tick_ms(session) / speed
+  const frameMs = tickMs(speed) / speed
+
   return {
     state,
     insights,
@@ -254,6 +273,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     timeline,
     playing,
     speed,
+    frameMs,
     atMs,
     loading,
     error,
