@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import type { DriverState } from '../../api/types'
 import { teamColor } from './teamColors'
 
@@ -27,16 +27,36 @@ function recentLaps(driver: DriverState): number[] {
   return []
 }
 
+/** Detect if a lap time is an in/out-lap: 10+ seconds slower than median of recent laps */
+function isPitLap(driver: DriverState): boolean {
+  if (!driver.last_lap_ms || driver.last_lap_ms <= 0) return false
+  const raw = (driver as Record<string, unknown>)['recent_laps_ms']
+  let medMs: number | null = null
+  if (Array.isArray(raw) && (raw as number[]).length > 0) {
+    const valid = (raw as number[]).filter((v) => v > 0)
+    if (valid.length > 0) {
+      const sorted = [...valid].sort((a, b) => a - b)
+      const mid = Math.floor(sorted.length / 2)
+      medMs = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    }
+  }
+  if (medMs === null) return false
+  return (driver.last_lap_ms - medMs) >= 10000
+}
+
 /** Single-driver card (non-H2H mode) */
 function DriverCard({ driverId, driver }: { driverId: string; driver: DriverState }) {
   const color = teamColor(driverId)
   const laps = recentLaps(driver)
   const compound = driver.tyre_compound?.charAt(0).toUpperCase() ?? '?'
+  const inPit = driver.in_pit
+  const pitLap = !inPit && isPitLap(driver)
 
   return (
     <div className="focus-card">
       <div className="focus-head" style={{ borderLeftColor: color }}>
         <span className="focus-code" style={{ color }}>{driverId}</span>
+        {inPit && <span className="focus-inpit-badge">IN PIT</span>}
         <span className="focus-pos">P{driver.position ?? '—'}</span>
         <span className="focus-gap">
           {driver.position === 1 ? 'LEADER' : fmtGap(driver.gap_s)}
@@ -44,16 +64,20 @@ function DriverCard({ driverId, driver }: { driverId: string; driver: DriverStat
         <span className={`focus-tyre ty ${compound}`}>
           {compound}<span className="age">{driver.tyre_age_laps ?? '—'}</span>
         </span>
-        <span className="focus-pits">{driver.pit_count ?? 0} PIT{(driver.pit_count ?? 0) !== 1 ? 'S' : ''}</span>
+        <span className="focus-pits" style={{ fontSize: 13 }}>{driver.pit_count ?? 0}×PIT</span>
       </div>
       <div className="focus-laps">
         {laps.length === 0 && <span className="focus-lap-cell dim">—</span>}
         {laps.map((ms, i) => {
           const prev = laps[i - 1]
           const delta = prev !== undefined ? ms - prev : null
+          const isLast = i === laps.length - 1
           return (
             <span key={i} className="focus-lap-cell">
               <span className="focus-lap-time">{fmtLap(ms)}</span>
+              {isLast && pitLap && (
+                <span className="focus-pitlap-ann">PIT LAP</span>
+              )}
               {delta !== null && (
                 <span className={`focus-lap-delta ${delta < 0 ? 'up' : 'down'}`}>
                   {delta < 0 ? '▲' : '▼'}{Math.abs(delta / 1000).toFixed(2)}
@@ -138,9 +162,15 @@ function H2HDeltas({
             ? `${(Math.abs(lastDiff) / 1000).toFixed(2)}s`
             : '—'}
         </span>
-        {lastDiff !== null && (
-          <span className="h2h-delta-who">{lastDiff < 0 ? idA : idB} faster</span>
-        )}
+        {lastDiff !== null && (() => {
+          const fasterId = lastDiff < 0 ? idA : idB
+          return (
+            <span
+              className="h2h-delta-who h2h-delta-faster"
+              style={{ color: teamColor(fasterId) }}
+            >{fasterId} faster</span>
+          )
+        })()}
       </div>
       <div className="h2h-delta-cell">
         <span className="h2h-delta-label">Δ TYRE</span>

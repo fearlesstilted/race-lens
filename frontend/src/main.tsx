@@ -145,10 +145,13 @@ function App() {
             positionsData={replay.positionsData}
           />
           {hasFocus ? (
-            <FocusPanel
-              selectedIds={selectedIds}
-              drivers={state?.drivers ?? {}}
-            />
+            <>
+              <FocusPanel
+                selectedIds={selectedIds}
+                drivers={state?.drivers ?? {}}
+              />
+              <RaceFeed items={replay.feed.slice(-4)} compact />
+            </>
           ) : (
             <RaceFeed items={replay.feed} />
           )}

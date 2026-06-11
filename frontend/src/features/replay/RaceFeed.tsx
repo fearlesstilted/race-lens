@@ -49,7 +49,7 @@ function itemKey(item: FeedItem): string {
   return `${item.at_ms}|${item.kind}|${item.text.slice(0, 20)}`
 }
 
-export function RaceFeed({ items }: { items: FeedItem[] }) {
+export function RaceFeed({ items, compact }: { items: FeedItem[]; compact?: boolean }) {
   const prevKeysRef = useRef<Set<string>>(new Set())
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set())
 
@@ -70,8 +70,8 @@ export function RaceFeed({ items }: { items: FeedItem[] }) {
   }, [items])
 
   return (
-    <div className="ev-scroll">
-      <div className="label">RACE FEED</div>
+    <div className={compact ? 'ev-scroll ev-scroll-compact' : 'ev-scroll'}>
+      {!compact && <div className="label">RACE FEED</div>}
       {items.map((item) => {
         const k = itemKey(item)
         return (

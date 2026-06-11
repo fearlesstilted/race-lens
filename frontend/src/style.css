@@ -980,6 +980,49 @@ body {
   letter-spacing: 0.08em;
 }
 
+/* ── IN PIT amber badge in focus panel ───────────────────────── */
+.focus-inpit-badge {
+  display: inline-block;
+  font: 800 13px/1 var(--cond);
+  letter-spacing: 0.18em;
+  color: #000;
+  background: var(--amber);
+  padding: 2px 7px;
+  vertical-align: middle;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
+/* ── PIT LAP annotation next to lap time ─────────────────────── */
+.focus-pitlap-ann {
+  font: 700 10px/1 var(--cond);
+  letter-spacing: 0.14em;
+  color: var(--amber);
+  margin-top: 1px;
+}
+
+/* ── compact feed strip under focus panel ───────────────────── */
+.ev-scroll-compact {
+  height: 140px;
+  overflow: hidden;
+  border-top: 1px solid var(--hair);
+  flex-shrink: 0;
+}
+.ev-scroll-compact .ev {
+  padding: 6px 22px;
+  font-size: 12px;
+}
+
+/* ── H2H delta labels ─────────────────────────────────────────── */
+.h2h-delta-who {
+  font: 600 13px var(--cond);
+  color: #f4f4f6;
+  letter-spacing: 0.08em;
+}
+.h2h-delta-faster {
+  font-weight: 700;
+}
+
 /* ── focused insight card ─────────────────────────────────────── */
 .ins-focused {
   outline: 1px solid #fff;
