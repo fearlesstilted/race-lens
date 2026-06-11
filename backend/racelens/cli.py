@@ -35,6 +35,15 @@ def main() -> None:
     p_track.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
     p_track.add_argument("-o", "--out", required=True, help="output .track.json path")
 
+    p_posraw = sub.add_parser(
+        "positions-raw",
+        help="export raw X/Y telemetry per driver as JSONL for Rust resampler",
+    )
+    p_posraw.add_argument("year", type=int)
+    p_posraw.add_argument("gp", help='Grand Prix name, e.g. "Monaco"')
+    p_posraw.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
+    p_posraw.add_argument("-o", "--out", required=True, help="output .jsonl path")
+
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
@@ -126,10 +135,76 @@ def main() -> None:
         else:
             session_id = stem
 
-        data = {"session_id": session_id, "viewbox": [VW, VH], "points": points}
+        data = {
+            "session_id": session_id,
+            "viewbox": [VW, VH],
+            "extent_dm": [x_min, y_min, x_max, y_max],
+            "padding": PAD,
+            "points": points,
+        }
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(data), encoding="utf-8")
         print(f"{len(points)} points → {out_path}", file=sys.stderr)
+
+    elif args.cmd == "positions-raw":
+        import fastf1
+        import pandas as pd
+
+        cache_dir = Path("fastf1_cache")
+        cache_dir.mkdir(exist_ok=True)
+        fastf1.Cache.enable_cache(str(cache_dir))
+
+        session_map = {
+            "R": "Race", "Q": "Qualifying",
+            "FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3",
+        }
+        session_name = session_map.get(args.session.upper(), args.session)
+
+        print(f"Loading {args.year} {args.gp} {session_name} …", file=sys.stderr)
+        ses = fastf1.get_session(args.year, args.gp, session_name)
+        ses.load(telemetry=True)
+
+        # Compute t0 rebase identical to fastf1_adapter: earliest lap-1 start = min(Time - LapTime)
+        lap1 = ses.laps[ses.laps["LapNumber"] == 1]
+        starts = (lap1["Time"] - lap1["LapTime"]).dropna()
+        t0_td = starts.min() if len(starts) else pd.Timedelta(0)
+        t0_ms = int(t0_td.total_seconds() * 1000) if not pd.isna(t0_td) else 0
+
+        # session_zero for Date→session-time conversion (same as fastf1_adapter race control path)
+        session_zero = pd.Timestamp(ses.date) - pd.Timedelta(ses.session_start_time)
+
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        count = 0
+        with out.open("w", encoding="utf-8") as fh:
+            for drv_num in ses.pos_data:
+                try:
+                    drv_abbr = ses.get_driver(str(drv_num))["Abbreviation"]
+                except Exception:
+                    drv_abbr = str(drv_num)
+                pos_df = ses.pos_data[drv_num]
+                if pos_df is None or len(pos_df) == 0:
+                    continue
+                for row in pos_df.itertuples():
+                    # Date column is absolute timestamp → session-relative ms → rebase
+                    try:
+                        date_ts = pd.Timestamp(row.Date)
+                        t_ms = int((date_ts - session_zero).total_seconds() * 1000) - t0_ms
+                    except Exception:
+                        continue
+                    if t_ms < -60000:
+                        continue
+                    try:
+                        x = float(row.X)
+                        y = float(row.Y)
+                    except Exception:
+                        continue
+                    line = json.dumps({"driver": drv_abbr, "t_ms": t_ms, "x": x, "y": y})
+                    fh.write(line + "\n")
+                    count += 1
+
+        print(f"{count} rows → {out}", file=sys.stderr)
 
     elif args.cmd == "state":
         from racelens.events.models import load_jsonl
