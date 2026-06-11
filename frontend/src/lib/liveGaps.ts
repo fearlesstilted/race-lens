@@ -33,17 +33,21 @@ function median(values: number[]): number {
 }
 
 /**
- * Interpolate fractional position [0, 1] for a driver at atMs.
- * Returns null if no telemetry or null frame.
+ * Compute the fractional position within the current lap [0, 1) for a driver at atMs.
  *
- * The fraction is a synthetic value derived from the frame index so that
- * we can compare positions across cars consistently. We map each non-null
- * frame to a fraction = frameIndex / totalFrames.
+ * The key insight: two cars running close together have nearly the same absolute
+ * frame index, so dividing by totalFrames gives almost identical fractions → ~0 gap.
+ * We must express each car's position as a fraction *within one lap*, not across
+ * the entire race.
+ *
+ * We estimate frames-per-lap from the driver's last_lap_ms and tick_ms, then
+ * compute frac = (frameIndex % framesPerLap) / framesPerLap.
  */
 function interpolateFraction(
   posData: PositionsData,
   driverId: string,
   atMs: number,
+  lapMs: number,
 ): number | null {
   const frames = posData.drivers[driverId]
   if (!frames || frames.length === 0) return null
@@ -58,15 +62,22 @@ function interpolateFraction(
   const f0 = frames[i0]
   if (f0 === null) return null
 
-  // Fraction based on raw frame index / total frames (position on path)
-  // We just use fi normalised — each frame advances 1/N of a lap
-  const totalFrames = frames.length
+  // Frames per lap derived from lap time and tick resolution
+  const framesPerLap = lapMs / posData.tick_ms
+  if (framesPerLap <= 0) return null
+
+  // Sub-frame interpolation alpha
   const alpha = fi - i0
 
-  // Find the next valid frame for interpolation
-  const i1 = i0 + 1
-  const frac0 = i0 / totalFrames
-  const frac1 = i1 / totalFrames
+  // Position within current lap as a fraction [0, 1)
+  const frac0 = (i0 % framesPerLap) / framesPerLap
+  const frac1 = ((i0 + 1) % framesPerLap) / framesPerLap
+
+  // Handle lap boundary wrap (frac1 could wrap near 0)
+  if (frac1 < frac0) {
+    // Crossing lap boundary — interpolate linearly without wrapping
+    return frac0 + alpha * (1 - frac0)
+  }
 
   return frac0 + alpha * (frac1 - frac0)
 }
@@ -110,11 +121,15 @@ export function computeLiveGaps(
   const medianLapS = median(lapTimesS)
 
   // Compute fractional positions for all on-track drivers
+  // Each driver's lap time is used to determine frames-per-lap for their fraction
   const fracs = new Map<string, number>()
   for (const id of classification) {
     const d = drivers[id]
     if (!d || d.in_pit || d.retired) continue
-    const frac = interpolateFraction(posData, id, atMs)
+    const lapMs = d.last_lap_ms !== null && d.last_lap_ms > 0
+      ? d.last_lap_ms
+      : medianLapS * 1000
+    const frac = interpolateFraction(posData, id, atMs, lapMs)
     if (frac !== null) {
       fracs.set(id, frac)
     }
@@ -190,6 +205,32 @@ export function computeLiveGaps(
       interval_s: estInterval,
       fromTelemetry: true,
     })
+  }
+
+  // Sanity guard: if all telemetry gaps are suspiciously near zero but official
+  // gaps are substantial, the telemetry fractions are degenerate — fall back entirely.
+  {
+    const telEntries = classification.slice(1).map((id) => {
+      const r = result.get(id)
+      const off = drivers[id]?.gap_s
+      return { r, off }
+    }).filter(({ r }) => r?.fromTelemetry)
+
+    if (telEntries.length > 0) {
+      const allNearZero = telEntries.every(({ r }) => (r?.gap_s ?? 0) < 0.05)
+      const anyOfficialLarge = telEntries.some(({ off }) => off !== null && off !== undefined && off > 1)
+      if (allNearZero && anyOfficialLarge) {
+        console.warn('[liveGaps] telemetry degenerate (all gaps ~0, official >1s) — falling back to official')
+        for (const id of classification) {
+          const d = drivers[id]
+          if (!d) continue
+          const existing = result.get(id)
+          if (existing?.fromTelemetry) {
+            result.set(id, { gap_s: d.gap_s, interval_s: d.interval_s, fromTelemetry: false })
+          }
+        }
+      }
+    }
   }
 
   // Console log: compare est vs official for P2 (first car with a gap)
