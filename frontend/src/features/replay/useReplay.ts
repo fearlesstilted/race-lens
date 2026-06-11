@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getBattles, getCommentary, getFeed, getInsights, getState, getTimeline, streamUrl } from '../../api/client'
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceState, Timeline } from '../../api/types'
+import { computeLiveGaps } from '../../lib/liveGaps'
+import type { LiveGapResult, PositionsData } from '../../lib/liveGaps'
 
 type Speed = 1 | 5 | 10
 export type Lang = 'en' | 'ru'
@@ -33,6 +35,10 @@ export type ReplayModel = {
   feedError: string | null
   lang: Lang
   level: Level
+  /** Positions telemetry data (null if not available for this session). */
+  positionsData: PositionsData | null
+  /** Live gap estimates from telemetry; empty map if telemetry unavailable. */
+  liveGaps: Map<string, LiveGapResult>
   scrub: (atMs: number) => void
   play: () => void
   pause: () => void
@@ -56,6 +62,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const [feedError, setFeedError] = useState<string | null>(null)
   const [lang, setLangState] = useState<Lang>(readLang)
   const [level, setLevelState] = useState<Level>(readLevel)
+  const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
+  const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
   const sourceRef = useRef<EventSource | null>(null)
   const requestSeq = useRef(0)
 
@@ -114,6 +122,16 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     [sessionId],
   )
 
+  // Recompute live gaps whenever state or positions data changes
+  useEffect(() => {
+    if (!state || !positionsData) {
+      setLiveGaps(new Map())
+      return
+    }
+    const gaps = computeLiveGaps(positionsData, state.at_ms, state.classification, state.drivers)
+    setLiveGaps(gaps)
+  }, [state, positionsData])
+
   useEffect(() => {
     closeStream()
     setPlaying(false)
@@ -126,8 +144,16 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setAtMs(0)
     setError(null)
     setFeedError(null)
+    setPositionsData(null)
+    setLiveGaps(new Map())
 
     if (!sessionId) return
+
+    // Fetch positions telemetry (non-critical, best-effort)
+    fetch(`/api/sessions/${encodeURIComponent(sessionId)}/positions`)
+      .then((r) => r.ok ? r.json() as Promise<PositionsData> : null)
+      .then((d) => { if (!cancelled) setPositionsData(d) })
+      .catch(() => { if (!cancelled) setPositionsData(null) })
 
     let cancelled = false
     setLoading(true)
@@ -280,6 +306,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     feedError,
     lang,
     level,
+    positionsData,
+    liveGaps,
     scrub,
     play,
     pause,

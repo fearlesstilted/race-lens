@@ -2,23 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
 import type { DriverState } from '../../api/types'
+import type { PositionsData } from '../../lib/liveGaps'
 import { teamColor } from './teamColors'
-
-// ── Real-telemetry positions data ────────────────────────────────────────────
-
-type PositionsData = {
-  session_id: string
-  start_ms: number
-  tick_ms: number
-  viewbox: [number, number]
-  drivers: Record<string, ([number, number] | null)[]>
-}
-
-async function fetchPositions(sessionId: string): Promise<PositionsData | null> {
-  const res = await fetch(`/api/sessions/${sessionId}/positions`)
-  if (!res.ok) return null
-  return res.json()
-}
 
 /** Interpolate a real position from positions data at atMs.
  * Returns null if no data or null frame. */
@@ -60,6 +45,8 @@ type Props = {
   classification: string[]
   sessionStatus?: string
   selectedIds?: string[]
+  /** Positions telemetry data lifted from parent (useReplay). If null, schematic mode is used. */
+  positionsData: PositionsData | null
 }
 
 // Pit lane: a horizontal row below the map bottom edge
@@ -148,11 +135,11 @@ function computeTargetFractions(
 
 export const TrackMap = React.memo(function TrackMap({
   sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, selectedIds = [],
+  positionsData,
 }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
-  const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
 
   // Per-car current fraction (animated) and target fraction (latest computed)
   const currentFracRef = useRef<Map<string, number>>(new Map())
@@ -193,18 +180,14 @@ export const TrackMap = React.memo(function TrackMap({
   const atMsRef = useRef(atMs)
   useEffect(() => { atMsRef.current = atMs }, [atMs])
 
-  // Fetch track data and positions data whenever session changes
+  // Fetch track data whenever session changes
   useEffect(() => {
     if (!sessionId) return
     setTrackData(null)
     setTrackError(false)
-    setPositionsData(null)
     getTrack(sessionId)
       .then((d) => setTrackData(d))
       .catch(() => setTrackError(true))
-    fetchPositions(sessionId)
-      .then((d) => setPositionsData(d))
-      .catch(() => setPositionsData(null))
   }, [sessionId])
 
   // Update target fractions whenever atMs / drivers / classification change

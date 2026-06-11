@@ -128,6 +128,7 @@ function App() {
           battles={replay.battles}
           selectedIds={selectedIds}
           onSelectDriver={handleSelectDriver}
+          liveGaps={replay.liveGaps}
         />
 
         <div className="col col-center">
@@ -141,6 +142,7 @@ function App() {
             classification={state?.classification ?? []}
             sessionStatus={sessionStatus}
             selectedIds={selectedIds}
+            positionsData={replay.positionsData}
           />
           {hasFocus ? (
             <FocusPanel

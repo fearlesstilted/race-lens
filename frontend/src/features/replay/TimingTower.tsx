@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Battle, DriverState } from '../../api/types'
+import type { LiveGapResult } from '../../lib/liveGaps'
 import { teamColor } from './teamColors'
 
 type DriverRow = { id: string } & DriverState
@@ -9,6 +10,8 @@ type Props = {
   battles: Battle[]
   selectedIds: string[]
   onSelectDriver: (id: string) => void
+  /** Live gap estimates from telemetry; key = driver_id */
+  liveGaps?: Map<string, LiveGapResult>
 }
 
 function fmtLastLap(ms: number | null): string {
@@ -46,6 +49,7 @@ export const TimingTower = React.memo(function TimingTower({
   battles,
   selectedIds,
   onSelectDriver,
+  liveGaps,
 }: Props) {
   const battleSet = useMemo(() => {
     const s = new Set<string>()
@@ -185,20 +189,24 @@ export const TimingTower = React.memo(function TimingTower({
         const trend = paceTrend(row)
         const hasFastestLap = row.id === fastestLapHolder
 
+        const liveEst = liveGaps?.get(row.id)
+        const displayInterval = liveEst?.fromTelemetry ? liveEst.interval_s : row.interval_s
+        const displayGap = liveEst?.fromTelemetry ? liveEst.gap_s : row.gap_s
+
         const intDisplay = isRetired
           ? <span className="gap dim">OUT</span>
           : isLead
             ? <span className="gap dim">—</span>
-            : row.interval_s !== null
-              ? <span className="gap dim">{`+${row.interval_s.toFixed(1)}`}</span>
+            : displayInterval !== null && displayInterval !== undefined
+              ? <span className="gap dim">{`+${displayInterval.toFixed(1)}`}</span>
               : <span className="gap dim">—</span>
 
         const gapDisplay = isRetired
           ? <span className="gap dim">OUT</span>
           : isLead
             ? <span className="gap dim">—</span>
-            : <span className={`gap${row.gap_s === null ? ' dim' : ''}`}>
-                {row.gap_s !== null ? `+${row.gap_s.toFixed(1)}` : '—'}
+            : <span className={`gap${displayGap === null || displayGap === undefined ? ' dim' : ''}`}>
+                {displayGap !== null && displayGap !== undefined ? `+${displayGap.toFixed(1)}` : '—'}
               </span>
 
         const compound = row.tyre_compound?.charAt(0).toUpperCase() ?? '?'
