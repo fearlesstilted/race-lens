@@ -27,7 +27,7 @@ html, body, #root {
 body {
   background: var(--bg);
   color: var(--ink);
-  font: clamp(12px, 1.1vw, 14px)/1.5 var(--body);
+  font: 15px/1.5 var(--body);
   overflow: hidden;
 }
 
@@ -214,7 +214,7 @@ body {
 /* ── layout grid ──────────────────────────────────────────────── */
 .wrap {
   display: grid;
-  grid-template-columns: 380px 1fr 360px;
+  grid-template-columns: 420px 1fr 360px;
   gap: 0;
   padding: 0 24px;
   min-height: 0;
@@ -247,12 +247,13 @@ body {
 }
 
 /* ── timing tower ─────────────────────────────────────────────── */
+/* columns: POS | bar | DRV | INT(opt) | GAP | LAST | trend | TYR+age | PITS(opt) */
 .trow-hdr {
   display: grid;
-  grid-template-columns: 36px 6px 56px 76px 76px 90px 46px 36px;
+  grid-template-columns: 38px 6px 58px 78px 78px 92px 18px 52px 34px;
   align-items: center;
-  gap: 12px;
-  height: 22px;
+  gap: 10px;
+  height: 24px;
   padding: 0 24px 0 18px;
   font: 600 11px var(--cond);
   letter-spacing: 0.2em;
@@ -262,13 +263,26 @@ body {
 }
 .trow {
   display: grid;
-  grid-template-columns: 36px 6px 56px 76px 76px 90px 46px 36px;
+  grid-template-columns: 38px 6px 58px 78px 78px 92px 18px 52px 34px;
   align-items: center;
-  gap: 12px;
-  height: clamp(28px, calc((var(--tower-body-h, 600px) - 60px) / var(--row-count, 20)), 44px);
+  gap: 10px;
+  height: clamp(36px, calc((var(--tower-body-h, 600px) - 60px) / var(--row-count, 20)), 46px);
   padding: 0 24px 0 18px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
+}
+/* Hide INT and PITS columns below 1500px */
+@media (max-width: 1500px) {
+  .trow-hdr,
+  .trow {
+    grid-template-columns: 38px 6px 58px 0 78px 92px 18px 52px 0;
+  }
+  .trow-hdr > :nth-child(4),
+  .trow-hdr > :nth-child(9),
+  .trow > :nth-child(4),
+  .trow > :nth-child(9) {
+    display: none;
+  }
 }
 .trow:first-of-type {
   border-top: 0;
@@ -288,7 +302,7 @@ body {
 }
 /* last lap column */
 .last-lap {
-  font: 600 15px var(--cond);
+  font: 600 17px var(--cond);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   text-align: right;
@@ -297,7 +311,7 @@ body {
 }
 /* pit count */
 .pits-count {
-  font: 600 12px var(--cond);
+  font: 600 13px var(--cond);
   color: var(--dim);
   text-align: center;
 }
@@ -306,7 +320,7 @@ body {
   background: var(--ink);
   color: #000;
   text-align: center;
-  line-height: 24px;
+  line-height: 26px;
   transform: skewX(-8deg);
 }
 .trow.lead .pos {
@@ -322,11 +336,11 @@ body {
 }
 /* gapline removed — replaced by INT column */
 .ty {
-  font: 800 13px var(--cond);
+  font: 800 15px var(--cond);
   text-align: center;
   display: flex;
   align-items: baseline;
-  gap: 3px;
+  gap: 4px;
 }
 .ty.M { color: var(--med); }
 .ty.H { color: var(--hard); }
@@ -335,10 +349,10 @@ body {
 .ty.W { color: #0067ff; }
 .ty .age {
   color: var(--dim);
-  font: 600 10px var(--cond);
+  font: 600 11px var(--cond);
 }
 .gap {
-  font: 600 15px var(--cond);
+  font: 600 16px var(--cond);
   text-align: right;
   color: var(--ink);
 }
@@ -502,7 +516,7 @@ body {
   background: #ffffff42;
 }
 .ins h4 {
-  font: italic 700 17px var(--cond);
+  font: italic 700 19px var(--cond);
   letter-spacing: 0.05em;
   display: flex;
   justify-content: space-between;
@@ -518,7 +532,7 @@ body {
 }
 .ins p {
   color: #c4c4cd;
-  font-size: 13.5px;
+  font-size: 14.5px;
   margin-top: 4px;
 }
 .ins .data {
@@ -687,17 +701,7 @@ body {
   background: var(--red);
 }
 
-/* ── timing tower: extra trend column ────────────────────────── */
-.trow,
-.trow-hdr {
-  grid-template-columns: 36px 6px 56px 76px 76px 90px 18px 46px 36px;
-}
-@media (max-width: 1280px) {
-  .trow,
-  .trow-hdr {
-    grid-template-columns: 28px 5px 52px 60px 60px 68px 14px 38px 22px;
-  }
-}
+/* trend column width defined in .trow declaration above */
 
 /* pace trend arrow */
 .pace-trend {
@@ -855,19 +859,13 @@ body {
 /* ── responsive ───────────────────────────────────────────────── */
 @media (max-width: 1380px) {
   .wrap {
-    grid-template-columns: 340px 1fr 320px;
+    grid-template-columns: 400px 1fr 340px;
   }
 }
 @media (max-width: 1280px) {
   .wrap {
-    grid-template-columns: 300px 1fr 280px;
+    grid-template-columns: 360px 1fr 300px;
     padding: 0 12px;
-  }
-  .trow,
-  .trow-hdr {
-    grid-template-columns: 28px 5px 52px 60px 60px 68px 14px 38px 22px;
-    gap: 4px;
-    padding: 0 10px;
   }
   .ins {
     padding: 10px 14px;
