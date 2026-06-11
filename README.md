@@ -27,7 +27,7 @@ construction: state at time `t` uses only events up to `t`.
 |---|---|---|
 | **Events** | Deterministic IDs, typed envelope, dedupe | [`racelens/events/`](backend/racelens/events/) |
 | **Replay engine** | `state_at(t)`, snapshots, no future leakage | [`racelens/replay/`](backend/racelens/replay/) |
-| **Insights** | 4 detectors: traffic risk, DRS train, pit window, undercut | [`racelens/insights/`](backend/racelens/insights/) |
+| **Insights** | 6 detectors: traffic risk, DRS train, pit window, undercut, tyre degradation, clean air pace | [`racelens/insights/`](backend/racelens/insights/) |
 | **Commentary** | EN/RU × beginner/pro templates, no AI required | [`racelens/commentary/`](backend/racelens/commentary/) |
 | **API / SSE** | FastAPI REST + Server-Sent Events stream + live polling | [`racelens/api.py`](backend/racelens/api.py) |
 | **Adapters** | FastF1 and OpenF1 normalized to the same envelope | [`racelens/adapters/`](backend/racelens/adapters/) |
@@ -88,6 +88,7 @@ docker compose up
 | `GET` | `/api/sessions/{id}/state?at_ms=N` | Race state snapshot at timestamp |
 | `GET` | `/api/sessions/{id}/timeline` | Full event timeline |
 | `GET` | `/api/sessions/{id}/insights?at_ms=N` | Structured strategy insights |
+| `GET` | `/api/sessions/{id}/battles?at_ms=N` | Active wheel-to-wheel battles |
 | `GET` | `/api/sessions/{id}/commentary?at_ms=N&lang=en&level=pro` | Human-readable commentary |
 | `GET` | `/api/sessions/{id}/feed?until_ms=N&lang=en&limit=30` | Spoiler-free event ticker (newest first) |
 | `GET` | `/api/sessions/{id}/stream?speed=N` | SSE simulated-live stream |

@@ -10,7 +10,6 @@ from typing import Any
 CLEAN_AIR_INTERVAL_THRESHOLD_S = 2.5   # gap beyond which a driver is in clear air
 MIN_LAPS_WINDOW = 3                     # recent_laps_ms must have exactly 3 entries
 
-_NEUTRALIZATION_STATUSES = {"red_flag", "safety_car", "vsc"}
 
 
 def detect_clean_air_pace(state: dict[str, Any]) -> list[dict[str, Any]]:
