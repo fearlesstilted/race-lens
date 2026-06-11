@@ -2,7 +2,7 @@
 :root {
   --bg: #0c0c0f;
   --ink: #f4f4f6;
-  --dim: #8e8e99;
+  --dim: #a0a0ac;
   --hair: #ffffff14;
   --red: #e8002d;
   --amber: #f2a900;
@@ -240,7 +240,7 @@ body {
   gap: 6px;
   height: 22px;
   padding: 0 18px;
-  font: 600 10px var(--cond);
+  font: 600 11px var(--cond);
   letter-spacing: 0.2em;
   color: var(--dim);
   border-top: 1px solid var(--hair);
@@ -274,7 +274,7 @@ body {
 }
 /* last lap column */
 .last-lap {
-  font: 600 13px var(--cond);
+  font: 600 15px var(--cond);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   text-align: right;
@@ -401,7 +401,7 @@ body {
   gap: 10px;
   padding: 10px 22px;
   border-top: 1px solid #ffffff0a;
-  font-size: 13px;
+  font-size: 14px;
 }
 .ev-lap {
   font: 700 13px var(--cond);
@@ -430,7 +430,7 @@ body {
 }
 .ins {
   margin: 0 0 1px;
-  padding: 14px 22px;
+  padding: 16px 22px;
   border-top: 1px solid #ffffff0a;
   position: relative;
 }
@@ -450,7 +450,7 @@ body {
   background: #ffffff42;
 }
 .ins h4 {
-  font: italic 700 16px var(--cond);
+  font: italic 700 17px var(--cond);
   letter-spacing: 0.05em;
   display: flex;
   justify-content: space-between;
@@ -465,15 +465,15 @@ body {
   color: var(--red);
 }
 .ins p {
-  color: #b9b9c2;
-  font-size: 12.5px;
+  color: #c4c4cd;
+  font-size: 13.5px;
   margin-top: 4px;
 }
 .ins .data {
   margin-top: 7px;
   display: flex;
   gap: 18px;
-  font: 600 13px var(--cond);
+  font: 600 14px var(--cond);
   letter-spacing: 0.06em;
   color: var(--dim);
   font-variant-numeric: tabular-nums;

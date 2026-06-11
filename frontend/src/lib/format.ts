@@ -18,8 +18,12 @@ export const formatDeltaSeconds = (value: number | null) => {
   return `${value.toFixed(1)}s`
 }
 
-export const sessionLabel = (sessionId: string) =>
-  sessionId
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
+// "monaco_2024_race" → "Monaco 2024 — Race"
+// Splits on underscore, Title Cases each part, joins with space,
+// then replaces the last word with " — LastWord" to mark the session type.
+export const sessionLabel = (sessionId: string): string => {
+  const parts = sessionId.split('_').map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+  if (parts.length < 2) return parts.join(' ')
+  const sessionType = parts.pop()!
+  return `${parts.join(' ')} — ${sessionType}`
+}

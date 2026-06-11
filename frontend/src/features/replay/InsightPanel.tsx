@@ -1,9 +1,15 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import type { CommentaryItem, Insight } from '../../api/types'
 
 type Props = {
   insights: Insight[]
   commentary: CommentaryItem[]
+}
+
+/** Stable key: strip trailing :number from insight_id, or fall back to type+drivers. */
+function stableKey(ins: Insight): string {
+  const stripped = ins.insight_id.replace(/:\d+$/, '')
+  return stripped || `${ins.type}:${ins.driver_ids.join(',')}`
 }
 
 function insightTitle(insight: Insight): string {
@@ -24,6 +30,8 @@ function evidenceData(insight: Insight): { label: string; value: string }[] {
   if (typeof ev.tyre_age === 'number') items.push({ label: 'TYRES', value: `${ev.tyre_age} LAPS` })
   return items
 }
+
+const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
 function severityClass(severity: string): string {
   if (severity === 'high') return 'ins high'
@@ -60,22 +68,43 @@ const InsightCard = React.memo(function InsightCard({
 })
 
 export const InsightPanel = React.memo(function InsightPanel({ insights, commentary }: Props) {
-  const commentaryMap: Record<string, string> = {}
-  for (const c of commentary) {
-    if (c.insight_id) commentaryMap[c.insight_id] = c.text
-  }
+  // Build commentary map keyed by stable key (strip trailing :ms from insight_id)
+  const commentaryMap: Record<string, string> = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const c of commentary) {
+      if (c.insight_id) {
+        const key = c.insight_id.replace(/:\d+$/, '')
+        m[key] = c.text
+      }
+    }
+    return m
+  }, [commentary])
+
+  // Sort: severity desc, then stable key alphabetical; limit to 6
+  const sorted = useMemo(() => {
+    return [...insights]
+      .sort((a, b) => {
+        const sd = (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
+        if (sd !== 0) return sd
+        return stableKey(a).localeCompare(stableKey(b))
+      })
+      .slice(0, 6)
+  }, [insights])
 
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
-      {insights.map((ins) => (
-        <InsightCard
-          key={ins.insight_id}
-          ins={ins}
-          text={commentaryMap[ins.insight_id] ?? ''}
-        />
-      ))}
-      {insights.length === 0 && (
+      {sorted.map((ins) => {
+        const key = stableKey(ins)
+        return (
+          <InsightCard
+            key={key}
+            ins={ins}
+            text={commentaryMap[key] ?? ''}
+          />
+        )
+      })}
+      {sorted.length === 0 && (
         <div className="ins pace">
           <h4>
             No active insights<small>INFO</small>
