@@ -89,6 +89,7 @@ function App() {
 
         <div className="col col-center">
           <TrackMap
+            sessionId={sessionId}
             atMs={replay.atMs}
             playing={replay.playing}
             drivers={state?.drivers ?? {}}

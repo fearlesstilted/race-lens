@@ -36,3 +36,8 @@ export const getBattles = (sessionId: string, atMs: number) =>
 
 export const getCommentary = (sessionId: string, atMs: number, lang = 'en', level = 'pro') =>
   json<CommentaryResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/commentary?at_ms=${atMs}&lang=${lang}&level=${level}`)
+
+export type TrackData = { session_id: string; viewbox: [number, number]; points: [number, number][] }
+
+export const getTrack = (sessionId: string) =>
+  json<TrackData>(`/api/sessions/${encodeURIComponent(sessionId)}/track`)
