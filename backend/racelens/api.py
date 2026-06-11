@@ -21,6 +21,7 @@ from racelens.adapters.openf1_adapter import find_session, ingest_openf1
 from racelens.commentary.feed import render_feed
 from racelens.commentary.renderer import render_all
 from racelens.events.models import load_jsonl
+from racelens.insights.battles import detect_battles
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
 from racelens.replay.engine import ReplayEngine
@@ -70,6 +71,13 @@ def insights(session_id: str, at_ms: int = Query(ge=0)) -> dict:
     """Active insights at a timestamp, computed from state <= at_ms only."""
     state = _engine(session_id).state_at(at_ms)
     return {"at_ms": at_ms, "insights": detect_all(state)}
+
+
+@app.get("/api/sessions/{session_id}/battles")
+def battles(session_id: str, at_ms: int = Query(ge=0)) -> dict:
+    """On-track battles at a timestamp: pairs of neighbouring drivers in a real fight."""
+    state = _engine(session_id).state_at(at_ms)
+    return {"at_ms": at_ms, "battles": detect_battles(state)}
 
 
 @app.get("/api/sessions/{session_id}/commentary")

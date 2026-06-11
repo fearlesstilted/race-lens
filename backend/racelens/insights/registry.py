@@ -1,6 +1,7 @@
 """Single entry point: all insight detectors over one state."""
 from typing import Any
 
+from racelens.insights.clean_air import detect_clean_air_pace
 from racelens.insights.degradation import detect_degradation
 from racelens.insights.drs_train import detect_drs_train
 from racelens.insights.pit_window import detect_pit_window
@@ -13,6 +14,7 @@ DETECTORS = (
     detect_pit_window,
     detect_undercut_risk,
     detect_degradation,
+    detect_clean_air_pace,
 )
 
 

@@ -74,9 +74,38 @@ TEMPLATES: dict[tuple[str, str, str], str] = {
     ("DEGRADATION_TREND", "ru", "beginner"):
         "Резина {a} сдаёт — каждый круг медленнее предыдущего. "
         "Команда скорее всего скоро вызовет в боксы.",
+
+    ("CLEAN_AIR_PACE_LEADER", "en", "pro"):
+        "{a} is the fastest car in clear air, averaging {avg_s:.3f}s/lap "
+        "({in_clean} drivers free). {strategy_note}",
+    ("CLEAN_AIR_PACE_LEADER", "en", "beginner"):
+        "{a} has no traffic and is showing the best pace in clear air "
+        "({avg_s:.3f}s average). {strategy_note}",
+    ("CLEAN_AIR_PACE_LEADER", "ru", "pro"):
+        "{a} — самая быстрая машина в чистом воздухе: средний круг {avg_s:.3f}с "
+        "({in_clean} пилотов без трафика). {strategy_note}",
+    ("CLEAN_AIR_PACE_LEADER", "ru", "beginner"):
+        "{a} едет в свободном воздухе и показывает лучший темп "
+        "({avg_s:.3f}с в среднем). {strategy_note}",
+
+    ("BATTLE_DETECTED", "en", "pro"):
+        "P{p1} {a} vs P{p2} {b}: gap {gap:.2f}s, laps within pace window — "
+        "DRS attack possible next straight.",
+    ("BATTLE_DETECTED", "en", "beginner"):
+        "{a} is right behind {b} — just {gap:.2f}s apart and evenly matched. "
+        "An overtake could happen any lap.",
+    ("BATTLE_DETECTED", "ru", "pro"):
+        "P{p1} {a} против P{p2} {b}: отставание {gap:.2f}с, темп сопоставим — "
+        "атака с DRS возможна на следующей прямой.",
+    ("BATTLE_DETECTED", "ru", "beginner"):
+        "{a} прямо за {b} — всего {gap:.2f}с при равном темпе. "
+        "Обгон может случиться в любой момент.",
 }
 
-_BASE_TYPES = ("TRAFFIC_RISK", "DRS_TRAIN", "PIT_WINDOW", "UNDERCUT_RISK", "DEGRADATION_TREND")
+_BASE_TYPES = (
+    "TRAFFIC_RISK", "DRS_TRAIN", "PIT_WINDOW", "UNDERCUT_RISK",
+    "DEGRADATION_TREND", "CLEAN_AIR_PACE_LEADER", "BATTLE_DETECTED",
+)
 
 
 def _params(base: str, ins: dict[str, Any]) -> dict[str, Any]:
@@ -94,6 +123,19 @@ def _params(base: str, ins: dict[str, Any]) -> dict[str, Any]:
                 "gap": ev["interval_s"], "age": ev["attacker_tyre_age_laps"]}
     if base == "DEGRADATION_TREND":
         return {"a": ids[0], "drift_s": ev["drift_ms"] / 1000, "age": ev["tyre_age_laps"]}
+    if base == "CLEAN_AIR_PACE_LEADER":
+        avg_s = ev["avg_lap_ms"] / 1000
+        vs = ev.get("vs_race_leader_ms")
+        if vs is not None and vs < 0:
+            strategy_note = f"faster than the leader's pace by {abs(vs/1000):.3f}s — strategy signal."
+        else:
+            strategy_note = "monitoring for strategic opportunity."
+        return {"a": ids[0], "avg_s": avg_s, "in_clean": ev["drivers_in_clean_air"],
+                "strategy_note": strategy_note}
+    if base == "BATTLE_DETECTED":
+        positions = ev.get("positions", [0, 0])
+        return {"a": ids[0], "b": ids[1], "gap": ev["interval_s"],
+                "p1": positions[0], "p2": positions[1]}
     return {}
 
 
