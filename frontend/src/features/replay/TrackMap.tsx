@@ -15,12 +15,13 @@ type Props = {
   sessionStatus?: string
 }
 
-type CarPos = { x: number; y: number }
-
 // Pit lane: a horizontal row below the map bottom edge
 const PIT_LANE_Y = 370
 const PIT_LANE_X_START = 30
 const PIT_LANE_SPACING = 22
+
+// Smoothing time constant in ms — how fast current_frac catches up to target_frac
+const TAU_MS = 300
 
 function median(values: number[]): number {
   if (values.length === 0) return 78000
@@ -43,13 +44,82 @@ function buildPathD(points: [number, number][]): string {
   return `M ${x0} ${y0} ${rest} Z`
 }
 
+/** Compute target fractions for all on-track drivers. Returns a map driverId → frac (0..1). */
+function computeTargetFractions(
+  atMs: number,
+  drivers: Record<string, DriverState>,
+  classification: string[],
+): Map<string, number> {
+  const result = new Map<string, number>()
+
+  const lapTimes = classification
+    .map((id) => drivers[id]?.last_lap_ms)
+    .filter((v): v is number => v !== null && v !== undefined && v > 0)
+  const avgLapMs = median(lapTimes)
+
+  const leaderFrac = (atMs % avgLapMs) / avgLapMs
+
+  const onTrack: string[] = []
+  for (const id of classification) {
+    if (!drivers[id]?.in_pit && !drivers[id]?.retired) onTrack.push(id)
+  }
+
+  const knownGap: string[] = []
+  const unknownGap: string[] = []
+  for (const id of onTrack) {
+    const d = drivers[id]
+    if (!d) continue
+    if (d.position === 1 || d.gap_s !== null) knownGap.push(id)
+    else unknownGap.push(id)
+  }
+
+  const lastKnownGap = knownGap.length > 0
+    ? (drivers[knownGap[knownGap.length - 1]]?.gap_s ?? 0)
+    : 0
+
+  for (const driverId of onTrack) {
+    const d = drivers[driverId]
+    if (!d) continue
+
+    let gapFrac: number
+    if (d.position === 1) {
+      gapFrac = 0
+    } else if (d.gap_s !== null) {
+      gapFrac = (d.gap_s * 1000) / avgLapMs
+    } else {
+      const unknownIdx = unknownGap.indexOf(driverId)
+      const baseGap = lastKnownGap * 1000
+      gapFrac = (baseGap + (unknownIdx + 1) * 1000) / avgLapMs
+    }
+
+    const frac = ((leaderFrac - gapFrac) % 1 + 1) % 1
+    result.set(driverId, frac)
+  }
+
+  return result
+}
+
 export const TrackMap = React.memo(function TrackMap({
-  sessionId, atMs, playing, frameMs, drivers, classification, sessionStatus,
+  sessionId, atMs, playing, drivers, classification, sessionStatus,
 }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
-  const [positions, setPositions] = useState<Record<string, CarPos>>({})
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
+
+  // Per-car current fraction (animated) and target fraction (latest computed)
+  const currentFracRef = useRef<Map<string, number>>(new Map())
+  const targetFracRef = useRef<Map<string, number>>(new Map())
+
+  // Refs to SVG <g> elements for imperative position updates
+  const carGroupRefs = useRef<Map<string, SVGGElement>>(new Map())
+
+  // rAF loop handle
+  const rafRef = useRef<number | null>(null)
+  const lastTimestampRef = useRef<number | null>(null)
+
+  // Track whether we are playing — used inside rAF closure
+  const playingRef = useRef(playing)
+  useEffect(() => { playingRef.current = playing }, [playing])
 
   // Fetch track data whenever session changes
   useEffect(() => {
@@ -61,75 +131,96 @@ export const TrackMap = React.memo(function TrackMap({
       .catch(() => setTrackError(true))
   }, [sessionId])
 
+  // Update target fractions whenever atMs / drivers / classification change
   useEffect(() => {
-    const path = pathRef.current
-    if (!path || !trackData) return
+    const newTargets = computeTargetFractions(atMs, drivers, classification)
+    targetFracRef.current = newTargets
 
+    if (!playing) {
+      // Scrub: snap current to target immediately, then render one frame
+      for (const [id, frac] of newTargets) {
+        currentFracRef.current.set(id, frac)
+      }
+      renderPositions()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atMs, drivers, classification])
+
+  // Render current positions imperatively via SVG element refs
+  function renderPositions() {
+    const path = pathRef.current
+    if (!path) return
     const totalLength = path.getTotalLength()
 
-    // Avg lap time from the peloton (ignore null)
-    const lapTimes = classification
-      .map((id) => drivers[id]?.last_lap_ms)
-      .filter((v): v is number => v !== null && v !== undefined && v > 0)
-    const avgLapMs = median(lapTimes)
+    for (const [driverId, groupEl] of carGroupRefs.current) {
+      const frac = currentFracRef.current.get(driverId)
+      if (frac === undefined) continue
+      const pt = path.getPointAtLength(frac * totalLength)
+      groupEl.setAttribute('transform', `translate(${pt.x.toFixed(2)},${pt.y.toFixed(2)})`)
+    }
+  }
 
-    // Leader fraction
-    const leaderFrac = (atMs % avgLapMs) / avgLapMs
-
-    // Separate on-track and in-pit
-    const onTrack: string[] = []
-    const inPit: string[] = []
-    for (const id of classification) {
-      if (drivers[id]?.in_pit) inPit.push(id)
-      else onTrack.push(id)
+  // rAF loop — only active while playing
+  useEffect(() => {
+    if (!playing) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+      lastTimestampRef.current = null
+      return
     }
 
-    const knownGap: string[] = []
-    const unknownGap: string[] = []
-    for (const id of onTrack) {
-      const d = drivers[id]
-      if (!d) continue
-      if (d.position === 1 || d.gap_s !== null) knownGap.push(id)
-      else unknownGap.push(id)
-    }
+    function tick(timestamp: number) {
+      const dt = lastTimestampRef.current !== null ? timestamp - lastTimestampRef.current : 16
+      lastTimestampRef.current = timestamp
 
-    const lastKnownGap = knownGap.length > 0
-      ? (drivers[knownGap[knownGap.length - 1]]?.gap_s ?? 0)
-      : 0
+      const k = 1 - Math.exp(-dt / TAU_MS)
 
-    const newPositions: Record<string, CarPos> = {}
-
-    for (const driverId of onTrack) {
-      const d = drivers[driverId]
-      if (!d) continue
-
-      let gapFrac: number
-      if (d.position === 1) {
-        gapFrac = 0
-      } else if (d.gap_s !== null) {
-        gapFrac = (d.gap_s * 1000) / avgLapMs
-      } else {
-        const unknownIdx = unknownGap.indexOf(driverId)
-        const baseGap = lastKnownGap * 1000
-        gapFrac = (baseGap + (unknownIdx + 1) * 1000) / avgLapMs
+      for (const [id, target] of targetFracRef.current) {
+        const current = currentFracRef.current.get(id) ?? target
+        // forward-only delta on the circular track
+        let delta = ((target - current) % 1 + 1) % 1
+        let next: number
+        if (delta > 0.5) {
+          // Overtake detected (large backward jump) — snap
+          next = target
+        } else {
+          next = (current + delta * k) % 1
+        }
+        currentFracRef.current.set(id, next)
       }
 
-      const frac = ((leaderFrac - gapFrac) % 1 + 1) % 1
-      const point = path.getPointAtLength(frac * totalLength)
-      newPositions[driverId] = { x: point.x, y: point.y }
-    }
+      renderPositions()
 
-    // In-pit: row below map
-    for (let i = 0; i < inPit.length; i++) {
-      const id = inPit[i]
-      newPositions[id] = {
-        x: PIT_LANE_X_START + i * PIT_LANE_SPACING,
-        y: PIT_LANE_Y,
+      if (playingRef.current) {
+        rafRef.current = requestAnimationFrame(tick)
       }
     }
 
-    setPositions(newPositions)
-  }, [atMs, drivers, classification, trackData])
+    rafRef.current = requestAnimationFrame(tick)
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+      lastTimestampRef.current = null
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing])
+
+  // Register/unregister car group refs as classification set changes
+  // (cleanup stale entries)
+  useEffect(() => {
+    const ids = new Set(classification)
+    for (const id of carGroupRefs.current.keys()) {
+      if (!ids.has(id)) {
+        carGroupRefs.current.delete(id)
+        currentFracRef.current.delete(id)
+      }
+    }
+  }, [classification])
 
   const watermark = statusWatermark(sessionStatus ?? '')
   const top3 = classification.slice(0, 3)
@@ -161,6 +252,9 @@ export const TrackMap = React.memo(function TrackMap({
       />
     )
   }
+
+  // Pit positions computed once per render (static — no animation needed)
+  const pitDrivers = classification.filter(id => drivers[id]?.in_pit)
 
   return (
     <div className="map">
@@ -202,7 +296,7 @@ export const TrackMap = React.memo(function TrackMap({
         <line
           x1={PIT_LANE_X_START - 8}
           y1={PIT_LANE_Y}
-          x2={PIT_LANE_X_START + classification.filter(id => drivers[id]?.in_pit).length * PIT_LANE_SPACING + 8}
+          x2={PIT_LANE_X_START + pitDrivers.length * PIT_LANE_SPACING + 8}
           y2={PIT_LANE_Y}
           stroke="#f2a90044"
           strokeWidth={1}
@@ -227,41 +321,55 @@ export const TrackMap = React.memo(function TrackMap({
           </text>
         )}
 
-        {/* Cars */}
-        {classification.map((driverId) => {
-          const pos = positions[driverId]
-          if (!pos) return null
+        {/* On-track cars — initial transform is 0,0; rAF loop updates imperatively */}
+        {classification
+          .filter(id => !drivers[id]?.in_pit && !drivers[id]?.retired)
+          .map((driverId) => {
+            const color = teamColor(driverId)
+            const isTop3 = top3.includes(driverId)
+            return (
+              <g
+                key={driverId}
+                ref={(el) => {
+                  if (el) carGroupRefs.current.set(driverId, el)
+                  else carGroupRefs.current.delete(driverId)
+                }}
+                transform="translate(0,0)"
+              >
+                <circle
+                  r={7}
+                  fill={color}
+                  stroke={isTop3 ? '#fff' : 'none'}
+                  strokeWidth={isTop3 ? 1.5 : 0}
+                />
+                {isTop3 && (
+                  <text
+                    x={0}
+                    y={-11}
+                    textAnchor="middle"
+                    fill="#fff"
+                    fontSize={12}
+                    fontStyle="italic"
+                    fontWeight={700}
+                    fontFamily="'Barlow Condensed', sans-serif"
+                    letterSpacing="0.04em"
+                  >
+                    {driverId}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+
+        {/* Pit lane cars — static row, no animation */}
+        {pitDrivers.map((driverId, i) => {
           const color = teamColor(driverId)
-          const isTop3 = top3.includes(driverId)
-          const isInPit = drivers[driverId]?.in_pit
           return (
             <g
               key={driverId}
-              transform={`translate(${pos.x},${pos.y})`}
-              style={playing && !isInPit ? { transition: `transform ${(frameMs / 1000).toFixed(2)}s linear` } : undefined}
+              transform={`translate(${PIT_LANE_X_START + i * PIT_LANE_SPACING},${PIT_LANE_Y})`}
             >
-              <circle
-                r={isInPit ? 5 : 7}
-                fill={color}
-                opacity={isInPit ? 0.6 : 1}
-                stroke={isTop3 && !isInPit ? '#fff' : 'none'}
-                strokeWidth={isTop3 && !isInPit ? 1.5 : 0}
-              />
-              {isTop3 && !isInPit && (
-                <text
-                  x={0}
-                  y={-11}
-                  textAnchor="middle"
-                  fill="#fff"
-                  fontSize={12}
-                  fontStyle="italic"
-                  fontWeight={700}
-                  fontFamily="'Barlow Condensed', sans-serif"
-                  letterSpacing="0.04em"
-                >
-                  {driverId}
-                </text>
-              )}
+              <circle r={5} fill={color} opacity={0.6} />
             </g>
           )
         })}
