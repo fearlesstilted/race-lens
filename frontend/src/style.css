@@ -19,15 +19,16 @@
   padding: 0;
 }
 
-html, body {
+html, body, #root {
   height: 100%;
+  overflow: hidden;
 }
 
 body {
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.5 var(--body);
-  overflow-y: auto;
+  font: clamp(12px, 1.1vw, 14px)/1.5 var(--body);
+  overflow: hidden;
 }
 
 /* ── error screen ─────────────────────────────────────────────── */
@@ -202,24 +203,37 @@ body {
   color: #ccc;
 }
 
+/* ── page shell: 100vh grid ────────────────────────────────────── */
+#root {
+  display: grid;
+  grid-template-rows: 52px auto auto 1fr auto;
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* ── layout grid ──────────────────────────────────────────────── */
 .wrap {
   display: grid;
   grid-template-columns: 380px 1fr 360px;
   gap: 0;
   padding: 0 24px;
-  /* Full viewport height minus top bar (52px) + deck (~100px) */
-  height: calc(100vh - 52px - 106px);
-  min-height: 560px;
+  min-height: 0;
   border-left: 1px solid var(--hair);
   border-right: 1px solid var(--hair);
+  overflow: hidden;
 }
 .col {
   border-right: 1px solid var(--hair);
-  overflow-y: auto;
+  overflow: hidden;
 }
 .col:last-child {
   border-right: 0;
+}
+/* timing tower: no scroll, height driven by row count */
+.col-timing {
+  overflow: hidden;
+  container-type: size;
+  container-name: tower;
 }
 .label {
   font: 600 12px var(--cond);
@@ -235,11 +249,11 @@ body {
 /* ── timing tower ─────────────────────────────────────────────── */
 .trow-hdr {
   display: grid;
-  grid-template-columns: 34px 6px 64px 72px 72px 72px 46px 28px;
+  grid-template-columns: 36px 6px 56px 76px 76px 86px 46px 36px;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   height: 22px;
-  padding: 0 18px;
+  padding: 0 20px 0 18px;
   font: 600 11px var(--cond);
   letter-spacing: 0.2em;
   color: var(--dim);
@@ -248,11 +262,11 @@ body {
 }
 .trow {
   display: grid;
-  grid-template-columns: 34px 6px 64px 72px 72px 72px 46px 28px;
+  grid-template-columns: 36px 6px 56px 76px 76px 86px 46px 36px;
   align-items: center;
-  gap: 6px;
-  height: 44px;
-  padding: 0 18px;
+  gap: 12px;
+  height: clamp(28px, calc((var(--tower-body-h, 600px) - 60px) / var(--row-count, 20)), 44px);
+  padding: 0 20px 0 18px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
 }
@@ -278,6 +292,8 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   text-align: right;
+  white-space: nowrap;
+  overflow: visible;
 }
 /* pit count */
 .pits-count {
@@ -345,6 +361,9 @@ body {
   width: 3px;
   background: var(--amber);
 }
+.trow.retired {
+  opacity: 0.45;
+}
 .trow-empty {
   padding: 16px 18px;
   color: var(--dim);
@@ -393,7 +412,13 @@ body {
 /* feed scroll area */
 .col-center .ev-scroll {
   flex: 1;
+  overflow-y: hidden;
+  min-height: 0;
+}
+.col-center .ev-scroll:hover {
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 transparent;
 }
 .ev {
   display: grid;
@@ -426,7 +451,9 @@ body {
 
 /* ── insights: lower-thirds ───────────────────────────────────── */
 .col-insights {
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .ins {
   margin: 0 0 1px;
@@ -481,6 +508,23 @@ body {
 .ins .data b {
   color: var(--ink);
   font-weight: 700;
+}
+
+/* ── insight card animations ─────────────────────────────────── */
+@keyframes ins-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ins-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+.ins-entering {
+  animation: ins-enter 150ms ease forwards;
+}
+.ins-leaving {
+  animation: ins-leave 400ms ease forwards;
+  pointer-events: none;
 }
 
 /* ── deck: replay controls ────────────────────────────────────── */

@@ -28,8 +28,10 @@ export const TimingTower = React.memo(function TimingTower({ rows, battles }: Pr
     return s
   }, [battles])
 
+  const rowCount = rows.length || 1
+
   return (
-    <div className="col col-timing">
+    <div className="col col-timing" style={{ '--row-count': rowCount } as React.CSSProperties}>
       <div className="label">TIMING</div>
       {/* Column headers */}
       <div className="trow-hdr">
@@ -45,19 +47,24 @@ export const TimingTower = React.memo(function TimingTower({ rows, battles }: Pr
       {rows.map((row) => {
         const isLead = row.position === 1
         const inBattle = battleSet.has(row.id)
+        const isRetired = row.retired === true
         const color = teamColor(row.id)
 
-        const intDisplay = isLead
-          ? <span className="gap dim">—</span>
-          : row.interval_s !== null
-            ? <span className="gap">{`+${row.interval_s.toFixed(3)}`}</span>
-            : <span className="gap dim">—</span>
+        const intDisplay = isRetired
+          ? <span className="gap dim">OUT</span>
+          : isLead
+            ? <span className="gap dim">—</span>
+            : row.interval_s !== null
+              ? <span className="gap">{`+${row.interval_s.toFixed(3)}`}</span>
+              : <span className="gap dim">—</span>
 
-        const gapDisplay = isLead
-          ? <span className="gap dim">LEADER</span>
-          : <span className={`gap${row.gap_s === null ? ' dim' : ''}`}>
-              {row.gap_s !== null ? `+${row.gap_s.toFixed(1)}` : '—'}
-            </span>
+        const gapDisplay = isRetired
+          ? <span className="gap dim">OUT</span>
+          : isLead
+            ? <span className="gap dim">LEADER</span>
+            : <span className={`gap${row.gap_s === null ? ' dim' : ''}`}>
+                {row.gap_s !== null ? `+${row.gap_s.toFixed(1)}` : '—'}
+              </span>
 
         const compound = row.tyre_compound?.charAt(0).toUpperCase() ?? '?'
 
@@ -68,20 +75,21 @@ export const TimingTower = React.memo(function TimingTower({ rows, battles }: Pr
               'trow',
               isLead ? 'lead' : '',
               inBattle ? 'battle-tick' : '',
+              isRetired ? 'retired' : '',
             ]
               .filter(Boolean)
               .join(' ')}
           >
-            <span className="pos">{row.position ?? '—'}</span>
+            <span className="pos">{isRetired ? '—' : (row.position ?? '—')}</span>
             <span className="tbar" style={{ background: color }} />
             <span className="code">
               {row.id}
-              {row.in_pit && <span className="pit-tag">PIT</span>}
+              {row.in_pit && !isRetired && <span className="pit-tag">PIT</span>}
             </span>
             {intDisplay}
             {gapDisplay}
-            <span className="last-lap">{fmtLastLap(row.last_lap_ms)}</span>
-            <span className={`ty ${compound}`}>{compound}<span className="age">{row.tyre_age_laps ?? '—'}</span></span>
+            <span className="last-lap">{isRetired ? '—' : fmtLastLap(row.last_lap_ms)}</span>
+            <span className={`ty ${compound}`}>{isRetired ? '—' : <>{compound}<span className="age">{row.tyre_age_laps ?? '—'}</span></>}</span>
             <span className="pits-count">{row.pit_count ?? 0}</span>
           </div>
         )

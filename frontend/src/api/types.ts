@@ -21,6 +21,7 @@ export type DriverState = {
   tyre_age_laps: number | null
   pit_count: number
   in_pit: boolean
+  retired: boolean
 }
 
 export type DataQuality = {

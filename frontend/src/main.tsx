@@ -92,6 +92,7 @@ function App() {
             sessionId={sessionId}
             atMs={replay.atMs}
             playing={replay.playing}
+            frameMs={replay.frameMs}
             drivers={state?.drivers ?? {}}
             classification={state?.classification ?? []}
             sessionStatus={sessionStatus}
@@ -107,6 +108,7 @@ function App() {
         atMs={replay.atMs}
         playing={replay.playing}
         speed={replay.speed}
+        frameMs={replay.frameMs}
         feed={replay.feed}
         onScrub={replay.scrub}
         onPlay={replay.play}
