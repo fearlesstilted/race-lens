@@ -4,6 +4,51 @@ import { getTrack } from '../../api/client'
 import type { DriverState } from '../../api/types'
 import { teamColor } from './teamColors'
 
+// ── Real-telemetry positions data ────────────────────────────────────────────
+
+type PositionsData = {
+  session_id: string
+  start_ms: number
+  tick_ms: number
+  viewbox: [number, number]
+  drivers: Record<string, ([number, number] | null)[]>
+}
+
+async function fetchPositions(sessionId: string): Promise<PositionsData | null> {
+  const res = await fetch(`/api/sessions/${sessionId}/positions`)
+  if (!res.ok) return null
+  return res.json()
+}
+
+/** Interpolate a real position from positions data at atMs.
+ * Returns null if no data or null frame. */
+function interpolateRealPos(
+  posData: PositionsData,
+  driver: string,
+  atMs: number,
+): [number, number] | null {
+  const frames = posData.drivers[driver]
+  if (!frames || frames.length === 0) return null
+  const tick = posData.tick_ms
+  const start = posData.start_ms
+  const relMs = atMs - start
+  if (relMs < 0) return null
+  const fi = relMs / tick
+  const i0 = Math.floor(fi)
+  const i1 = Math.ceil(fi)
+  if (i0 >= frames.length) return frames[frames.length - 1]
+  const f0 = frames[i0]
+  if (f0 === null) return null
+  if (i0 === i1 || i1 >= frames.length) return f0
+  const f1 = frames[i1]
+  if (f1 === null) return f0
+  const alpha = fi - i0
+  return [
+    Math.round((f0[0] + alpha * (f1[0] - f0[0])) * 10) / 10,
+    Math.round((f0[1] + alpha * (f1[1] - f0[1])) * 10) / 10,
+  ]
+}
+
 type Props = {
   sessionId: string | null
   atMs: number
@@ -107,6 +152,7 @@ export const TrackMap = React.memo(function TrackMap({
   const pathRef = useRef<SVGPathElement>(null)
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
+  const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
 
   // Per-car current fraction (animated) and target fraction (latest computed)
   const currentFracRef = useRef<Map<string, number>>(new Map())
@@ -118,6 +164,9 @@ export const TrackMap = React.memo(function TrackMap({
   // rAF loop handle
   const rafRef = useRef<number | null>(null)
   const lastTimestampRef = useRef<number | null>(null)
+
+  // Local session clock for real-telemetry rAF (ms) — advanced by wall*speed
+  const localAtMsRef = useRef<number>(0)
 
   // Track whether we are playing — used inside rAF closure
   const playingRef = useRef(playing)
@@ -136,14 +185,26 @@ export const TrackMap = React.memo(function TrackMap({
   // Peloton median fallback — updated on each drivers change
   const pelotonMedianRef = useRef<number>(78000)
 
-  // Fetch track data whenever session changes
+  // Ref for positionsData used inside rAF closure
+  const positionsDataRef = useRef<PositionsData | null>(null)
+  useEffect(() => { positionsDataRef.current = positionsData }, [positionsData])
+
+  // Ref for atMs used inside rAF closure (real-telemetry mode)
+  const atMsRef = useRef(atMs)
+  useEffect(() => { atMsRef.current = atMs }, [atMs])
+
+  // Fetch track data and positions data whenever session changes
   useEffect(() => {
     if (!sessionId) return
     setTrackData(null)
     setTrackError(false)
+    setPositionsData(null)
     getTrack(sessionId)
       .then((d) => setTrackData(d))
       .catch(() => setTrackError(true))
+    fetchPositions(sessionId)
+      .then((d) => setPositionsData(d))
+      .catch(() => setPositionsData(null))
   }, [sessionId])
 
   // Update target fractions whenever atMs / drivers / classification change
@@ -166,26 +227,50 @@ export const TrackMap = React.memo(function TrackMap({
     }
 
     if (!playing) {
-      // Scrub: snap current to target immediately, then render one frame
-      for (const [id, frac] of newTargets) {
-        currentFracRef.current.set(id, frac)
+      if (positionsDataRef.current) {
+        // Real-telemetry scrub: render at atMs directly
+        renderPositions(atMs)
+      } else {
+        // Schematic scrub: snap fractions, render via path
+        for (const [id, frac] of newTargets) {
+          currentFracRef.current.set(id, frac)
+        }
+        renderPositions()
       }
-      renderPositions()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atMs, drivers, classification])
 
-  // Render current positions imperatively via SVG element refs
-  function renderPositions() {
-    const path = pathRef.current
-    if (!path) return
-    const totalLength = path.getTotalLength()
-
-    for (const [driverId, groupEl] of carGroupRefs.current) {
-      const frac = currentFracRef.current.get(driverId)
-      if (frac === undefined) continue
-      const pt = path.getPointAtLength(frac * totalLength)
-      groupEl.setAttribute('transform', `translate(${pt.x.toFixed(2)},${pt.y.toFixed(2)})`)
+  // Render current positions imperatively via SVG element refs.
+  // Real-telemetry mode: uses positionsDataRef + localAtMsRef to get XY directly.
+  // Fallback (schematic) mode: uses currentFracRef + SVG path.
+  function renderPositions(overrideAtMs?: number) {
+    const posData = positionsDataRef.current
+    if (posData) {
+      // REAL TELEMETRY MODE
+      const queryMs = overrideAtMs ?? localAtMsRef.current
+      for (const [driverId, groupEl] of carGroupRefs.current) {
+        const xy = interpolateRealPos(posData, driverId, queryMs)
+        if (xy === null) {
+          // null frame — hide car
+          groupEl.setAttribute('visibility', 'hidden')
+        } else {
+          groupEl.setAttribute('visibility', 'visible')
+          groupEl.setAttribute('transform', `translate(${xy[0]},${xy[1]})`)
+        }
+      }
+    } else {
+      // SCHEMATIC FALLBACK MODE
+      const path = pathRef.current
+      if (!path) return
+      const totalLength = path.getTotalLength()
+      for (const [driverId, groupEl] of carGroupRefs.current) {
+        groupEl.setAttribute('visibility', 'visible')
+        const frac = currentFracRef.current.get(driverId)
+        if (frac === undefined) continue
+        const pt = path.getPointAtLength(frac * totalLength)
+        groupEl.setAttribute('transform', `translate(${pt.x.toFixed(2)},${pt.y.toFixed(2)})`)
+      }
     }
   }
 
@@ -200,42 +285,54 @@ export const TrackMap = React.memo(function TrackMap({
       return
     }
 
+    // Sync local session clock to current atMs when starting playback
+    localAtMsRef.current = atMsRef.current
+
     function tick(timestamp: number) {
       const dt = lastTimestampRef.current !== null ? timestamp - lastTimestampRef.current : 16
       lastTimestampRef.current = timestamp
 
-      // Dead reckoning speed multiplier based on session status
-      const status = sessionStatusRef.current
-      let drMultiplier = 1
-      if (status === 'red_flag') drMultiplier = 0
-      else if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') drMultiplier = 0.6
-
       const speed = playbackSpeedRef.current
-      const pelotonMs = pelotonMedianRef.current
 
-      for (const [id, target] of targetFracRef.current) {
-        const current = currentFracRef.current.get(id) ?? target
+      if (positionsDataRef.current) {
+        // REAL TELEMETRY MODE: advance local session clock and render
+        localAtMsRef.current += dt * speed
+        renderPositions()
+      } else {
+        // SCHEMATIC FALLBACK: dead reckoning + soft correction toward target fracs
 
-        // --- Dead reckoning: advance car by wall-time * speed / lap_ms
-        const lapMs = driverLapMsRef.current.get(id) ?? pelotonMs
-        const drDelta = (dt * speed * drMultiplier) / lapMs
-        const afterDR = (current + drDelta) % 1
+        // Dead reckoning speed multiplier based on session status
+        const status = sessionStatusRef.current
+        let drMultiplier = 1
+        if (status === 'red_flag') drMultiplier = 0
+        else if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') drMultiplier = 0.6
 
-        // --- Soft correction toward target (circular, shortest path)
-        let corrDelta = ((target - afterDR) % 1 + 1) % 1
-        if (corrDelta > 0.5) corrDelta -= 1 // allow backward correction
-        let next: number
-        if (Math.abs(corrDelta) > 0.5) {
-          // Large snap (position data jump > half lap) — snap immediately
-          next = target
-        } else {
-          const corrK = 1 - Math.exp(-dt / CORRECTION_TAU_MS)
-          next = ((afterDR + corrDelta * corrK) % 1 + 1) % 1
+        const pelotonMs = pelotonMedianRef.current
+
+        for (const [id, target] of targetFracRef.current) {
+          const current = currentFracRef.current.get(id) ?? target
+
+          // --- Dead reckoning: advance car by wall-time * speed / lap_ms
+          const lapMs = driverLapMsRef.current.get(id) ?? pelotonMs
+          const drDelta = (dt * speed * drMultiplier) / lapMs
+          const afterDR = (current + drDelta) % 1
+
+          // --- Soft correction toward target (circular, shortest path)
+          let corrDelta = ((target - afterDR) % 1 + 1) % 1
+          if (corrDelta > 0.5) corrDelta -= 1 // allow backward correction
+          let next: number
+          if (Math.abs(corrDelta) > 0.5) {
+            // Large snap (position data jump > half lap) — snap immediately
+            next = target
+          } else {
+            const corrK = 1 - Math.exp(-dt / CORRECTION_TAU_MS)
+            next = ((afterDR + corrDelta * corrK) % 1 + 1) % 1
+          }
+          currentFracRef.current.set(id, next)
         }
-        currentFracRef.current.set(id, next)
-      }
 
-      renderPositions()
+        renderPositions()
+      }
 
       if (playingRef.current) {
         rafRef.current = requestAnimationFrame(tick)
@@ -425,7 +522,7 @@ export const TrackMap = React.memo(function TrackMap({
         })}
       </svg>
 
-      <span className="note">TELEMETRY · INTERPOLATED</span>
+      <span className="note">{positionsData ? 'LIVE TELEMETRY' : 'SCHEMATIC · INTERPOLATED'}</span>
     </div>
   )
 })

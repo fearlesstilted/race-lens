@@ -216,6 +216,19 @@ def track(session_id: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/sessions/{session_id}/positions")
+def positions(session_id: str):
+    """Return resampled car positions from Rust race-core pipeline.
+
+    Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
+    404 if positions.json has not been generated yet.
+    """
+    path = FIXTURES_DIR / f"{session_id}.positions.json"
+    if not path.is_file():
+        raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @app.get("/api/sessions/{session_id}/feed")
 def feed(
     session_id: str,

@@ -89,6 +89,37 @@ def test_track_endpoint(tmp_path, monkeypatch):
     assert c.get("/api/sessions/nope/track").status_code == 404
 
 
+def test_positions_endpoint(tmp_path, monkeypatch):
+    import json as _json
+    import racelens.api as api
+
+    pos_data = {
+        "session_id": "2024_mini_race",
+        "start_ms": 0,
+        "tick_ms": 500,
+        "viewbox": [600, 400],
+        "drivers": {"LEC": [[100.0, 200.0], None, [110.0, 205.0]]},
+    }
+    (tmp_path / "2024_mini_race.jsonl").write_text(
+        dump_jsonl(mini_race()), encoding="utf-8"
+    )
+    (tmp_path / "2024_mini_race.positions.json").write_text(
+        _json.dumps(pos_data), encoding="utf-8"
+    )
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine.cache_clear()
+    c = TestClient(api.app)
+
+    r = c.get("/api/sessions/2024_mini_race/positions")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tick_ms"] == 500
+    assert "LEC" in body["drivers"]
+    assert body["drivers"]["LEC"][1] is None  # null frame preserved
+
+    assert c.get("/api/sessions/nope/positions").status_code == 404
+
+
 def test_timeline(client):
     t = client.get("/api/sessions/2024_mini_race/timeline").json()
     assert t["start_ms"] == 0
