@@ -7,6 +7,11 @@ type Props = {
   selectedIds?: string[]
 }
 
+/** Minimum wall-time a card must be displayed before it can be removed. */
+const MIN_VISIBLE_MS = 6000
+/** Consecutive absent updates before a card is removed. */
+const ABSENT_THRESHOLD = 2
+
 /** Stable key: strip trailing :number from insight_id, or fall back to type+drivers. */
 function stableKey(ins: Insight): string {
   const stripped = ins.insight_id.replace(/:\d+$/, '')
@@ -90,6 +95,14 @@ const InsightCard = React.memo(function InsightCard({
   )
 })
 
+type CardState = {
+  ins: Insight
+  text: string
+  appearedAt: number  // wall-clock ms when card first appeared
+  absentCount: number // consecutive data updates where insight was absent
+  leaving: boolean
+}
+
 export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [] }: Props) {
   // Build commentary map keyed by stable key (strip trailing :ms from insight_id)
   const commentaryMap: Record<string, string> = useMemo(() => {
@@ -107,10 +120,9 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   const isFocused = (ins: Insight) =>
     selectedIds.length > 0 && ins.driver_ids.some((id) => selectedIds.includes(id))
 
-  // Sort: focused first, then severity desc, then stable key alphabetical.
-  // Diversity cap: max 2 cards of the same type, so one noisy detector
-  // can't flood the panel. Limit to 4 total.
-  const sorted = useMemo(() => {
+  // Sort incoming insights: focused first, then severity desc, then stable key alphabetical.
+  // Diversity cap: max 2 cards of the same type. Candidate list (up to 8) for hysteresis to trim.
+  const incomingCandidates = useMemo(() => {
     const ranked = [...insights].sort((a, b) => {
       const af = isFocused(a) ? 0 : 1
       const bf = isFocused(b) ? 0 : 1
@@ -127,52 +139,112 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       if (count >= 2 && !isFocused(ins)) continue
       perType[label] = count + 1
       picked.push(ins)
-      if (picked.length >= 4) break
+      if (picked.length >= 8) break
     }
     return picked
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, selectedIds])
 
-  // CSS-only enter/leave animation: track which keys are "leaving"
-  const prevKeysRef = useRef<Set<string>>(new Set())
-  const [leavingKeys, setLeavingKeys] = useState<Set<string>>(new Set())
+  // Hysteresis state: map of stable key → CardState
+  const cardsRef = useRef<Map<string, CardState>>(new Map())
+  const [renderTick, forceRender] = useState(0)
 
   useEffect(() => {
-    const newKeys = new Set(sorted.map(stableKey))
-    const gone = [...prevKeysRef.current].filter((k) => !newKeys.has(k))
-    if (gone.length > 0) {
-      setLeavingKeys((prev) => new Set([...prev, ...gone]))
-      const timer = window.setTimeout(() => {
-        setLeavingKeys((prev) => {
-          const next = new Set(prev)
-          for (const k of gone) next.delete(k)
-          return next
-        })
-      }, 400)
-      return () => clearTimeout(timer)
-    }
-    prevKeysRef.current = newKeys
-  }, [sorted])
+    const now = Date.now()
+    const incomingKeys = new Set(incomingCandidates.map(stableKey))
+    const cards = cardsRef.current
 
-  // Combine current + leaving (leaving cards retain their last known data)
-  const prevInsightsRef = useRef<Map<string, { ins: Insight; text: string }>>(new Map())
-  const displayItems = useMemo(() => {
-    const items: Array<{ key: string; ins: Insight; text: string; leaving: boolean; focused: boolean }> = []
-    for (const ins of sorted) {
-      const key = stableKey(ins)
-      const text = commentaryMap[key] ?? ''
-      prevInsightsRef.current.set(key, { ins, text })
-      items.push({ key, ins, text, leaving: false, focused: isFocused(ins) })
-    }
-    for (const key of leavingKeys) {
-      const cached = prevInsightsRef.current.get(key)
-      if (cached) {
-        items.push({ key, ins: cached.ins, text: cached.text, leaving: true, focused: false })
+    // Update absent counts and remove cards that have been absent long enough
+    // and have also expired their minimum display time
+    for (const [key, card] of cards) {
+      if (!incomingKeys.has(key)) {
+        card.absentCount += 1
+        const ageMs = now - card.appearedAt
+        const minExpired = ageMs >= MIN_VISIBLE_MS
+        if (card.absentCount >= ABSENT_THRESHOLD && minExpired) {
+          // Mark leaving for animation, schedule removal
+          if (!card.leaving) {
+            card.leaving = true
+            window.setTimeout(() => {
+              cardsRef.current.delete(key)
+              forceRender((n) => n + 1)
+            }, 400)
+          }
+        }
+      } else {
+        // Insight is present again — reset absent count, update data
+        card.absentCount = 0
+        card.leaving = false
       }
     }
-    return items
+
+    // Update text for existing cards from commentary
+    for (const [key, card] of cards) {
+      const newText = commentaryMap[key] ?? card.text
+      if (newText !== card.text) card.text = newText
+    }
+
+    // Add new cards for incoming insights not yet tracked
+    for (const ins of incomingCandidates) {
+      const key = stableKey(ins)
+      if (!cards.has(key)) {
+        cards.set(key, {
+          ins,
+          text: commentaryMap[key] ?? '',
+          appearedAt: now,
+          absentCount: 0,
+          leaving: false,
+        })
+      } else {
+        // Update insight data
+        const card = cards.get(key)!
+        card.ins = ins
+        card.text = commentaryMap[key] ?? card.text
+      }
+    }
+
+    // Enforce 4-card limit: cards that have expired MIN_VISIBLE_MS evict first,
+    // then newest arrivals (by appearedAt desc)
+    const activeCards = [...cards.entries()].filter(([, c]) => !c.leaving)
+    if (activeCards.length > 4) {
+      // Sort: expired-min first (can be evicted), then by newest (evict newest if needed)
+      const sorted = activeCards.sort(([, a], [, b]) => {
+        const aExpired = (now - a.appearedAt) >= MIN_VISIBLE_MS ? 0 : 1
+        const bExpired = (now - b.appearedAt) >= MIN_VISIBLE_MS ? 0 : 1
+        if (aExpired !== bExpired) return bExpired - aExpired // expired comes first (evict first)
+        // Among same expiry group, newer cards evict first
+        return b.appearedAt - a.appearedAt
+      })
+      const toEvict = sorted.slice(4)
+      for (const [key, card] of toEvict) {
+        if (!card.leaving) {
+          card.leaving = true
+          window.setTimeout(() => {
+            cardsRef.current.delete(key)
+            forceRender((n) => n + 1)
+          }, 400)
+        }
+      }
+    }
+
+    forceRender((n) => n + 1)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sorted, commentaryMap, leavingKeys, selectedIds])
+  }, [incomingCandidates, commentaryMap])
+
+  const displayItems = useMemo(() => {
+    const cards = cardsRef.current
+    return [...cards.entries()].map(([key, card]) => ({
+      key,
+      ins: card.ins,
+      text: card.text,
+      leaving: card.leaving,
+      focused: isFocused(card.ins),
+    }))
+  // renderTick ensures this re-derives after forceRender calls
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderTick, selectedIds])
+
+  const hasVisible = displayItems.some((item) => !item.leaving)
 
   return (
     <div className="col col-insights">
@@ -186,7 +258,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
           focused={focused}
         />
       ))}
-      {sorted.length === 0 && leavingKeys.size === 0 && (
+      {!hasVisible && displayItems.length === 0 && (
         <div className="ins pace">
           <h4>
             No active insights<small>INFO</small>
