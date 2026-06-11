@@ -6,6 +6,7 @@ changes, gaps, intervals) is suppressed.
 """
 from __future__ import annotations
 
+import bisect
 from typing import Any
 
 from racelens.events.models import Event
@@ -61,6 +62,18 @@ def render_feed(
     # Sort ascending for processing
     visible_sorted = sorted(visible, key=lambda e: (e.session_time_ms, e.event_id))
 
+    # Pre-build index: driver_id -> sorted list of (session_time_ms, compound)
+    # for TyreStintUpdated events, used for O(log n) PitOut↔tyre pairing.
+    _stint_index: dict[str, list[tuple[int, str]]] = {}
+    for _e in visible_sorted:
+        if _e.type == "TyreStintUpdated" and _e.driver_id:
+            compound_val = _e.payload.get("compound")
+            if compound_val is not None:
+                _stint_index.setdefault(_e.driver_id, []).append(
+                    (_e.session_time_ms, compound_val)
+                )
+    # Lists are already in ascending order (visible_sorted is sorted)
+
     items: list[dict[str, Any]] = []
 
     # Track absolute fastest lap for fastest-lap feed items
@@ -94,15 +107,15 @@ def render_feed(
         elif e.type == "PitOut":
             drv = e.driver_id or "?"
             # Look for TyreStintUpdated from the same driver within 5 s after PitOut
+            # using pre-built index + bisect for O(log n) lookup.
             compound: str | None = None
-            for ne in visible_sorted:
-                if (
-                    ne.type == "TyreStintUpdated"
-                    and ne.driver_id == e.driver_id
-                    and 0 <= ne.session_time_ms - e.session_time_ms <= 5_000
-                ):
-                    compound = ne.payload.get("compound")
-                    break
+            stints = _stint_index.get(e.driver_id or "", [])
+            if stints:
+                t0 = e.session_time_ms
+                t1 = t0 + 5_000
+                lo = bisect.bisect_left(stints, (t0,))
+                if lo < len(stints) and stints[lo][0] <= t1:
+                    compound = stints[lo][1]
             if compound:
                 cname_en = _COMPOUND_EN.get(compound.upper(), compound.lower() + "s")
                 cname_ru = _COMPOUND_RU.get(compound.upper(), compound.lower())

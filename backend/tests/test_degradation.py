@@ -1,18 +1,21 @@
 """Tests for the tyre degradation trend insight detector and its commentary."""
 from racelens.commentary.renderer import render
+from racelens.events.models import event
 from racelens.insights.degradation import detect_degradation
 from racelens.replay.engine import ReplayEngine
 
-from tests.test_replay import mini_race
+from tests.test_replay import SID, mini_race
 
 
 # ── Detector tests ─────────────────────────────────────────────────────────────
 
-def _state(recent_laps_ms, tyre_age_laps, in_pit=False, at_ms=500_000):
+def _state(recent_laps_ms, tyre_age_laps, in_pit=False, at_ms=500_000,
+           session_status="started"):
     """Minimal state dict for detector unit tests."""
     return {
         "at_ms": at_ms,
         "lap": 10,
+        "session_status": session_status,
         "drivers": {
             "TST": {
                 "recent_laps_ms": recent_laps_ms,
@@ -77,6 +80,40 @@ def test_no_degradation_mini_race_fresh_tyres():
     state = engine.state_at(300_000)
     found = detect_degradation(state)
     assert found == []
+
+
+def test_no_degradation_under_safety_car():
+    """Safety car status suppresses degradation insight even with perfect pattern."""
+    s = _state([80_000, 80_200, 80_500], tyre_age_laps=10, session_status="safety_car")
+    assert detect_degradation(s) == []
+
+
+def test_no_degradation_under_red_flag():
+    s = _state([80_000, 80_200, 80_500], tyre_age_laps=10, session_status="red_flag")
+    assert detect_degradation(s) == []
+
+
+def test_no_degradation_under_vsc():
+    s = _state([80_000, 80_200, 80_500], tyre_age_laps=10, session_status="vsc")
+    assert detect_degradation(s) == []
+
+
+def test_recent_laps_cleared_after_neutralization():
+    """Integration: recent_laps_ms must be empty for a driver after a safety car event."""
+    # Build events: 3 laps for VER, then safety car, then one more lap
+    e = list(mini_race())
+    # Insert a safety car before a 4th lap
+    sc_time = 260_000
+    lap4_time = 340_000
+    e.append(event(SID, "SessionStatusChanged", sc_time, status="safety_car"))
+    e.append(event(SID, "LapCompleted", lap4_time, "VER", lap=4, lap_time_ms=85_000))
+
+    engine = ReplayEngine(e)
+    # State right after lap 4 but after safety car was declared
+    state = engine.state_at(lap4_time + 1)
+    ver = state["drivers"]["VER"]
+    # After safety car, previous 3 laps were wiped; only the 1 lap after SC remains
+    assert ver["recent_laps_ms"] == [85_000]
 
 
 # ── Renderer tests ─────────────────────────────────────────────────────────────

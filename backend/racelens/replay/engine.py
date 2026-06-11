@@ -134,7 +134,11 @@ class ReplayEngine:
             state["total_laps"] = p.get("total_laps")
 
         elif e.type == "SessionStatusChanged":
-            state["session_status"] = p.get("status", state["session_status"])
+            new_status = p.get("status", state["session_status"])
+            state["session_status"] = new_status
+            if new_status in {"red_flag", "safety_car", "vsc"}:
+                for drv in state["drivers"].values():
+                    drv["recent_laps_ms"] = []
 
         elif e.type == "LapCompleted":
             d = self._driver(state, e.driver_id)

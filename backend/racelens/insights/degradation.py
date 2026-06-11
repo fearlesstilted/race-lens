@@ -12,7 +12,13 @@ DRIFT_HIGH_MS = 1000
 MIN_TYRE_AGE_LAPS = 5
 
 
+_NEUTRALIZATION_STATUSES = {"red_flag", "safety_car", "vsc"}
+
+
 def detect_degradation(state: dict[str, Any]) -> list[dict[str, Any]]:
+    if state.get("session_status") in _NEUTRALIZATION_STATUSES:
+        return []
+
     drivers = state["drivers"]
     insights = []
 
