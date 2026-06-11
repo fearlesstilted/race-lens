@@ -9,7 +9,16 @@ type Props = {
   battles: Battle[]
 }
 
-export function TimingTower({ rows, battles }: Props) {
+function fmtLastLap(ms: number | null): string {
+  if (ms === null || ms <= 0) return '—'
+  const totalMs = ms
+  const m = Math.floor(totalMs / 60000)
+  const s = Math.floor((totalMs % 60000) / 1000)
+  const t = Math.floor((totalMs % 1000) / 100)
+  return `${m}:${String(s).padStart(2, '0')}.${t}`
+}
+
+export const TimingTower = React.memo(function TimingTower({ rows, battles }: Props) {
   const battleSet = useMemo(() => {
     const s = new Set<string>()
     for (const b of battles) {
@@ -19,35 +28,36 @@ export function TimingTower({ rows, battles }: Props) {
     return s
   }, [battles])
 
-  const maxGap = useMemo(() => {
-    let max = 0
-    for (const r of rows) {
-      if (r.gap_s !== null && r.gap_s > max) max = r.gap_s
-    }
-    return max || 1
-  }, [rows])
-
   return (
     <div className="col col-timing">
       <div className="label">TIMING</div>
+      {/* Column headers */}
+      <div className="trow-hdr">
+        <span>POS</span>
+        <span />
+        <span>DRV</span>
+        <span>INT</span>
+        <span>GAP</span>
+        <span>LAST</span>
+        <span>TYR</span>
+        <span>PIT</span>
+      </div>
       {rows.map((row) => {
         const isLead = row.position === 1
         const inBattle = battleSet.has(row.id)
         const color = teamColor(row.id)
-        const gapPct = row.gap_s !== null ? Math.min((row.gap_s / maxGap) * 100, 100) : 0
 
-        let gapDisplay: React.ReactNode
-        if (row.in_pit) {
-          gapDisplay = <span className="gap amber">IN PIT</span>
-        } else if (isLead) {
-          gapDisplay = <span className="gap dim">LEADER</span>
-        } else {
-          gapDisplay = (
-            <span className="gap">
+        const intDisplay = isLead
+          ? <span className="gap dim">—</span>
+          : row.interval_s !== null
+            ? <span className="gap">{`+${row.interval_s.toFixed(3)}`}</span>
+            : <span className="gap dim">—</span>
+
+        const gapDisplay = isLead
+          ? <span className="gap dim">LEADER</span>
+          : <span className={`gap${row.gap_s === null ? ' dim' : ''}`}>
               {row.gap_s !== null ? `+${row.gap_s.toFixed(1)}` : '—'}
             </span>
-          )
-        }
 
         const compound = row.tyre_compound?.charAt(0).toUpperCase() ?? '?'
 
@@ -64,17 +74,19 @@ export function TimingTower({ rows, battles }: Props) {
           >
             <span className="pos">{row.position ?? '—'}</span>
             <span className="tbar" style={{ background: color }} />
-            <span className="code">{row.id}</span>
-            <span className="gapline">
-              <i style={{ width: `${gapPct}%` }} />
+            <span className="code">
+              {row.id}
+              {row.in_pit && <span className="pit-tag">PIT</span>}
             </span>
-            <span className={`ty ${compound}`}>{compound}</span>
-            <span className="age">{row.tyre_age_laps ?? '—'}</span>
+            {intDisplay}
             {gapDisplay}
+            <span className="last-lap">{fmtLastLap(row.last_lap_ms)}</span>
+            <span className={`ty ${compound}`}>{compound}<span className="age">{row.tyre_age_laps ?? '—'}</span></span>
+            <span className="pits-count">{row.pit_count ?? 0}</span>
           </div>
         )
       })}
       {rows.length === 0 && <div className="trow-empty">No data</div>}
     </div>
   )
-}
+})
