@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Race Lens — Direction B: Pitwall</title>
+<style>
+  :root{
+    --bg:#0b0e0c; --panel:#10140f; --line:#1f2a1e; --grid:#16201a;
+    --txt:#d4e8d0; --dim:#6b8a66; --bright:#aaffa0; --hot:#ffb454;
+    --crit:#ff6b5e; --cyan:#7adcd4; --soft:#ff6b5e; --med:#ffd166; --hard:#e8e8e0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font:13px/1.5 'JetBrains Mono','Cascadia Code',ui-monospace,monospace;padding-bottom:40px}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.12) 2px 4px)}
+  header{display:flex;gap:24px;align-items:baseline;padding:14px 28px;border-bottom:1px solid var(--line)}
+  header .logo{color:var(--bright);font-weight:700;letter-spacing:.2em}
+  header .sess{color:var(--dim)}
+  header .clock{margin-left:auto;font-size:18px;color:var(--bright);font-variant-numeric:tabular-nums}
+  .alert{background:rgba(255,107,94,.12);border:1px solid var(--crit);color:var(--crit);padding:6px 28px;letter-spacing:.25em;font-weight:700;text-align:center}
+  .blink{animation:b 1.2s steps(2) infinite}@keyframes b{50%{opacity:.3}}
+  .grid{display:grid;grid-template-columns:1.4fr 1fr;gap:1px;background:var(--line);margin:0}
+  section{background:var(--bg);padding:18px 28px}
+  h2{font-size:11px;color:var(--dim);letter-spacing:.25em;margin-bottom:14px}
+  h2::before{content:"// "}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-size:10px;color:var(--dim);text-align:left;font-weight:400;letter-spacing:.15em;padding:4px 8px;border-bottom:1px solid var(--line)}
+  td{padding:5px 8px;border-bottom:1px solid rgba(31,42,30,.5)}
+  tr.battle td{background:rgba(255,180,84,.07)}
+  td.p{color:var(--dim)} td.d{color:var(--bright);font-weight:700}
+  td.gap{color:var(--dim)} td.neg{color:var(--bright)}
+  .ty{display:inline-block;width:14px;text-align:center;font-weight:700}
+  .ty.M{color:var(--med)}.ty.H{color:var(--hard)}.ty.S{color:var(--soft)}
+  .bar-cell{position:relative;height:10px;background:#15201a;min-width:90px}
+  .bar-inner{position:absolute;left:0;top:2px;bottom:2px;background:linear-gradient(90deg,var(--dim),var(--bright))}
+  /* insights as log */
+  .log{display:flex;flex-direction:column;gap:2px}
+  .ln{display:flex;gap:14px;padding:6px 10px;border-left:3px solid var(--hot);background:rgba(255,180,84,.05)}
+  .ln.crit{border-color:var(--crit);background:rgba(255,107,94,.07)}
+  .ln.info{border-color:var(--cyan);background:rgba(122,220,212,.05)}
+  .ln .tag{color:var(--dim);width:118px;flex-shrink:0;font-size:11px}
+  .ln.crit .tag{color:var(--crit)} .ln .tag{letter-spacing:.05em}
+  .ln .msg{flex:1}
+  .ln .num{color:var(--hot);font-weight:700}
+  .feed .ln{border-color:var(--line);background:none}
+  .feed .t{color:var(--dim);width:64px;flex-shrink:0}
+  .feed .flag{color:var(--crit);font-weight:700}
+  .feed .fl{color:var(--med)}
+  /* sparkline strip */
+  .spark{display:flex;gap:3px;align-items:flex-end;height:34px;margin-top:6px}
+  .spark i{width:9px;background:var(--dim);opacity:.8}
+  .spark i.hot{background:var(--crit)}
+  .deg-row{display:flex;align-items:center;gap:16px;padding:8px 0;border-bottom:1px solid rgba(31,42,30,.5)}
+  .deg-row .d{color:var(--bright);font-weight:700;width:44px}
+  .deg-row .note{color:var(--dim);font-size:11px;margin-left:auto}
+  /* timeline */
+  .tl{padding:18px 28px;border-top:1px solid var(--line)}
+  .tl-bar{display:flex;height:22px;border:1px solid var(--line)}
+  .seg{height:100%}
+  .seg.green{background:rgba(170,255,160,.18)}
+  .seg.red{background:rgba(255,107,94,.45)}
+  .seg.sc{background:rgba(255,209,102,.4)}
+  .seg.cur{outline:2px solid var(--bright);outline-offset:-2px}
+  .tl .legend{display:flex;gap:18px;color:var(--dim);font-size:11px;margin-top:8px}
+  .tl .legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+  kbd{border:1px solid var(--line);border-radius:3px;padding:1px 6px;color:var(--dim);font-size:11px}
+  .hint{color:var(--dim);font-size:11px;margin-top:12px}
+</style>
+</head>
+<body>
+  <header>
+    <span class="logo">RACE_LENS v0.1</span>
+    <span class="sess">2024_monaco_race · feed: openf1 · dq: <span style="color:var(--bright)">GOOD</span></span>
+    <span class="clock">01:21:14 · L48/78</span>
+  </header>
+  <div class="alert blink">▲ RED FLAG — SESSION NEUTRALIZED ▲</div>
+
+  <div class="grid">
+    <section>
+      <h2>CLASSIFICATION</h2>
+      <table>
+        <tr><th>P</th><th>DRV</th><th>GAP</th><th>INT</th><th>TY</th><th>AGE</th><th>LAST</th><th>PACE TREND</th><th>PIT</th></tr>
+        <tr><td class="p">01</td><td class="d">LEC</td><td class="gap">—</td><td class="gap">—</td><td><span class="ty M">M</span></td><td>24</td><td>1:16.94</td><td><div class="bar-cell"><div class="bar-inner" style="width:88%"></div></div></td><td>0</td></tr>
+        <tr class="battle"><td class="p">02</td><td class="d">PIA</td><td>+0.81</td><td>0.81</td><td><span class="ty M">M</span></td><td>24</td><td>1:17.10</td><td><div class="bar-cell"><div class="bar-inner" style="width:84%"></div></div></td><td>0</td></tr>
+        <tr><td class="p">03</td><td class="d">SAI</td><td>+1.62</td><td>0.81</td><td><span class="ty H">H</span></td><td>24</td><td>1:17.31</td><td><div class="bar-cell"><div class="bar-inner" style="width:80%"></div></div></td><td>0</td></tr>
+        <tr><td class="p">04</td><td class="d">NOR</td><td>+2.40</td><td>0.78</td><td><span class="ty M">M</span></td><td>24</td><td>1:17.02</td><td><div class="bar-cell"><div class="bar-inner" style="width:86%"></div></div></td><td>0</td></tr>
+        <tr><td class="p">05</td><td class="d">RUS</td><td>+3.13</td><td>0.73</td><td><span class="ty M">M</span></td><td>24</td><td>1:17.66</td><td><div class="bar-cell"><div class="bar-inner" style="width:74%"></div></div></td><td>0</td></tr>
+        <tr><td class="p">06</td><td class="d">VER</td><td>+3.92</td><td>0.79</td><td><span class="ty H">H</span></td><td>24</td><td>1:17.58</td><td><div class="bar-cell"><div class="bar-inner" style="width:75%"></div></div></td><td>0</td></tr>
+        <tr><td class="p">07</td><td class="d">HAM</td><td>+5.04</td><td>1.12</td><td><span class="ty H">H</span></td><td>23</td><td>1:18.59</td><td><div class="bar-cell"><div class="bar-inner" style="width:62%"></div></div></td><td>1</td></tr>
+      </table>
+
+      <h2 style="margin-top:26px">TYRE DEGRADATION WATCH</h2>
+      <div class="deg-row"><span class="d">RUS</span>
+        <span class="spark"><i style="height:40%"></i><i style="height:48%"></i><i style="height:55%"></i><i class="hot" style="height:70%"></i><i class="hot" style="height:85%"></i></span>
+        <span>drift <span class="num">+1.2s</span>/3 laps</span><span class="note">stop overdue</span></div>
+      <div class="deg-row"><span class="d">HAM</span>
+        <span class="spark"><i style="height:50%"></i><i style="height:52%"></i><i style="height:58%"></i><i style="height:64%"></i><i class="hot" style="height:72%"></i></span>
+        <span>drift <span class="num">+0.6s</span>/3 laps</span><span class="note">monitoring</span></div>
+    </section>
+
+    <section>
+      <h2>STRATEGY ALERTS</h2>
+      <div class="log">
+        <div class="ln crit"><span class="tag">TRAFFIC·HIGH</span><span class="msg">LEC ← PIA · gap <span class="num">0.8s</span> · Δpace <span class="num">+0.3s</span>/lap. Early stop becomes viable.</span></div>
+        <div class="ln"><span class="tag">UNDERCUT·MED</span><span class="msg">NOR → SAI · <span class="num">0.78s</span> back, tyres 24L, matching pace. Defensive window open.</span></div>
+        <div class="ln"><span class="tag">DRS·TRAIN</span><span class="msg">4 cars behind RUS · P5–P8 · intervals &lt; 1.0s. Stalemate until train breaks.</span></div>
+        <div class="ln info"><span class="tag">CLEAN·AIR</span><span class="msg">BOT fastest in clear air · avg 1:17.7 · <span class="num">−2.3s</span> vs leader pace.</span></div>
+      </div>
+
+      <h2 style="margin-top:26px">SESSION FEED</h2>
+      <div class="log feed">
+        <div class="ln"><span class="t">01:21:07</span><span class="flag">RED FLAG — Portier incident</span></div>
+        <div class="ln"><span class="t">01:19:58</span><span>ZHO pits → rejoins on hards</span></div>
+        <div class="ln"><span class="t">01:17:21</span><span class="fl">FASTEST LAP — LEC 1:16.94</span></div>
+        <div class="ln"><span class="t">01:15:05</span><span>FIA: T8 incident under investigation (GAS/OCO)</span></div>
+        <div class="ln"><span class="t">01:11:40</span><span>HAM pits → rejoins on hards · P7</span></div>
+      </div>
+      <p class="hint"><kbd>space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> ±1 lap · <kbd>S</kbd> spoiler-free · <kbd>1/5/0</kbd> speed</p>
+    </section>
+  </div>
+
+  <div class="tl">
+    <h2>RACE TIMELINE — ░ green · ▓ SC/VSC · █ red flag</h2>
+    <div class="tl-bar">
+      <div class="seg green" style="width:3%"></div>
+      <div class="seg red" style="width:13%"></div>
+      <div class="seg green cur" style="width:36%"></div>
+      <div class="seg sc" style="width:6%"></div>
+      <div class="seg green" style="width:42%"></div>
+    </div>
+    <div class="legend"><span><i style="background:rgba(170,255,160,.18)"></i>racing</span><span><i style="background:rgba(255,209,102,.4)"></i>neutralized</span><span><i style="background:rgba(255,107,94,.45)"></i>stopped</span><span style="margin-left:auto">spoiler-free: future segments hidden</span></div>
+  </div>
+</body>
+</html>

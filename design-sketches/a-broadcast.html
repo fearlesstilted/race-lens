@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Race Lens — Direction A: Broadcast</title>
+<style>
+  :root{
+    --bg:#08080d; --panel:#101018; --panel2:#15151f; --line:#23232f;
+    --txt:#e8e8f0; --dim:#8a8a9a; --accent:#e10600; --teal:#00d2be;
+    --gold:#ffd12e; --soft:#ff3b30; --med:#ffd12e; --hard:#e8e8f0;
+    --green:#34c759; --amber:#ff9f0a; --red:#ff453a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,'Segoe UI',Roboto,sans-serif;padding:0 0 40px}
+  .statusbar{display:flex;align-items:center;gap:16px;padding:10px 24px;background:linear-gradient(180deg,#15151f,#0d0d14);border-bottom:1px solid var(--line);position:sticky;top:0}
+  .brand{font-weight:800;letter-spacing:.12em;font-size:13px}
+  .brand b{color:var(--accent)}
+  .gp{color:var(--dim);font-size:13px}
+  .lap{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;font-size:16px}
+  .lap small{color:var(--dim);font-weight:400}
+  .flag{padding:4px 14px;border-radius:4px;font-weight:800;font-size:12px;letter-spacing:.1em;background:var(--red);animation:pulse 1.6s infinite}
+  .flag.green{background:#1a7a3a;animation:none}
+  @keyframes pulse{50%{opacity:.55}}
+  .wrap{display:grid;grid-template-columns:340px 1fr 320px;gap:14px;padding:16px 24px;max-width:1500px;margin:0 auto}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .panel h3{font-size:11px;letter-spacing:.15em;color:var(--dim);padding:12px 16px 8px;text-transform:uppercase}
+  /* timing tower */
+  .row{display:flex;align-items:center;gap:10px;padding:7px 14px;border-top:1px solid #1a1a24;font-variant-numeric:tabular-nums;transition:background .3s}
+  .row:hover{background:var(--panel2)}
+  .pos{width:24px;height:24px;border-radius:5px;background:#fff;color:#000;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .row.battle .pos{background:var(--gold)}
+  .teambar{width:4px;height:22px;border-radius:2px}
+  .drv{font-weight:700;width:46px;letter-spacing:.04em}
+  .gapv{margin-left:auto;color:var(--dim);width:64px;text-align:right;font-size:13px}
+  .tyre{width:18px;height:18px;border-radius:50%;border:3px solid;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800}
+  .tyre.M{border-color:var(--med);color:var(--med)} .tyre.H{border-color:var(--hard);color:var(--hard)} .tyre.S{border-color:var(--soft);color:var(--soft)}
+  .age{color:var(--dim);font-size:11px;width:22px}
+  .up{color:var(--green);font-size:11px}.dn{color:var(--red);font-size:11px}
+  /* center: track + feed */
+  .track{height:300px;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,#141420 0%,#0c0c12 70%);position:relative}
+  .track svg{opacity:.95}
+  .track .placeholder{position:absolute;bottom:12px;right:16px;color:var(--dim);font-size:11px;letter-spacing:.1em}
+  .feed{max-height:330px;overflow:auto}
+  .ev{display:flex;gap:12px;padding:9px 16px;border-top:1px solid #1a1a24;font-size:13px}
+  .ev .t{color:var(--dim);font-variant-numeric:tabular-nums;width:54px;flex-shrink:0}
+  .ev .lapn{color:var(--dim);width:42px;flex-shrink:0}
+  .ev.flag-ev{background:rgba(255,69,58,.08)}
+  .ev.fl .txt{color:var(--gold)}
+  /* insights */
+  .card{margin:10px 14px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--amber);padding:11px 13px}
+  .card.high{border-left-color:var(--red)}
+  .card.info{border-left-color:var(--teal)}
+  .card .head{display:flex;gap:8px;align-items:center;font-weight:700;font-size:13px;margin-bottom:4px}
+  .sev{font-size:9px;letter-spacing:.12em;padding:2px 7px;border-radius:3px;background:rgba(255,159,10,.18);color:var(--amber)}
+  .card.high .sev{background:rgba(255,69,58,.18);color:var(--red)}
+  .card.info .sev{background:rgba(0,210,190,.15);color:var(--teal)}
+  .card p{color:var(--dim);font-size:12.5px}
+  .card .ev-data{margin-top:6px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .card .ev-data b{color:var(--txt)}
+  /* scrubber */
+  .scrub{grid-column:1/-1;padding:16px 20px}
+  .bar{position:relative;height:6px;background:#1d1d28;border-radius:3px;margin:18px 6px 6px}
+  .fill{position:absolute;left:0;top:0;bottom:0;width:62%;background:linear-gradient(90deg,var(--accent),#ff5f57);border-radius:3px}
+  .knob{position:absolute;left:62%;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgba(225,6,0,.3)}
+  .marks{position:absolute;inset:0}
+  .mark{position:absolute;top:-6px;width:2px;height:18px;background:#3a3a4a}
+  .mark.sc{background:var(--amber)} .mark.rf{background:var(--red)}
+  .scrub .meta{display:flex;justify-content:space-between;color:var(--dim);font-size:12px;margin-top:10px}
+  .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer}
+  .btn.play{background:var(--accent);border-color:var(--accent)}
+  .btn.spd.on{border-color:var(--teal);color:var(--teal)}
+  .spoiler{margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--dim);font-size:12px}
+  .toggle{width:36px;height:20px;border-radius:10px;background:var(--teal);position:relative}
+  .toggle::after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+</style>
+</head>
+<body>
+  <div class="statusbar">
+    <span class="brand">RACE<b>LENS</b></span>
+    <span class="gp">Monaco GP 2024 · Race</span>
+    <span class="flag">🔴 RED FLAG</span>
+    <span class="lap">LAP 1<small> / 78</small></span>
+  </div>
+
+  <div class="wrap">
+    <div class="panel">
+      <h3>Timing</h3>
+      <div class="row"><span class="pos">1</span><span class="teambar" style="background:#e10600"></span><span class="drv">LEC</span><span class="tyre M">M</span><span class="age">0</span><span class="up">▲</span><span class="gapv">LEADER</span></div>
+      <div class="row battle"><span class="pos">2</span><span class="teambar" style="background:#ff8700"></span><span class="drv">PIA</span><span class="tyre M">M</span><span class="age">0</span><span></span><span class="gapv">+0.8</span></div>
+      <div class="row"><span class="pos">3</span><span class="teambar" style="background:#e10600"></span><span class="drv">SAI</span><span class="tyre H">H</span><span class="age">0</span><span></span><span class="gapv">+1.6</span></div>
+      <div class="row"><span class="pos">4</span><span class="teambar" style="background:#ff8700"></span><span class="drv">NOR</span><span class="tyre M">M</span><span class="age">0</span><span></span><span class="gapv">+2.4</span></div>
+      <div class="row"><span class="pos">5</span><span class="teambar" style="background:#00d2be"></span><span class="drv">RUS</span><span class="tyre M">M</span><span class="age">0</span><span class="dn">▼</span><span class="gapv">+3.1</span></div>
+      <div class="row"><span class="pos">6</span><span class="teambar" style="background:#0600ef"></span><span class="drv">VER</span><span class="tyre H">H</span><span class="age">0</span><span></span><span class="gapv">+3.9</span></div>
+      <div class="row"><span class="pos">7</span><span class="teambar" style="background:#00d2be"></span><span class="drv">HAM</span><span class="tyre H">H</span><span class="age">0</span><span></span><span class="gapv">+4.5</span></div>
+      <div class="row"><span class="pos">8</span><span class="teambar" style="background:#2b4562"></span><span class="drv">TSU</span><span class="tyre M">M</span><span class="age">0</span><span></span><span class="gapv">+5.2</span></div>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:14px">
+        <div class="track">
+          <svg width="420" height="260" viewBox="0 0 420 260" fill="none">
+            <path d="M60 200 C40 160 50 120 90 100 C130 80 150 40 200 35 C250 30 280 50 310 70 C350 95 380 110 370 150 C360 185 320 180 290 195 C250 215 220 230 170 225 C120 220 80 235 60 200 Z" stroke="#3a3a4f" stroke-width="14" stroke-linejoin="round"/>
+            <path d="M60 200 C40 160 50 120 90 100 C130 80 150 40 200 35" stroke="#e10600" stroke-width="4"/>
+            <circle cx="90" cy="100" r="7" fill="#e10600"/><text x="78" y="86" fill="#fff" font-size="10" font-weight="700">LEC</text>
+            <circle cx="118" cy="86" r="7" fill="#ff8700"/><text x="106" y="72" fill="#fff" font-size="10" font-weight="700">PIA</text>
+            <circle cx="148" cy="56" r="7" fill="#e10600" opacity=".7"/>
+            <circle cx="196" cy="36" r="7" fill="#ff8700" opacity=".7"/>
+          </svg>
+          <span class="placeholder">SCHEMATIC · positions interpolated</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Race feed</h3>
+        <div class="feed">
+          <div class="ev flag-ev"><span class="t">04:07</span><span class="lapn">L1</span><span class="txt">🔴 Red flag — incident at Portier, PER / MAG / HUL involved</span></div>
+          <div class="ev"><span class="t">03:58</span><span class="lapn">L1</span><span class="txt">ZHO pits</span></div>
+          <div class="ev fl"><span class="t">02:21</span><span class="lapn">L1</span><span class="txt">⏱ Fastest lap: LEC 1:17.494</span></div>
+          <div class="ev"><span class="t">02:05</span><span class="lapn">L1</span><span class="txt">FIA: Turn 8 incident under investigation</span></div>
+          <div class="ev"><span class="t">00:00</span><span class="lapn">—</span><span class="txt">🟢 Lights out — race start</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>What to watch</h3>
+      <div class="card high">
+        <div class="head">LEC ← PIA <span class="sev">HIGH</span></div>
+        <p>Пиастри в зоне атаки за Леклером. В Монако обгонять почти негде — давление через темп.</p>
+        <div class="ev-data">gap <b>0.8s</b> · pace Δ <b>+0.3s/lap</b></div>
+      </div>
+      <div class="card">
+        <div class="head">DRS train · P5–P8 <span class="sev">MEDIUM</span></div>
+        <p>4 машины за Расселом в зоне DRS. Преимущества нет ни у кого — позиции заморожены.</p>
+        <div class="ev-data">cars <b>4</b> · head <b>RUS</b></div>
+      </div>
+      <div class="card info">
+        <div class="head">Clean air · BOT <span class="sev">PACE</span></div>
+        <p>Боттас — быстрейшая машина в чистом воздухе, быстрее темпа лидера.</p>
+        <div class="ev-data">avg <b>1:17.7</b> · vs leader <b>−2.3s</b></div>
+      </div>
+    </div>
+
+    <div class="panel scrub">
+      <div class="bar">
+        <div class="marks">
+          <span class="mark rf" style="left:4%"></span>
+          <span class="mark" style="left:26%"></span>
+          <span class="mark sc" style="left:47%"></span>
+          <span class="mark" style="left:71%"></span>
+        </div>
+        <div class="fill"></div><div class="knob"></div>
+      </div>
+      <div class="meta"><span>0:00</span><span>LAP 48 / 78 · 1:21:14</span><span>2:26:46</span></div>
+      <div class="controls">
+        <button class="btn play">⏸ Pause</button>
+        <button class="btn spd">1x</button><button class="btn spd on">5x</button><button class="btn spd">10x</button>
+        <div class="spoiler">SPOILER-FREE <span class="toggle"></span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
