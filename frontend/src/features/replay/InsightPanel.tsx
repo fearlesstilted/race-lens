@@ -13,12 +13,30 @@ function stableKey(ins: Insight): string {
   return stripped || `${ins.type}:${ins.driver_ids.join(',')}`
 }
 
+// Short human labels instead of raw enum names; severity is rendered once, separately
+const TYPE_LABELS: Array<[string, string]> = [
+  ['TRAFFIC_RISK', 'TRAFFIC'],
+  ['DRS_TRAIN', 'DRS TRAIN'],
+  ['PIT_WINDOW', 'PIT WINDOW'],
+  ['UNDERCUT_RISK', 'UNDERCUT'],
+  ['DEGRADATION_TREND', 'TYRE DEG'],
+  ['CLEAN_AIR_PACE', 'CLEAN AIR'],
+  ['BATTLE_DETECTED', 'BATTLE'],
+]
+
+function baseLabel(type: string): string {
+  const hit = TYPE_LABELS.find(([prefix]) => type.startsWith(prefix))
+  return hit ? hit[1] : type.replace(/_/g, ' ')
+}
+
 function insightTitle(insight: Insight): string {
-  return insight.driver_ids.join(' ← ') || insight.type.replace(/_/g, ' ')
+  return insight.driver_ids.join(' ← ') || baseLabel(insight.type)
 }
 
 function insightSubtitle(insight: Insight): string {
-  return `${insight.type.replace(/_/g, ' ')} · ${insight.severity.toUpperCase()}`
+  const label = baseLabel(insight.type)
+  // severity already speaks through the edge colour; spell it out only for HIGH
+  return insight.severity === 'high' ? `${label} · HIGH` : label
 }
 
 function evidenceData(insight: Insight): { label: string; value: string }[] {
@@ -89,18 +107,29 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   const isFocused = (ins: Insight) =>
     selectedIds.length > 0 && ins.driver_ids.some((id) => selectedIds.includes(id))
 
-  // Sort: focused first, then severity desc, then stable key alphabetical; limit to 4
+  // Sort: focused first, then severity desc, then stable key alphabetical.
+  // Diversity cap: max 2 cards of the same type, so one noisy detector
+  // can't flood the panel. Limit to 4 total.
   const sorted = useMemo(() => {
-    return [...insights]
-      .sort((a, b) => {
-        const af = isFocused(a) ? 0 : 1
-        const bf = isFocused(b) ? 0 : 1
-        if (af !== bf) return af - bf
-        const sd = (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
-        if (sd !== 0) return sd
-        return stableKey(a).localeCompare(stableKey(b))
-      })
-      .slice(0, 4)
+    const ranked = [...insights].sort((a, b) => {
+      const af = isFocused(a) ? 0 : 1
+      const bf = isFocused(b) ? 0 : 1
+      if (af !== bf) return af - bf
+      const sd = (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
+      if (sd !== 0) return sd
+      return stableKey(a).localeCompare(stableKey(b))
+    })
+    const perType: Record<string, number> = {}
+    const picked: Insight[] = []
+    for (const ins of ranked) {
+      const label = baseLabel(ins.type)
+      const count = perType[label] ?? 0
+      if (count >= 2 && !isFocused(ins)) continue
+      perType[label] = count + 1
+      picked.push(ins)
+      if (picked.length >= 4) break
+    }
+    return picked
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, selectedIds])
 
