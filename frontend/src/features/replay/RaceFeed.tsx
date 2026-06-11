@@ -18,11 +18,11 @@ function formatFeedTime(ms: number): string {
 
 export function RaceFeed({ items }: Props) {
   return (
-    <>
+    <div className="ev-scroll">
       <div className="label">RACE FEED</div>
       {items.map((item, i) => {
         const isStatus = item.kind === 'status' || item.kind === 'red_flag' || item.kind === 'safety_car'
-        const isFastest = item.kind === 'fastest_lap'
+        const isFastest = item.kind === 'fastest_lap' || item.kind === 'LapCompleted'
         return (
           <div
             key={i}
@@ -41,6 +41,6 @@ export function RaceFeed({ items }: Props) {
           <span className="x">No events yet</span>
         </div>
       )}
-    </>
+    </div>
   )
 }

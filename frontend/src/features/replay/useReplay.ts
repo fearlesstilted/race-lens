@@ -3,6 +3,18 @@ import { getBattles, getCommentary, getFeed, getInsights, getState, getTimeline,
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceState, Timeline } from '../../api/types'
 
 type Speed = 1 | 5 | 10
+export type Lang = 'en' | 'ru'
+export type Level = 'beginner' | 'pro'
+
+const LANG_KEY = 'racelens_lang'
+const LEVEL_KEY = 'racelens_level'
+
+function readLang(): Lang {
+  try { return (localStorage.getItem(LANG_KEY) as Lang) || 'en' } catch { return 'en' }
+}
+function readLevel(): Level {
+  try { return (localStorage.getItem(LEVEL_KEY) as Level) || 'pro' } catch { return 'pro' }
+}
 
 export type ReplayModel = {
   state: RaceState | null
@@ -16,10 +28,15 @@ export type ReplayModel = {
   atMs: number
   loading: boolean
   error: string | null
+  feedError: string | null
+  lang: Lang
+  level: Level
   scrub: (atMs: number) => void
   play: () => void
   pause: () => void
   setSpeed: (speed: Speed) => void
+  setLang: (lang: Lang) => void
+  setLevel: (level: Level) => void
 }
 
 export const useReplay = (sessionId: string | null): ReplayModel => {
@@ -34,6 +51,9 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const [atMs, setAtMs] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [feedError, setFeedError] = useState<string | null>(null)
+  const [lang, setLangState] = useState<Lang>(readLang)
+  const [level, setLevelState] = useState<Level>(readLevel)
   const sourceRef = useRef<EventSource | null>(null)
   const requestSeq = useRef(0)
 
@@ -43,33 +63,50 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   }, [])
 
   const loadSnapshot = useCallback(
-    async (nextAtMs: number) => {
+    async (nextAtMs: number, nextLang: Lang, nextLevel: Level) => {
       if (!sessionId) return
       const seq = ++requestSeq.current
       setLoading(true)
       setError(null)
+      setFeedError(null)
 
+      // Load state + insights in one batch; feed/battles/commentary separately (non-critical)
+      let nextState: RaceState
+      let nextInsights: { insights: Insight[] }
       try {
-        const [nextState, nextInsights, nextBattles, nextFeed, nextCommentary] = await Promise.all([
+        ;[nextState, nextInsights] = await Promise.all([
           getState(sessionId, nextAtMs),
           getInsights(sessionId, nextAtMs),
-          getBattles(sessionId, nextAtMs).catch(() => ({ battles: [] })),
-          getFeed(sessionId, nextAtMs, 30).catch(() => ({ items: [] })),
-          getCommentary(sessionId, nextAtMs).catch(() => ({ items: [] })),
         ])
-        if (seq !== requestSeq.current) return
-        setState(nextState)
-        setInsights(nextInsights.insights)
-        setBattles(nextBattles.battles)
-        setFeed(nextFeed.items)
-        setCommentary(nextCommentary.items)
-        setAtMs(nextState.at_ms)
       } catch (err) {
         if (seq !== requestSeq.current) return
         setError(err instanceof Error ? err.message : 'Could not load replay state')
-      } finally {
-        if (seq === requestSeq.current) setLoading(false)
+        setLoading(false)
+        return
       }
+
+      if (seq !== requestSeq.current) return
+      setState(nextState)
+      setInsights(nextInsights.insights)
+      setAtMs(nextState.at_ms)
+
+      // Feed + battles + commentary — errors shown in thin strip, not fatal
+      const ms = nextState.at_ms
+      const feedProm = getFeed(sessionId, ms, 30, nextLang)
+        .then((r) => { if (seq === requestSeq.current) { setFeed(r.items); setFeedError(null) } })
+        .catch((err: unknown) => {
+          if (seq === requestSeq.current)
+            setFeedError(err instanceof Error ? err.message : 'Feed unavailable')
+        })
+      const battlesProm = getBattles(sessionId, ms)
+        .then((r) => { if (seq === requestSeq.current) setBattles(r.battles) })
+        .catch(() => undefined)
+      const commentaryProm = getCommentary(sessionId, ms, nextLang, nextLevel)
+        .then((r) => { if (seq === requestSeq.current) setCommentary(r.items) })
+        .catch(() => undefined)
+
+      await Promise.allSettled([feedProm, battlesProm, commentaryProm])
+      if (seq === requestSeq.current) setLoading(false)
     },
     [sessionId],
   )
@@ -85,6 +122,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setTimeline(null)
     setAtMs(0)
     setError(null)
+    setFeedError(null)
 
     if (!sessionId) return
 
@@ -95,7 +133,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
         if (cancelled) return undefined
         setTimeline(nextTimeline)
         setAtMs(nextTimeline.start_ms)
-        return loadSnapshot(nextTimeline.start_ms)
+        return loadSnapshot(nextTimeline.start_ms, lang, level)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -109,7 +147,22 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       cancelled = true
       closeStream()
     }
+    // lang/level intentionally NOT in deps — session change resets; lang/level trigger own effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeStream, loadSnapshot, sessionId])
+
+  // Re-fetch feed + commentary when lang/level change (without resetting position)
+  useEffect(() => {
+    if (!sessionId || atMs === 0) return
+    setFeedError(null)
+    getFeed(sessionId, atMs, 30, lang)
+      .then((r) => { setFeed(r.items); setFeedError(null) })
+      .catch((err: unknown) => setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
+    getCommentary(sessionId, atMs, lang, level)
+      .then((r) => setCommentary(r.items))
+      .catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, level])
 
   const scrub = useCallback(
     (nextAtMs: number) => {
@@ -117,14 +170,14 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       setPlaying(false)
       setAtMs(nextAtMs)
       window.setTimeout(() => {
-        void loadSnapshot(nextAtMs)
+        void loadSnapshot(nextAtMs, lang, level)
       }, 150)
     },
-    [closeStream, loadSnapshot],
+    [closeStream, lang, level, loadSnapshot],
   )
 
   const openStream = useCallback(
-    (nextSpeed: Speed, startMs: number) => {
+    (nextSpeed: Speed, startMs: number, nextLang: Lang, nextLevel: Level) => {
       if (!sessionId) return
       closeStream()
       setError(null)
@@ -138,11 +191,13 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
         setState(nextState)
         setInsights(nextState.active_insights ?? [])
         setAtMs(nextState.at_ms)
-        // Refresh battles and feed from new at_ms
         const ms = nextState.at_ms
         void getBattles(sessionId, ms).then((r) => setBattles(r.battles)).catch(() => undefined)
-        void getFeed(sessionId, ms, 30).then((r) => setFeed(r.items)).catch(() => undefined)
-        void getCommentary(sessionId, ms).then((r) => setCommentary(r.items)).catch(() => undefined)
+        void getFeed(sessionId, ms, 30, nextLang)
+          .then((r) => { setFeed(r.items); setFeedError(null) })
+          .catch((err: unknown) => setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
+        void getCommentary(sessionId, ms, nextLang, nextLevel)
+          .then((r) => setCommentary(r.items)).catch(() => undefined)
       }
 
       source.addEventListener('end', () => {
@@ -161,8 +216,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
 
   const play = useCallback(() => {
     if (!sessionId) return
-    openStream(speed, atMs)
-  }, [atMs, openStream, sessionId, speed])
+    openStream(speed, atMs, lang, level)
+  }, [atMs, lang, level, openStream, sessionId, speed])
 
   const pause = useCallback(() => {
     closeStream()
@@ -173,11 +228,21 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     (nextSpeed: Speed) => {
       setSpeedValue(nextSpeed)
       if (playing) {
-        openStream(nextSpeed, atMs)
+        openStream(nextSpeed, atMs, lang, level)
       }
     },
-    [atMs, openStream, playing],
+    [atMs, lang, level, openStream, playing],
   )
+
+  const setLang = useCallback((nextLang: Lang) => {
+    try { localStorage.setItem(LANG_KEY, nextLang) } catch { /* noop */ }
+    setLangState(nextLang)
+  }, [])
+
+  const setLevel = useCallback((nextLevel: Level) => {
+    try { localStorage.setItem(LEVEL_KEY, nextLevel) } catch { /* noop */ }
+    setLevelState(nextLevel)
+  }, [])
 
   return {
     state,
@@ -191,9 +256,14 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     atMs,
     loading,
     error,
+    feedError,
+    lang,
+    level,
     scrub,
     play,
     pause,
     setSpeed,
+    setLang,
+    setLevel,
   }
 }

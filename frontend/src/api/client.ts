@@ -1,9 +1,9 @@
-import type { BattlesResponse, CommentaryResponse, FeedResponse, InsightsResponse, RaceState, SessionSummary, Timeline } from './types'
+import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, InsightsResponse, RaceState, SessionSummary, Timeline } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`)
+    throw new Error(`${response.status} ${response.statusText}: ${path}`)
   }
   return (await response.json()) as T
 }
@@ -22,11 +22,17 @@ export const getInsights = (sessionId: string, atMs: number) =>
 export const streamUrl = (sessionId: string, speed: number, fromMs: number, tickMs = 1000) =>
   `/api/sessions/${encodeURIComponent(sessionId)}/stream?speed=${speed}&from_ms=${fromMs}&tick_ms=${tickMs}`
 
-export const getFeed = (sessionId: string, untilMs: number, limit = 30) =>
-  json<FeedResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/feed?until_ms=${untilMs}&limit=${limit}`)
+/** The backend returns a bare list; normalise to {items} for the rest of the app. */
+export const getFeed = async (sessionId: string, untilMs: number, limit = 30, lang = 'en'): Promise<FeedResponse> => {
+  const raw = await json<FeedItem[] | FeedResponse>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/feed?until_ms=${untilMs}&lang=${lang}&limit=${limit}`,
+  )
+  if (Array.isArray(raw)) return { items: raw }
+  return raw
+}
 
 export const getBattles = (sessionId: string, atMs: number) =>
   json<BattlesResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/battles?at_ms=${atMs}`)
 
-export const getCommentary = (sessionId: string, atMs: number, lang = 'en', level = 'standard') =>
+export const getCommentary = (sessionId: string, atMs: number, lang = 'en', level = 'pro') =>
   json<CommentaryResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/commentary?at_ms=${atMs}&lang=${lang}&level=${level}`)
