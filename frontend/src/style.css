@@ -574,15 +574,17 @@ body {
   pointer-events: none;
 }
 
-/* ── deck: replay controls ────────────────────────────────────── */
+/* ── deck: replay controls ─────────────────────────────────────── */
+/* Target total height ~72px: phase(4) + rail(30) + deckrow(38) */
 .deck {
-  padding: 20px 32px 22px;
+  padding: 0 32px 8px;
   border-top: 1px solid var(--hair);
 }
+/* Phase strip: 4px, flush above rail */
 .phase {
   display: flex;
   height: 4px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 .phase i {
   height: 100%;
@@ -592,47 +594,52 @@ body {
 .ph-s { background: var(--amber); }
 .ph-neutral { background: #1d1d24; }
 
+/* Rail: compact, no minor ticks */
 .rail {
   position: relative;
-  height: 34px;
+  height: 30px;
   cursor: pointer;
 }
 .rail .line {
   position: absolute;
   left: 0;
   right: 0;
-  top: 16px;
+  top: 14px;
   height: 2px;
   background: #2c2c34;
 }
 .rail .played {
   position: absolute;
   left: 0;
-  top: 16px;
+  top: 14px;
   height: 2px;
   background: var(--ink);
 }
-.rail .tick {
+/* Lap labels at every 10 laps, below the rail */
+.lap-label {
   position: absolute;
-  top: 11px;
-  width: 1px;
-  height: 12px;
-  background: #3c3c46;
+  top: 18px;
+  transform: translateX(-50%);
+  font: 600 10px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  white-space: nowrap;
 }
 .rail .cursor {
   position: absolute;
-  top: 6px;
+  top: 4px;
   width: 2px;
-  height: 22px;
+  height: 20px;
   background: var(--red);
   transform: translateX(-1px);
 }
 .rail .cursor::after {
   content: attr(data-lap);
   position: absolute;
-  top: -16px;
+  top: -15px;
   left: -18px;
-  font: italic 700 12px var(--cond);
+  font: italic 700 11px var(--cond);
   color: var(--red);
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -642,7 +649,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 8px;
 }
 .b {
   font: 600 13px var(--cond);

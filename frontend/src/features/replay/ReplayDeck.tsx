@@ -27,7 +27,6 @@ type PhaseSegment = {
 function buildPhase(feed: FeedItem[], startMs: number, endMs: number): PhaseSegment[] {
   if (endMs <= startMs) return [{ kind: 'green', pct: 100 }]
 
-  // Collect status events
   const statusEvents: { ms: number; kind: 'green' | 'red' | 'amber' }[] = [
     { ms: startMs, kind: 'green' },
   ]
@@ -43,7 +42,7 @@ function buildPhase(feed: FeedItem[], startMs: number, endMs: number): PhaseSegm
   }
 
   statusEvents.sort((a, b) => a.ms - b.ms)
-  statusEvents.push({ ms: endMs, kind: 'green' }) // sentinel
+  statusEvents.push({ ms: endMs, kind: 'green' })
 
   const duration = endMs - startMs
   const segments: PhaseSegment[] = []
@@ -71,6 +70,22 @@ function lapFromTimeline(timeline: Timeline, atMs: number): number | null {
   return lap
 }
 
+/** Compute lap label positions at every 10 laps from timeline.lap_marks */
+function buildLapLabels(
+  timeline: Timeline,
+  startMs: number,
+  duration: number,
+): { lap: number; pct: number }[] {
+  const result: { lap: number; pct: number }[] = []
+  for (const [lapStr, lapMs] of Object.entries(timeline.lap_marks)) {
+    const lap = parseInt(lapStr, 10)
+    if (lap % 10 !== 0) continue
+    const pct = ((lapMs - startMs) / duration) * 100
+    if (pct >= 0 && pct <= 100) result.push({ lap, pct })
+  }
+  return result.sort((a, b) => a.lap - b.lap)
+}
+
 const SPOILER_KEY = 'racelens_spoiler_free'
 
 export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onScrub, onPlay, onPause, onSpeed }: Props) {
@@ -84,16 +99,18 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
   const duration = endMs - startMs || 1
 
   const progress = Math.min(Math.max((atMs - startMs) / duration, 0), 1)
+  const cursorPct = progress * 100
+  const currentLap = timeline ? lapFromTimeline(timeline, atMs) : null
 
   const phases = useMemo(() => {
     if (!timeline) return [{ kind: 'green' as const, pct: 100 }]
     return buildPhase(feed, startMs, endMs)
   }, [feed, startMs, endMs, timeline])
 
-  // When spoiler-free, compute the progress fraction for splitting future/past
-  const cursorPct = progress * 100
-
-  const currentLap = timeline ? lapFromTimeline(timeline, atMs) : null
+  const lapLabels = useMemo(() => {
+    if (!timeline || duration <= 1) return []
+    return buildLapLabels(timeline, startMs, duration)
+  }, [timeline, startMs, duration])
 
   const handleRailClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -116,20 +133,16 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
   const sessionTime = formatRaceTime(atMs)
   const totalTime = formatRaceTime(endMs)
 
-  // Spoiler-free: build phase segments split at cursor position
   const visiblePhases = useMemo(() => {
     if (!spoilerFree) return phases.map((seg, i) => ({ ...seg, key: i, neutral: false }))
-    // Walk through segments and mark future ones neutral
     const result: { kind: string; pct: number; key: number; neutral: boolean }[] = []
     let accumulated = 0
     for (let i = 0; i < phases.length; i++) {
       const seg = phases[i]
       const segEnd = accumulated + seg.pct
       if (accumulated >= cursorPct) {
-        // Fully future
         result.push({ ...seg, key: i, neutral: true })
       } else if (segEnd > cursorPct) {
-        // Straddles cursor — split into past portion and future portion
         const pastPct = cursorPct - accumulated
         const futurePct = segEnd - cursorPct
         result.push({ kind: seg.kind, pct: pastPct, key: i * 100, neutral: false })
@@ -144,6 +157,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
 
   return (
     <div className="deck">
+      {/* Phase strip — flush above rail */}
       <div className="phase">
         {visiblePhases.map((seg) => (
           <i
@@ -153,6 +167,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
           />
         ))}
       </div>
+      {/* Timeline rail */}
       <div className="rail" ref={railRef} onClick={handleRailClick}>
         <div className="line" />
         <div
@@ -162,10 +177,13 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
             transition: playing ? `width ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
           }}
         />
-        {[10, 20, 30, 40, 50, 60, 70, 80, 90]
-          .filter((pct) => !spoilerFree || pct <= cursorPct)
-          .map((pct) => (
-            <div key={pct} className="tick" style={{ left: `${pct}%` }} />
+        {/* Lap labels every 10 laps */}
+        {lapLabels
+          .filter((ll) => !spoilerFree || ll.pct <= cursorPct)
+          .map(({ lap, pct }) => (
+            <div key={lap} className="lap-label" style={{ left: `${pct}%` }}>
+              L{lap}
+            </div>
           ))}
         <div
           className="cursor"
@@ -176,6 +194,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
           data-lap={currentLap !== null ? `LAP ${currentLap}` : ''}
         />
       </div>
+      {/* Single control row: play/speeds left, spoiler+time right */}
       <div className="deckrow">
         {playing ? (
           <button className="b primary" type="button" onClick={onPause}>
@@ -202,7 +221,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
         </div>
         <span className="clock">
           <small>SESSION</small>
-          {spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
+          {spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
         </span>
       </div>
     </div>
