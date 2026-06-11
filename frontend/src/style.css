@@ -392,8 +392,8 @@ body {
   overflow: hidden;
 }
 .map {
-  height: 55vh;
-  min-height: 240px;
+  height: 48vh;
+  min-height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -423,7 +423,7 @@ body {
   color: var(--amber);
 }
 
-/* feed scroll area */
+/* feed scroll area: takes remaining height, internal scroll on hover */
 .col-center .ev-scroll {
   flex: 1;
   overflow-y: hidden;
@@ -433,6 +433,14 @@ body {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #3a3a44 transparent;
+}
+/* When focus panel replaces the feed, it should fill remaining space with scroll */
+.col-center .focus-panel,
+.col-center .focus-panel-h2h {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: none;
 }
 .ev {
   display: grid;
@@ -743,30 +751,28 @@ body {
 
 /* ── focus panel ──────────────────────────────────────────────── */
 .focus-panel {
-  flex: 1;
-  min-height: 0;
-  max-height: 120px;
+  flex-shrink: 0;
   border-top: 1px solid var(--hair);
-  padding: 8px 16px;
+  padding: 10px 16px 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+/* H2H panel taller */
+.focus-panel-h2h {
+  padding: 10px 14px 12px;
 }
 .focus-h2h-label {
   font: italic 800 11px var(--cond);
   letter-spacing: 0.35em;
   color: var(--dim);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .focus-cards {
   display: flex;
   gap: 12px;
-  flex: 1;
   min-height: 0;
-}
-.focus-cards.h2h {
-  gap: 8px;
 }
 .focus-card {
   flex: 1;
@@ -835,19 +841,121 @@ body {
   color: var(--ink);
   font-weight: 700;
 }
-.focus-delta-row {
+
+/* ── H2H redesign ─────────────────────────────────────────────── */
+.h2h-body {
   display: flex;
-  gap: 14px;
+  align-items: stretch;
+  gap: 0;
+}
+.h2h-half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.h2h-half:last-child {
+  align-items: flex-end;
+  text-align: right;
+}
+.h2h-divider {
+  width: 1px;
+  background: var(--hair);
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+.h2h-code {
+  font: italic 800 24px/1 var(--cond);
+  letter-spacing: 0.04em;
+}
+.h2h-meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.h2h-half:last-child .h2h-meta {
+  flex-direction: row-reverse;
+}
+.h2h-pos {
+  font: italic 700 14px var(--cond);
+  letter-spacing: 0.1em;
+}
+.h2h-gap {
+  font: 600 12px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+.h2h-laps {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.h2h-half:last-child .h2h-laps {
+  flex-direction: row-reverse;
+}
+.h2h-lap-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 56px;
+}
+.h2h-half:last-child .h2h-lap-cell {
+  align-items: flex-end;
+}
+.h2h-lap-time {
+  font: 700 13px var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.h2h-lap-delta {
+  font: 600 10px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.h2h-lap-delta.up   { color: #39b54a; }
+.h2h-lap-delta.down { color: var(--red); }
+.h2h-tyre-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font: 600 12px var(--cond);
+}
+.h2h-half:last-child .h2h-tyre-row {
+  flex-direction: row-reverse;
+}
+.h2h-pits {
   font: 600 11px var(--cond);
   color: var(--dim);
   letter-spacing: 0.06em;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--hair);
-  padding-top: 4px;
 }
-.focus-delta-row b {
-  color: var(--ink);
-  font-weight: 700;
+/* Bottom delta row */
+.h2h-deltas {
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid var(--hair);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.h2h-delta-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.h2h-delta-label {
+  font: 600 10px var(--cond);
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.h2h-delta-val {
+  font: italic 700 18px/1 var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.h2h-delta-who {
+  font: 600 10px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.08em;
 }
 
 /* ── focused insight card ─────────────────────────────────────── */

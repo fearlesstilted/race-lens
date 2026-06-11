@@ -27,6 +27,7 @@ function recentLaps(driver: DriverState): number[] {
   return []
 }
 
+/** Single-driver card (non-H2H mode) */
 function DriverCard({ driverId, driver }: { driverId: string; driver: DriverState }) {
   const color = teamColor(driverId)
   const laps = recentLaps(driver)
@@ -71,11 +72,48 @@ function DriverCard({ driverId, driver }: { driverId: string; driver: DriverStat
   )
 }
 
-function DeltaRow({ a, b, driverA, driverB }: {
-  a: string
-  b: string
-  driverA: DriverState
-  driverB: DriverState
+/** H2H half-panel for one driver */
+function H2HDriver({ driverId, driver }: { driverId: string; driver: DriverState }) {
+  const color = teamColor(driverId)
+  const laps = recentLaps(driver)
+  const compound = driver.tyre_compound?.charAt(0).toUpperCase() ?? '?'
+
+  return (
+    <div className="h2h-half">
+      <div className="h2h-code" style={{ color }}>{driverId}</div>
+      <div className="h2h-meta">
+        <span className="h2h-pos">P{driver.position ?? '—'}</span>
+        <span className="h2h-gap">{driver.position === 1 ? 'LEADER' : fmtGap(driver.gap_s)}</span>
+      </div>
+      <div className="h2h-laps">
+        {laps.length === 0 && <span className="h2h-lap-cell"><span className="h2h-lap-time">—</span></span>}
+        {laps.map((ms, i) => {
+          const prev = laps[i - 1]
+          const delta = prev !== undefined ? ms - prev : null
+          return (
+            <span key={i} className="h2h-lap-cell">
+              <span className="h2h-lap-time">{fmtLap(ms)}</span>
+              {delta !== null && (
+                <span className={`h2h-lap-delta ${delta < 0 ? 'up' : 'down'}`}>
+                  {delta < 0 ? '▲' : '▼'}{Math.abs(delta / 1000).toFixed(2)}
+                </span>
+              )}
+            </span>
+          )
+        })}
+      </div>
+      <div className="h2h-tyre-row">
+        <span className={`ty ${compound}`}>{compound}<span className="age">{driver.tyre_age_laps ?? '—'}</span></span>
+        <span className="h2h-pits">{driver.pit_count ?? 0}×PIT</span>
+      </div>
+    </div>
+  )
+}
+
+function H2HDeltas({
+  idA, idB, driverA, driverB,
+}: {
+  idA: string; idB: string; driverA: DriverState; driverB: DriverState
 }) {
   const gapDiff = driverA.gap_s !== null && driverB.gap_s !== null
     ? Math.abs(driverA.gap_s - driverB.gap_s)
@@ -88,10 +126,31 @@ function DeltaRow({ a, b, driverA, driverB }: {
     : null
 
   return (
-    <div className="focus-delta-row">
-      <span>Δ GAP <b>{gapDiff !== null ? `${gapDiff.toFixed(1)}s` : '—'}</b></span>
-      <span>Δ LAST <b>{lastDiff !== null ? `${(Math.abs(lastDiff) / 1000).toFixed(2)}s (${lastDiff < 0 ? a : b} faster)` : '—'}</b></span>
-      <span>Δ TYRE <b>{tyreDiff !== null ? `${Math.abs(tyreDiff)} lap${Math.abs(tyreDiff) !== 1 ? 's' : ''} (${tyreDiff > 0 ? a : b} older)` : '—'}</b></span>
+    <div className="h2h-deltas">
+      <div className="h2h-delta-cell">
+        <span className="h2h-delta-label">Δ GAP</span>
+        <span className="h2h-delta-val">{gapDiff !== null ? `${gapDiff.toFixed(1)}s` : '—'}</span>
+      </div>
+      <div className="h2h-delta-cell">
+        <span className="h2h-delta-label">Δ LAST</span>
+        <span className="h2h-delta-val">
+          {lastDiff !== null
+            ? `${(Math.abs(lastDiff) / 1000).toFixed(2)}s`
+            : '—'}
+        </span>
+        {lastDiff !== null && (
+          <span className="h2h-delta-who">{lastDiff < 0 ? idA : idB} faster</span>
+        )}
+      </div>
+      <div className="h2h-delta-cell">
+        <span className="h2h-delta-label">Δ TYRE</span>
+        <span className="h2h-delta-val">
+          {tyreDiff !== null ? `${Math.abs(tyreDiff)}L` : '—'}
+        </span>
+        {tyreDiff !== null && tyreDiff !== 0 && (
+          <span className="h2h-delta-who">{tyreDiff > 0 ? idA : idB} older</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -107,16 +166,25 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers 
 
   const isH2H = driverB !== null && idB !== undefined
 
+  if (isH2H && driverB) {
+    return (
+      <div className="focus-panel focus-panel-h2h">
+        <div className="focus-h2h-label">HEAD TO HEAD</div>
+        <div className="h2h-body">
+          <H2HDriver driverId={idA} driver={driverA} />
+          <div className="h2h-divider" />
+          <H2HDriver driverId={idB!} driver={driverB} />
+        </div>
+        <H2HDeltas idA={idA} idB={idB!} driverA={driverA} driverB={driverB} />
+      </div>
+    )
+  }
+
   return (
     <div className="focus-panel">
-      {isH2H && <div className="focus-h2h-label">HEAD TO HEAD</div>}
-      <div className={`focus-cards ${isH2H ? 'h2h' : ''}`}>
+      <div className="focus-cards">
         <DriverCard driverId={idA} driver={driverA} />
-        {isH2H && driverB && <DriverCard driverId={idB!} driver={driverB} />}
       </div>
-      {isH2H && driverB && (
-        <DeltaRow a={idA} b={idB!} driverA={driverA} driverB={driverB} />
-      )}
     </div>
   )
 })
