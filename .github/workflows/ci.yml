@@ -27,6 +27,17 @@ jobs:
           cd backend
           python -m pytest -q
 
+  rust:
+    name: Rust race-core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test race-core
+        run: |
+          cd rust/race-core
+          cargo test
+
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest

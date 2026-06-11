@@ -7,6 +7,9 @@ venv/
 .ruff_cache/
 fastf1_cache/
 backend/fixtures/*.jsonl
+backend/fixtures/*.positions_raw.jsonl
+backend/fixtures/*.positions.json
+rust/target/
 .env
 frontend/node_modules/
 frontend/dist/

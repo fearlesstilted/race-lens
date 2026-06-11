@@ -31,6 +31,7 @@ construction: state at time `t` uses only events up to `t`.
 | **Commentary** | EN/RU × beginner/pro templates, no AI required | [`racelens/commentary/`](backend/racelens/commentary/) |
 | **API / SSE** | FastAPI REST + Server-Sent Events stream + live polling | [`racelens/api.py`](backend/racelens/api.py) |
 | **Adapters** | FastF1 and OpenF1 normalized to the same envelope | [`racelens/adapters/`](backend/racelens/adapters/) |
+| **race-core** | Rust CLI resampler: raw JSONL → positions.json (500 ms ticks, linear interp, normalised to SVG viewbox) | [`rust/race-core/`](rust/race-core/) |
 
 ## Quickstart
 
@@ -48,6 +49,24 @@ python -m pytest -q          # 71 tests, all pass
 pip install -e ".[dev,api,fastf1]"
 python -m racelens.cli ingest 2024 Monaco R -o fixtures/monaco_2024_race.jsonl
 python -m racelens.cli state fixtures/monaco_2024_race.jsonl --at-ms 3600000
+```
+
+**Full telemetry pipeline (real car positions):**
+
+```bash
+# 1. Export track outline (includes extent_dm for Rust normalisation)
+python -m racelens.cli track 2024 Monaco R -o fixtures/monaco_2024_race.track.json
+
+# 2. Export raw X/Y telemetry per driver (~43 MB JSONL, temporary)
+python -m racelens.cli positions-raw 2024 Monaco R -o fixtures/monaco_2024_race.positions_raw.jsonl
+
+# 3. Resample with Rust race-core (500 ms ticks → 4.7 MB JSON, ~0.2 s)
+cd rust/race-core && cargo build --release
+./target/release/race-core \
+  ../../backend/fixtures/monaco_2024_race.positions_raw.jsonl \
+  ../../backend/fixtures/monaco_2024_race.track.json \
+  ../../backend/fixtures/monaco_2024_race.positions.json \
+  500
 ```
 
 **Ingest via OpenF1 (near-live source, no extra deps):**
@@ -112,6 +131,8 @@ docker compose up
 - [x] Commentary renderer: EN/RU × beginner/pro templates, /commentary endpoint, no AI required
 - [x] OpenF1 adapter — same envelope from a second source (near-live foundation)
 - [x] Near-live mode: polling runner over the OpenF1 adapter, /api/live/*
+- [x] Rust race-core resampler: raw telemetry JSONL → positions.json (500 ms ticks, linear interp, null gaps, SVG-normalised)
+- [x] Real car positions in TrackMap: LIVE TELEMETRY mode with rAF interpolation; schematic dead-reckoning retained as 404 fallback
 - [ ] Frontend (Vite + React + TS) — in progress
 
 ## Disclaimer
