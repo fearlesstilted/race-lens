@@ -118,3 +118,19 @@ def test_feed_status_texts_ru():
     feed = render_feed(mini_race(), until_ms=300_000, lang="ru")
     finished = [i for i in feed if i["kind"] == "SessionStatusChanged"]
     assert any("Клетчатый флаг" in i["text"] and "финиш" in i["text"] for i in finished)
+
+
+def test_feed_session_started_lights_out():
+    feed = render_feed(mini_race(), until_ms=300_000)
+    started = [i for i in feed if i["kind"] == "SessionStarted"]
+    assert len(started) == 1
+    assert started[0]["text"] == "Lights out — race start!"
+    assert started[0]["tag"] == "FLAG"
+    assert started[0]["driver_id"] is None
+
+
+def test_feed_session_started_ru():
+    feed = render_feed(mini_race(), until_ms=300_000, lang="ru")
+    started = [i for i in feed if i["kind"] == "SessionStarted"]
+    assert len(started) == 1
+    assert "старт" in started[0]["text"].lower()

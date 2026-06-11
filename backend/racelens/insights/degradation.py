@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 DRIFT_THRESHOLD_MS = 400
-DRIFT_HIGH_MS = 1000
+DRIFT_HIGH_MS = 1500
 MIN_TYRE_AGE_LAPS = 5
 
 

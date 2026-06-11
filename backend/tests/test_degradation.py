@@ -33,17 +33,17 @@ def test_degradation_detected():
     assert len(found) == 1
     ins = found[0]
     assert ins["type"] == "DEGRADATION_TREND_DETECTED"
-    assert ins["severity"] == "medium"  # 500 < 1000
+    assert ins["severity"] == "medium"  # 500 < 1500
     assert ins["driver_ids"] == ["TST"]
     assert ins["evidence"]["drift_ms"] == 500
     assert ins["evidence"]["tyre_age_laps"] == 10
 
 
 def test_degradation_high_severity():
-    s = _state([80_000, 80_500, 81_200], tyre_age_laps=12)
+    s = _state([80_000, 80_700, 81_600], tyre_age_laps=12)
     found = detect_degradation(s)
     assert len(found) == 1
-    assert found[0]["severity"] == "high"  # drift = 1200 >= 1000
+    assert found[0]["severity"] == "high"  # drift = 1600 >= 1500
 
 
 def test_no_degradation_plateau():

@@ -15,7 +15,7 @@ def _state(rows: dict[str, tuple[float | None, int, int]]) -> dict:
 
 
 def test_close_old_tyres_high_risk():
-    s = _state({"NOR": (None, 22, 78_000), "VER": (1.2, 20, 78_100)})
+    s = _state({"NOR": (None, 22, 78_000), "VER": (0.8, 20, 78_100)})
     found = detect_undercut_risk(s)
     assert len(found) == 1
     assert found[0]["type"] == "UNDERCUT_RISK_HIGH"

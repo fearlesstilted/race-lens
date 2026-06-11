@@ -9,7 +9,7 @@ from typing import Any
 
 INTERVAL_THRESHOLD_S = 1.0   # within striking distance
 PACE_DELTA_MEDIUM_MS = 200   # behind car is at least this much faster per lap
-PACE_DELTA_HIGH_MS = 500
+PACE_DELTA_HIGH_MS = 700
 
 
 def detect_traffic_risk(state: dict[str, Any]) -> list[dict[str, Any]]:

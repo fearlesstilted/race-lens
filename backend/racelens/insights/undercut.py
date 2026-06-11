@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 STRIKE_RANGE_S = 3.5      # within this, a good outlap usually closes the gap
-HIGH_RISK_RANGE_S = 1.5
+HIGH_RISK_RANGE_S = 1.0
 MIN_TYRE_AGE_LAPS = 10    # nobody undercuts on fresh tyres
 MAX_PACE_DEFICIT_MS = 300 # attacker must not be clearly slower
 

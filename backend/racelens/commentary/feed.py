@@ -87,7 +87,14 @@ def render_feed(
         text: str | None = None
         driver_id: str | None = e.driver_id
 
-        if e.type == "LapCompleted":
+        if e.type == "SessionStarted":
+            if lang == "ru":
+                text = "Свет погас — старт!"
+            else:
+                text = "Lights out — race start!"
+            driver_id = None
+
+        elif e.type == "LapCompleted":
             lap_ms = e.payload.get("lap_time_ms")
             if lap_ms is not None:
                 if best_ms is None or lap_ms < best_ms:
@@ -180,7 +187,7 @@ def render_feed(
         # Determine tag for frontend chip
         if e.type in ("PitIn", "PitOut"):
             tag = "PIT"
-        elif e.type in ("SessionStatusChanged", "RaceControlMessage"):
+        elif e.type in ("SessionStarted", "SessionStatusChanged", "RaceControlMessage"):
             tag = "FLAG"
         elif e.type == "LapCompleted":
             tag = "FASTEST"
