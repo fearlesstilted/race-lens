@@ -39,6 +39,10 @@ export type ReplayModel = {
   positionsData: PositionsData | null
   /** Live gap estimates from telemetry; empty map if telemetry unavailable. */
   liveGaps: Map<string, LiveGapResult>
+  /** True when the green flag strip should be shown. */
+  greenFlag: boolean
+  /** Text to display in the green flag strip. */
+  greenFlagText: string
   scrub: (atMs: number) => void
   play: () => void
   pause: () => void
@@ -64,6 +68,10 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
+  const [greenFlag, setGreenFlag] = useState(false)
+  const [greenFlagText, setGreenFlagText] = useState('')
+  const prevStatusRef = useRef<string | null>(null)
+  const greenUntilRef = useRef<number>(0)
   const sourceRef = useRef<EventSource | null>(null)
   const requestSeq = useRef(0)
 
@@ -122,6 +130,37 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     [sessionId],
   )
 
+  // Green flag strip: show on race start (first 15s) or after neutralisation ends
+  useEffect(() => {
+    if (!state) return
+    const status = state.session_status ?? ''
+    const atMs = state.at_ms
+    const NEUTRAL = new Set(['red_flag', 'safety_car', 'vsc'])
+    const prev = prevStatusRef.current
+
+    if (prev !== null && NEUTRAL.has(prev) && status === 'started') {
+      // Neutralisation ended → green flag
+      greenUntilRef.current = atMs + 15000
+    } else if (atMs < 15000 && status === 'started' && greenUntilRef.current === 0) {
+      // Race start (only set once)
+      greenUntilRef.current = 15000
+    }
+
+    prevStatusRef.current = status
+    const isGreen = status === 'started' && atMs < greenUntilRef.current
+
+    if (isGreen) {
+      // Determine which text to show: race start vs resumed
+      const text = atMs < 15000 && greenUntilRef.current <= 15000
+        ? 'RACE START — LIGHTS OUT'
+        : 'GREEN FLAG — RACING RESUMED'
+      setGreenFlagText(text)
+    } else {
+      setGreenFlagText('')
+    }
+    setGreenFlag(isGreen)
+  }, [state])
+
   // Recompute live gaps whenever state or positions data changes
   useEffect(() => {
     if (!state || !positionsData) {
@@ -146,6 +185,10 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setFeedError(null)
     setPositionsData(null)
     setLiveGaps(new Map())
+    setGreenFlag(false)
+    setGreenFlagText('')
+    prevStatusRef.current = null
+    greenUntilRef.current = 0
 
     if (!sessionId) return
 
@@ -314,5 +357,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setSpeed,
     setLang,
     setLevel,
+    greenFlag,
+    greenFlagText,
   }
 }

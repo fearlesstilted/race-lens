@@ -117,7 +117,7 @@ function App() {
         onLang={replay.setLang}
         onLevel={replay.setLevel}
       />
-      <StatusStrip status={sessionStatus} />
+      <StatusStrip status={sessionStatus} greenFlag={replay.greenFlag} greenFlagText={replay.greenFlagText} />
       {replay.feedError && (
         <div className="feed-error">{replay.feedError}</div>
       )}

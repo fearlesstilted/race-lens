@@ -2,9 +2,19 @@ import React from 'react'
 
 type Props = {
   status: string
+  greenFlag?: boolean
+  greenFlagText?: string
 }
 
-export function StatusStrip({ status }: Props) {
+export function StatusStrip({ status, greenFlag = false, greenFlagText = '' }: Props) {
+  if (greenFlag && status === 'started') {
+    return (
+      <div className="hazard hazard-green">
+        <span>{greenFlagText}</span>
+      </div>
+    )
+  }
+
   if (status === 'started') return null
 
   if (status === 'red_flag') {

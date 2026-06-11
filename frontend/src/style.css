@@ -203,6 +203,14 @@ body {
   color: #ccc;
 }
 
+.hazard-green {
+  background: #143d1f;
+}
+.hazard-green span {
+  color: #4cdb6e;
+  letter-spacing: 0.18em;
+}
+
 /* ── page shell: 100vh grid ────────────────────────────────────── */
 #root {
   display: grid;
@@ -565,10 +573,10 @@ body {
 /* ── insight card animations ─────────────────────────────────── */
 @keyframes ins-enter {
   from { opacity: 0; max-height: 0; margin-bottom: 0; }
-  to   { opacity: 1; max-height: 220px; }
+  to   { opacity: 1; max-height: 400px; }
 }
 @keyframes ins-leave {
-  from { opacity: 1; max-height: 220px; margin-bottom: 1px; }
+  from { opacity: 1; max-height: 400px; margin-bottom: 1px; }
   to   { opacity: 0; max-height: 0; margin-bottom: 0; }
 }
 .ins-entering {

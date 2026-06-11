@@ -173,7 +173,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       if (af !== bf) return af - bf
       return (SEVERITY_ORDER[ga.primary.severity] ?? 9) - (SEVERITY_ORDER[gb.primary.severity] ?? 9)
     })
-    return groups.slice(0, 8)
+    return groups.slice(0, 4)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, selectedIds])
 
