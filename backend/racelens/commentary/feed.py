@@ -29,16 +29,16 @@ _COMPOUND_RU = {
 
 # Session status → display text
 _STATUS_EN: dict[str, str] = {
-    "red_flag": "Red flag",
+    "red_flag": "Red flag — session stopped",
     "safety_car": "Safety car",
     "vsc": "VSC",
-    "finished": "Chequered flag",
+    "finished": "Chequered flag — race complete",
 }
 _STATUS_RU: dict[str, str] = {
-    "red_flag": "Красный флаг",
+    "red_flag": "Красный флаг — гонка остановлена",
     "safety_car": "Safety car",
     "vsc": "VSC",
-    "finished": "Клетчатый флаг",
+    "finished": "Клетчатый флаг — финиш",
 }
 
 
@@ -177,10 +177,21 @@ def render_feed(
         if text is None:
             continue
 
+        # Determine tag for frontend chip
+        if e.type in ("PitIn", "PitOut"):
+            tag = "PIT"
+        elif e.type in ("SessionStatusChanged", "RaceControlMessage"):
+            tag = "FLAG"
+        elif e.type == "LapCompleted":
+            tag = "FASTEST"
+        else:
+            tag = "INFO"
+
         items.append({
             "at_ms": e.session_time_ms,
             "lap": e.lap,
             "kind": e.type,
+            "tag": tag,
             "text": text,
             "driver_id": driver_id,
         })

@@ -80,3 +80,41 @@ def test_feed_no_position_changed_or_gap_noise():
     feed = render_feed(mini_race(), until_ms=300_000)
     noisy_kinds = {"PositionChanged", "GapUpdated", "IntervalUpdated"}
     assert not any(i["kind"] in noisy_kinds for i in feed)
+
+
+def test_feed_tag_all_items_have_tag():
+    feed = render_feed(mini_race(), until_ms=300_000)
+    valid_tags = {"PIT", "FLAG", "FASTEST", "INFO"}
+    for item in feed:
+        assert "tag" in item, f"Missing tag on item: {item}"
+        assert item["tag"] in valid_tags, f"Unknown tag {item['tag']!r} on item: {item}"
+
+
+def test_feed_tag_pit_items():
+    feed = render_feed(mini_race(), until_ms=300_000)
+    pit_items = [i for i in feed if i["kind"] in ("PitIn", "PitOut")]
+    assert all(i["tag"] == "PIT" for i in pit_items), "PitIn/PitOut must have tag=PIT"
+
+
+def test_feed_tag_fastest_lap():
+    feed = render_feed(mini_race(), until_ms=300_000)
+    fl_items = [i for i in feed if i["kind"] == "LapCompleted"]
+    assert all(i["tag"] == "FASTEST" for i in fl_items), "LapCompleted must have tag=FASTEST"
+
+
+def test_feed_tag_session_status_flag():
+    feed = render_feed(mini_race(), until_ms=300_000)
+    status_items = [i for i in feed if i["kind"] == "SessionStatusChanged"]
+    assert all(i["tag"] == "FLAG" for i in status_items), "SessionStatusChanged must have tag=FLAG"
+
+
+def test_feed_status_texts_en():
+    feed = render_feed(mini_race(), until_ms=300_000)
+    finished = [i for i in feed if i["kind"] == "SessionStatusChanged"]
+    assert any("Chequered flag" in i["text"] and "race complete" in i["text"] for i in finished)
+
+
+def test_feed_status_texts_ru():
+    feed = render_feed(mini_race(), until_ms=300_000, lang="ru")
+    finished = [i for i in feed if i["kind"] == "SessionStatusChanged"]
+    assert any("Клетчатый флаг" in i["text"] and "финиш" in i["text"] for i in finished)
