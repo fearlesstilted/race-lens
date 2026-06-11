@@ -93,6 +93,7 @@ function App() {
             atMs={replay.atMs}
             playing={replay.playing}
             frameMs={replay.frameMs}
+            playbackSpeed={replay.speed}
             drivers={state?.drivers ?? {}}
             classification={state?.classification ?? []}
             sessionStatus={sessionStatus}

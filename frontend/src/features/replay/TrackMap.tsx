@@ -10,6 +10,7 @@ type Props = {
   playing: boolean
   /** Wall-clock ms between stream frames — used to set CSS transition duration. */
   frameMs: number
+  playbackSpeed: number
   drivers: Record<string, DriverState>
   classification: string[]
   sessionStatus?: string
@@ -20,8 +21,8 @@ const PIT_LANE_Y = 370
 const PIT_LANE_X_START = 30
 const PIT_LANE_SPACING = 22
 
-// Smoothing time constant in ms — how fast current_frac catches up to target_frac
-const TAU_MS = 300
+// Correction smoothing tau in ms — how fast current_frac catches up to target_frac
+const CORRECTION_TAU_MS = 2000
 
 function median(values: number[]): number {
   if (values.length === 0) return 78000
@@ -100,7 +101,7 @@ function computeTargetFractions(
 }
 
 export const TrackMap = React.memo(function TrackMap({
-  sessionId, atMs, playing, drivers, classification, sessionStatus,
+  sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus,
 }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const [trackData, setTrackData] = useState<TrackData | null>(null)
@@ -121,6 +122,19 @@ export const TrackMap = React.memo(function TrackMap({
   const playingRef = useRef(playing)
   useEffect(() => { playingRef.current = playing }, [playing])
 
+  // Refs for values used inside rAF closure
+  const playbackSpeedRef = useRef(playbackSpeed)
+  useEffect(() => { playbackSpeedRef.current = playbackSpeed }, [playbackSpeed])
+
+  const sessionStatusRef = useRef(sessionStatus ?? '')
+  useEffect(() => { sessionStatusRef.current = sessionStatus ?? '' }, [sessionStatus])
+
+  // Per-driver estimated lap ms (for dead reckoning)
+  const driverLapMsRef = useRef<Map<string, number>>(new Map())
+
+  // Peloton median fallback — updated on each drivers change
+  const pelotonMedianRef = useRef<number>(78000)
+
   // Fetch track data whenever session changes
   useEffect(() => {
     if (!sessionId) return
@@ -135,6 +149,20 @@ export const TrackMap = React.memo(function TrackMap({
   useEffect(() => {
     const newTargets = computeTargetFractions(atMs, drivers, classification)
     targetFracRef.current = newTargets
+
+    // Update per-driver lap ms estimates and peloton median
+    const lapTimes: number[] = []
+    for (const id of classification) {
+      const d = drivers[id]
+      if (!d) continue
+      if (d.last_lap_ms && d.last_lap_ms > 0) {
+        driverLapMsRef.current.set(id, d.last_lap_ms)
+        lapTimes.push(d.last_lap_ms)
+      }
+    }
+    if (lapTimes.length > 0) {
+      pelotonMedianRef.current = median(lapTimes)
+    }
 
     if (!playing) {
       // Scrub: snap current to target immediately, then render one frame
@@ -175,18 +203,33 @@ export const TrackMap = React.memo(function TrackMap({
       const dt = lastTimestampRef.current !== null ? timestamp - lastTimestampRef.current : 16
       lastTimestampRef.current = timestamp
 
-      const k = 1 - Math.exp(-dt / TAU_MS)
+      // Dead reckoning speed multiplier based on session status
+      const status = sessionStatusRef.current
+      let drMultiplier = 1
+      if (status === 'red_flag') drMultiplier = 0
+      else if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') drMultiplier = 0.6
+
+      const speed = playbackSpeedRef.current
+      const pelotonMs = pelotonMedianRef.current
 
       for (const [id, target] of targetFracRef.current) {
         const current = currentFracRef.current.get(id) ?? target
-        // forward-only delta on the circular track
-        let delta = ((target - current) % 1 + 1) % 1
+
+        // --- Dead reckoning: advance car by wall-time * speed / lap_ms
+        const lapMs = driverLapMsRef.current.get(id) ?? pelotonMs
+        const drDelta = (dt * speed * drMultiplier) / lapMs
+        const afterDR = (current + drDelta) % 1
+
+        // --- Soft correction toward target (circular, shortest path)
+        let corrDelta = ((target - afterDR) % 1 + 1) % 1
+        if (corrDelta > 0.5) corrDelta -= 1 // allow backward correction
         let next: number
-        if (delta > 0.5) {
-          // Overtake detected (large backward jump) — snap
+        if (Math.abs(corrDelta) > 0.5) {
+          // Large snap (position data jump > half lap) — snap immediately
           next = target
         } else {
-          next = (current + delta * k) % 1
+          const corrK = 1 - Math.exp(-dt / CORRECTION_TAU_MS)
+          next = ((afterDR + corrDelta * corrK) % 1 + 1) % 1
         }
         currentFracRef.current.set(id, next)
       }
