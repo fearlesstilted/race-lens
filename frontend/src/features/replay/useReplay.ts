@@ -1,27 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { getBattles, getCommentary, getFeed, getInsights, getState, getTimeline, streamUrl } from '../../api/client'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getCommentary, getFeed, getTimeline } from '../../api/client'
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceState, Timeline } from '../../api/types'
 import { computeLiveGaps } from '../../lib/liveGaps'
 import type { LiveGapResult, PositionsData } from '../../lib/liveGaps'
+import { LANG_KEY, LEVEL_KEY, readLang, readLevel, tickMs } from './replayTypes'
+import type { Lang, Level, Speed } from './replayTypes'
+import type { ReplaySetters } from './replaySetters'
+import { useGreenFlag } from './useGreenFlag'
+import { useReplayStream } from './useReplayStream'
+import { useSnapshotLoader } from './useSnapshotLoader'
 
-type Speed = 1 | 5 | 10
-export type Lang = 'en' | 'ru'
-export type Level = 'beginner' | 'pro'
-
-const LANG_KEY = 'racelens_lang'
-const LEVEL_KEY = 'racelens_level'
-
-/** How long the green-flag strip stays visible after race start or a restart. */
-const GREEN_FLAG_MS = 15000
 /** Debounce before loading a snapshot while the user is scrubbing. */
 const SCRUB_DEBOUNCE_MS = 150
 
-function readLang(): Lang {
-  try { return (localStorage.getItem(LANG_KEY) as Lang) || 'en' } catch { return 'en' }
-}
-function readLevel(): Level {
-  try { return (localStorage.getItem(LEVEL_KEY) as Level) || 'pro' } catch { return 'pro' }
-}
+export type { Lang, Level } from './replayTypes'
 
 export type ReplayModel = {
   state: RaceState | null
@@ -73,98 +65,15 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
-  const [greenFlag, setGreenFlag] = useState(false)
-  const [greenFlagText, setGreenFlagText] = useState('')
-  const prevStatusRef = useRef<string | null>(null)
-  const greenUntilRef = useRef<number>(0)
-  const sourceRef = useRef<EventSource | null>(null)
-  const requestSeq = useRef(0)
 
-  const closeStream = useCallback(() => {
-    sourceRef.current?.close()
-    sourceRef.current = null
-  }, [])
+  const set = useMemo<ReplaySetters>(() => ({
+    setState, setInsights, setBattles, setFeed, setCommentary,
+    setAtMs, setLoading, setError, setFeedError, setPlaying,
+  }), [])
 
-  const loadSnapshot = useCallback(
-    async (nextAtMs: number, nextLang: Lang, nextLevel: Level) => {
-      if (!sessionId) return
-      const seq = ++requestSeq.current
-      setLoading(true)
-      setError(null)
-      setFeedError(null)
-
-      // Load state + insights in one batch; feed/battles/commentary separately (non-critical)
-      let nextState: RaceState
-      let nextInsights: { insights: Insight[] }
-      try {
-        ;[nextState, nextInsights] = await Promise.all([
-          getState(sessionId, nextAtMs),
-          getInsights(sessionId, nextAtMs),
-        ])
-      } catch (err) {
-        if (seq !== requestSeq.current) return
-        setError(err instanceof Error ? err.message : 'Could not load replay state')
-        setLoading(false)
-        return
-      }
-
-      if (seq !== requestSeq.current) return
-      // Update atomically — never clear before new data arrives to avoid flicker
-      setState(nextState)
-      setInsights(nextInsights.insights)
-      setAtMs(nextState.at_ms)
-
-      // Feed + battles + commentary — errors shown in thin strip, not fatal
-      const ms = nextState.at_ms
-      const feedProm = getFeed(sessionId, ms, 30, nextLang)
-        .then((r) => { if (seq === requestSeq.current) { setFeed(r.items); setFeedError(null) } })
-        .catch((err: unknown) => {
-          if (seq === requestSeq.current)
-            setFeedError(err instanceof Error ? err.message : 'Feed unavailable')
-        })
-      const battlesProm = getBattles(sessionId, ms)
-        .then((r) => { if (seq === requestSeq.current) setBattles(r.battles) })
-        .catch(() => undefined)
-      const commentaryProm = getCommentary(sessionId, ms, nextLang, nextLevel)
-        .then((r) => { if (seq === requestSeq.current) setCommentary(r.items) })
-        .catch(() => undefined)
-
-      await Promise.allSettled([feedProm, battlesProm, commentaryProm])
-      if (seq === requestSeq.current) setLoading(false)
-    },
-    [sessionId],
-  )
-
-  // Green flag strip: show on race start (first 15s) or after neutralisation ends
-  useEffect(() => {
-    if (!state) return
-    const status = state.session_status ?? ''
-    const atMs = state.at_ms
-    const NEUTRAL = new Set(['red_flag', 'safety_car', 'vsc'])
-    const prev = prevStatusRef.current
-
-    if (prev !== null && NEUTRAL.has(prev) && status === 'started') {
-      // Neutralisation ended → green flag
-      greenUntilRef.current = atMs + GREEN_FLAG_MS
-    } else if (atMs < GREEN_FLAG_MS && status === 'started' && greenUntilRef.current === 0) {
-      // Race start (only set once)
-      greenUntilRef.current = GREEN_FLAG_MS
-    }
-
-    prevStatusRef.current = status
-    const isGreen = status === 'started' && atMs < greenUntilRef.current
-
-    if (isGreen) {
-      // Determine which text to show: race start vs resumed
-      const text = atMs < GREEN_FLAG_MS && greenUntilRef.current <= GREEN_FLAG_MS
-        ? 'RACE START — LIGHTS OUT'
-        : 'GREEN FLAG — RACING RESUMED'
-      setGreenFlagText(text)
-    } else {
-      setGreenFlagText('')
-    }
-    setGreenFlag(isGreen)
-  }, [state])
+  const { loadSnapshot } = useSnapshotLoader(sessionId, set)
+  const { closeStream, openStream } = useReplayStream(sessionId, set)
+  const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(state)
 
   // Recompute live gaps whenever state or positions data changes
   useEffect(() => {
@@ -172,10 +81,10 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       setLiveGaps(new Map())
       return
     }
-    const gaps = computeLiveGaps(positionsData, state.at_ms, state.classification, state.drivers)
-    setLiveGaps(gaps)
+    setLiveGaps(computeLiveGaps(positionsData, state.at_ms, state.classification, state.drivers))
   }, [state, positionsData])
 
+  // Session change: reset everything and load timeline + first snapshot
   useEffect(() => {
     closeStream()
     setPlaying(false)
@@ -190,12 +99,11 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setFeedError(null)
     setPositionsData(null)
     setLiveGaps(new Map())
-    setGreenFlag(false)
-    setGreenFlagText('')
-    prevStatusRef.current = null
-    greenUntilRef.current = 0
+    resetGreenFlag()
 
     if (!sessionId) return
+
+    let cancelled = false
 
     // Fetch positions telemetry (non-critical, best-effort)
     fetch(`/api/sessions/${encodeURIComponent(sessionId)}/positions`)
@@ -203,7 +111,6 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       .then((d) => { if (!cancelled) setPositionsData(d) })
       .catch(() => { if (!cancelled) setPositionsData(null) })
 
-    let cancelled = false
     setLoading(true)
     getTimeline(sessionId)
       .then((nextTimeline) => {
@@ -226,10 +133,9 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     }
     // lang/level intentionally NOT in deps — session change resets; lang/level trigger own effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closeStream, loadSnapshot, sessionId])
+  }, [closeStream, loadSnapshot, resetGreenFlag, sessionId])
 
   // Re-fetch feed + commentary when lang/level change (without resetting position).
-  // If currently playing, also reopen the stream so commentary in SSE uses new lang/level.
   useEffect(() => {
     if (!sessionId || atMs === 0) return
     setFeedError(null)
@@ -241,7 +147,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       .catch(() => undefined)
 
     // Reopen stream with same position but new lang/level so live commentary updates
-    if (sourceRef.current) {
+    if (playing) {
       openStream(speed, atMs, lang, level)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,52 +165,6 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     [closeStream, lang, level, loadSnapshot],
   )
 
-  // Adaptive tick: keep wall-clock interval ~200-500ms for smooth playback
-  const tickMs = useCallback((s: Speed): number => {
-    if (s === 1) return 500
-    if (s === 5) return 1000
-    return 2000
-  }, [])
-
-  const openStream = useCallback(
-    (nextSpeed: Speed, startMs: number, nextLang: Lang, nextLevel: Level) => {
-      if (!sessionId) return
-      closeStream()
-      setError(null)
-      setPlaying(true)
-
-      const tick = tickMs(nextSpeed)
-      const source = new EventSource(streamUrl(sessionId, nextSpeed, startMs, tick))
-      sourceRef.current = source
-
-      source.onmessage = (event) => {
-        const nextState = JSON.parse(event.data) as RaceState
-        setState(nextState)
-        setInsights(nextState.active_insights ?? [])
-        setAtMs(nextState.at_ms)
-        const ms = nextState.at_ms
-        void getBattles(sessionId, ms).then((r) => setBattles(r.battles)).catch(() => undefined)
-        void getFeed(sessionId, ms, 30, nextLang)
-          .then((r) => { setFeed(r.items); setFeedError(null) })
-          .catch((err: unknown) => setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
-        void getCommentary(sessionId, ms, nextLang, nextLevel)
-          .then((r) => setCommentary(r.items)).catch(() => undefined)
-      }
-
-      source.addEventListener('end', () => {
-        closeStream()
-        setPlaying(false)
-      })
-
-      source.onerror = () => {
-        closeStream()
-        setPlaying(false)
-        setError('Replay stream disconnected')
-      }
-    },
-    [closeStream, sessionId],
-  )
-
   const play = useCallback(() => {
     if (!sessionId) return
     openStream(speed, atMs, lang, level)
@@ -318,9 +178,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const setSpeed = useCallback(
     (nextSpeed: Speed) => {
       setSpeedValue(nextSpeed)
-      if (playing) {
-        openStream(nextSpeed, atMs, lang, level)
-      }
+      if (playing) openStream(nextSpeed, atMs, lang, level)
     },
     [atMs, lang, level, openStream, playing],
   )
@@ -339,30 +197,10 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const frameMs = tickMs(speed) / speed
 
   return {
-    state,
-    insights,
-    battles,
-    feed,
-    commentary,
-    timeline,
-    playing,
-    speed,
-    frameMs,
-    atMs,
-    loading,
-    error,
-    feedError,
-    lang,
-    level,
-    positionsData,
-    liveGaps,
-    scrub,
-    play,
-    pause,
-    setSpeed,
-    setLang,
-    setLevel,
-    greenFlag,
-    greenFlagText,
+    state, insights, battles, feed, commentary, timeline,
+    playing, speed, frameMs, atMs, loading, error, feedError,
+    lang, level, positionsData, liveGaps,
+    greenFlag, greenFlagText,
+    scrub, play, pause, setSpeed, setLang, setLevel,
   }
 }
