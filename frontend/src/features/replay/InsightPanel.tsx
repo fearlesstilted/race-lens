@@ -7,9 +7,7 @@ type Props = {
 }
 
 function insightTitle(insight: Insight): string {
-  const drivers = insight.driver_ids.join(' ← ')
-  const type = insight.type.replace(/_/g, ' ')
-  return drivers ? `${drivers}` : type
+  return insight.driver_ids.join(' ← ') || insight.type.replace(/_/g, ' ')
 }
 
 function insightSubtitle(insight: Insight): string {
@@ -33,8 +31,35 @@ function severityClass(severity: string): string {
   return 'ins pace'
 }
 
-export function InsightPanel({ insights, commentary }: Props) {
-  // Match commentary to insights by insight_id
+const InsightCard = React.memo(function InsightCard({
+  ins,
+  text,
+}: {
+  ins: Insight
+  text: string
+}) {
+  const data = evidenceData(ins)
+  return (
+    <div className={severityClass(ins.severity)}>
+      <h4>
+        {insightTitle(ins)}
+        <small>{insightSubtitle(ins)}</small>
+      </h4>
+      {text && <p>{text}</p>}
+      {data.length > 0 && (
+        <div className="data">
+          {data.map((d) => (
+            <span key={d.label}>
+              {d.label} <b>{d.value}</b>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+})
+
+export const InsightPanel = React.memo(function InsightPanel({ insights, commentary }: Props) {
   const commentaryMap: Record<string, string> = {}
   for (const c of commentary) {
     if (c.insight_id) commentaryMap[c.insight_id] = c.text
@@ -43,28 +68,13 @@ export function InsightPanel({ insights, commentary }: Props) {
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
-      {insights.map((ins) => {
-        const text = commentaryMap[ins.insight_id] ?? ''
-        const data = evidenceData(ins)
-        return (
-          <div key={ins.insight_id} className={severityClass(ins.severity)}>
-            <h4>
-              {insightTitle(ins)}
-              <small>{insightSubtitle(ins)}</small>
-            </h4>
-            {text && <p>{text}</p>}
-            {data.length > 0 && (
-              <div className="data">
-                {data.map((d) => (
-                  <span key={d.label}>
-                    {d.label} <b>{d.value}</b>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {insights.map((ins) => (
+        <InsightCard
+          key={ins.insight_id}
+          ins={ins}
+          text={commentaryMap[ins.insight_id] ?? ''}
+        />
+      ))}
       {insights.length === 0 && (
         <div className="ins pace">
           <h4>
@@ -75,4 +85,4 @@ export function InsightPanel({ insights, commentary }: Props) {
       )}
     </div>
   )
-}
+})

@@ -86,6 +86,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       }
 
       if (seq !== requestSeq.current) return
+      // Update atomically — never clear before new data arrives to avoid flicker
       setState(nextState)
       setInsights(nextInsights.insights)
       setAtMs(nextState.at_ms)
