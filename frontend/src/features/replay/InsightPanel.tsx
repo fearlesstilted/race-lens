@@ -7,18 +7,14 @@ type Props = {
   selectedIds?: string[]
 }
 
-/** Minimum wall-time a card must be displayed before it can be removed. */
 const MIN_VISIBLE_MS = 6000
-/** Consecutive absent updates before a card is removed. */
 const ABSENT_THRESHOLD = 2
 
-/** Stable key: strip trailing :number from insight_id, or fall back to type+drivers. */
 function stableKey(ins: Insight): string {
   const stripped = ins.insight_id.replace(/:\d+$/, '')
   return stripped || `${ins.type}:${ins.driver_ids.join(',')}`
 }
 
-// Short human labels instead of raw enum names; severity is rendered once, separately
 const TYPE_LABELS: Array<[string, string]> = [
   ['TRAFFIC_RISK', 'TRAFFIC'],
   ['DRS_TRAIN', 'DRS TRAIN'],
@@ -40,7 +36,6 @@ function insightTitle(insight: Insight): string {
 
 function insightSubtitle(insight: Insight): string {
   const label = baseLabel(insight.type)
-  // severity already speaks through the edge colour; spell it out only for HIGH
   return insight.severity === 'high' ? `${label} · HIGH` : label
 }
 
@@ -63,24 +58,65 @@ function severityClass(severity: string): string {
   return 'ins pace'
 }
 
+/** Canonical pair key: sorted driver IDs joined. */
+function pairKey(ins: Insight): string {
+  return [...ins.driver_ids].sort().join(':')
+}
+
+/** Group insights by driver pair. Return the best per pair + 'also' list. */
+function groupByPair(insights: Insight[]): {
+  primary: Insight
+  also: string[]
+}[] {
+  const byPair = new Map<string, Insight[]>()
+  for (const ins of insights) {
+    const key = pairKey(ins)
+    const arr = byPair.get(key) ?? []
+    arr.push(ins)
+    byPair.set(key, arr)
+  }
+  const result: { primary: Insight; also: string[] }[] = []
+  for (const [, group] of byPair) {
+    // Sort by severity — best first
+    group.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
+    const [primary, ...rest] = group
+    result.push({
+      primary,
+      also: rest.map((r) => baseLabel(r.type)),
+    })
+  }
+  return result
+}
+
 const InsightCard = React.memo(function InsightCard({
   ins,
+  also,
   text,
   leaving,
   focused,
 }: {
   ins: Insight
+  also: string[]
   text: string
   leaving: boolean
   focused: boolean
 }) {
   const data = evidenceData(ins)
   return (
-    <div className={[severityClass(ins.severity), leaving ? 'ins-leaving' : 'ins-entering', focused ? 'ins-focused' : ''].filter(Boolean).join(' ')}>
+    <div
+      className={[
+        severityClass(ins.severity),
+        leaving ? 'ins-leaving' : 'ins-entering',
+        focused ? 'ins-focused' : '',
+      ].filter(Boolean).join(' ')}
+    >
       <h4>
         {insightTitle(ins)}
         <small>{insightSubtitle(ins)}</small>
       </h4>
+      {also.length > 0 && (
+        <div className="ins-also">also: {also.join(' · ')}</div>
+      )}
       {text && <p>{text}</p>}
       {data.length > 0 && (
         <div className="data">
@@ -97,14 +133,14 @@ const InsightCard = React.memo(function InsightCard({
 
 type CardState = {
   ins: Insight
+  also: string[]
   text: string
-  appearedAt: number  // wall-clock ms when card first appeared
-  absentCount: number // consecutive data updates where insight was absent
+  appearedAt: number
+  absentCount: number
   leaving: boolean
 }
 
 export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [] }: Props) {
-  // Build commentary map keyed by stable key (strip trailing :ms from insight_id)
   const commentaryMap: Record<string, string> = useMemo(() => {
     const m: Record<string, string> = {}
     for (const c of commentary) {
@@ -116,13 +152,11 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
     return m
   }, [commentary])
 
-  // Helper: does this insight involve any selected driver?
   const isFocused = (ins: Insight) =>
     selectedIds.length > 0 && ins.driver_ids.some((id) => selectedIds.includes(id))
 
-  // Sort incoming insights: focused first, then severity desc, then stable key alphabetical.
-  // Diversity cap: max 2 cards of the same type. Candidate list (up to 8) for hysteresis to trim.
-  const incomingCandidates = useMemo(() => {
+  // Sort, then group by pair, then rank groups
+  const incomingGroups = useMemo(() => {
     const ranked = [...insights].sort((a, b) => {
       const af = isFocused(a) ? 0 : 1
       const bf = isFocused(b) ? 0 : 1
@@ -131,38 +165,32 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       if (sd !== 0) return sd
       return stableKey(a).localeCompare(stableKey(b))
     })
-    const perType: Record<string, number> = {}
-    const picked: Insight[] = []
-    for (const ins of ranked) {
-      const label = baseLabel(ins.type)
-      const count = perType[label] ?? 0
-      if (count >= 2 && !isFocused(ins)) continue
-      perType[label] = count + 1
-      picked.push(ins)
-      if (picked.length >= 8) break
-    }
-    return picked
+    const groups = groupByPair(ranked)
+    // Re-sort groups by their primary insight's rank
+    groups.sort((ga, gb) => {
+      const af = isFocused(ga.primary) ? 0 : 1
+      const bf = isFocused(gb.primary) ? 0 : 1
+      if (af !== bf) return af - bf
+      return (SEVERITY_ORDER[ga.primary.severity] ?? 9) - (SEVERITY_ORDER[gb.primary.severity] ?? 9)
+    })
+    return groups.slice(0, 8)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, selectedIds])
 
-  // Hysteresis state: map of stable key → CardState
   const cardsRef = useRef<Map<string, CardState>>(new Map())
   const [renderTick, forceRender] = useState(0)
 
   useEffect(() => {
     const now = Date.now()
-    const incomingKeys = new Set(incomingCandidates.map(stableKey))
+    const incomingKeys = new Set(incomingGroups.map((g) => stableKey(g.primary)))
     const cards = cardsRef.current
 
-    // Update absent counts and remove cards that have been absent long enough
-    // and have also expired their minimum display time
     for (const [key, card] of cards) {
       if (!incomingKeys.has(key)) {
         card.absentCount += 1
         const ageMs = now - card.appearedAt
         const minExpired = ageMs >= MIN_VISIBLE_MS
         if (card.absentCount >= ABSENT_THRESHOLD && minExpired) {
-          // Mark leaving for animation, schedule removal
           if (!card.leaving) {
             card.leaving = true
             window.setTimeout(() => {
@@ -172,52 +200,47 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
           }
         }
       } else {
-        // Insight is present again — reset absent count, update data
         card.absentCount = 0
         card.leaving = false
       }
     }
 
-    // Update text for existing cards from commentary
     for (const [key, card] of cards) {
       const newText = commentaryMap[key] ?? card.text
       if (newText !== card.text) card.text = newText
     }
 
-    // Add new cards for incoming insights not yet tracked
-    for (const ins of incomingCandidates) {
-      const key = stableKey(ins)
+    for (const group of incomingGroups) {
+      const key = stableKey(group.primary)
       if (!cards.has(key)) {
         cards.set(key, {
-          ins,
+          ins: group.primary,
+          also: group.also,
           text: commentaryMap[key] ?? '',
           appearedAt: now,
           absentCount: 0,
           leaving: false,
         })
       } else {
-        // Update insight data
         const card = cards.get(key)!
-        card.ins = ins
+        card.ins = group.primary
+        card.also = group.also
         card.text = commentaryMap[key] ?? card.text
       }
     }
 
-    // Enforce 4-card limit: cards that have expired MIN_VISIBLE_MS evict first,
-    // then newest arrivals (by appearedAt desc)
+    // Enforce 3 non-focused + 1 focused limit (total 4 max)
+    const focusedCards = [...cards.entries()].filter(([, c]) => !c.leaving && isFocused(c.ins))
+    const nonFocusedCards = [...cards.entries()].filter(([, c]) => !c.leaving && !isFocused(c.ins))
+    // Allow 1 focused + 3 non-focused = 4 total
+    const keepFocused = focusedCards.slice(0, 1)
+    const keepNonFocused = nonFocusedCards.slice(0, 3)
+    const keepKeys = new Set([...keepFocused, ...keepNonFocused].map(([k]) => k))
     const activeCards = [...cards.entries()].filter(([, c]) => !c.leaving)
-    if (activeCards.length > 4) {
-      // Sort: expired-min first (can be evicted), then by newest (evict newest if needed)
-      const sorted = activeCards.sort(([, a], [, b]) => {
-        const aExpired = (now - a.appearedAt) >= MIN_VISIBLE_MS ? 0 : 1
-        const bExpired = (now - b.appearedAt) >= MIN_VISIBLE_MS ? 0 : 1
-        if (aExpired !== bExpired) return bExpired - aExpired // expired comes first (evict first)
-        // Among same expiry group, newer cards evict first
-        return b.appearedAt - a.appearedAt
-      })
-      const toEvict = sorted.slice(4)
-      for (const [key, card] of toEvict) {
-        if (!card.leaving) {
+    for (const [key, card] of activeCards) {
+      if (!keepKeys.has(key) && !card.leaving) {
+        const age = now - card.appearedAt
+        if (age >= MIN_VISIBLE_MS) {
           card.leaving = true
           window.setTimeout(() => {
             cardsRef.current.delete(key)
@@ -229,18 +252,18 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
 
     forceRender((n) => n + 1)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incomingCandidates, commentaryMap])
+  }, [incomingGroups, commentaryMap])
 
   const displayItems = useMemo(() => {
     const cards = cardsRef.current
     return [...cards.entries()].map(([key, card]) => ({
       key,
       ins: card.ins,
+      also: card.also,
       text: card.text,
       leaving: card.leaving,
       focused: isFocused(card.ins),
     }))
-  // renderTick ensures this re-derives after forceRender calls
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderTick, selectedIds])
 
@@ -249,10 +272,11 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
-      {displayItems.map(({ key, ins, text, leaving, focused }) => (
+      {displayItems.map(({ key, ins, also, text, leaving, focused }) => (
         <InsightCard
           key={key}
           ins={ins}
+          also={also}
           text={text}
           leaving={leaving}
           focused={focused}

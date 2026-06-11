@@ -501,12 +501,17 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Fixed width — never shrinks due to content changes */
+  flex-shrink: 0;
+  width: 360px;
 }
 .ins {
   margin: 0 0 1px;
   padding: 16px 22px;
   border-top: 1px solid #ffffff0a;
   position: relative;
+  /* Smooth max-height collapse on exit */
+  overflow: hidden;
 }
 .ins::before {
   content: '';
@@ -559,19 +564,29 @@ body {
 
 /* ── insight card animations ─────────────────────────────────── */
 @keyframes ins-enter {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { opacity: 0; max-height: 0; margin-bottom: 0; }
+  to   { opacity: 1; max-height: 220px; }
 }
 @keyframes ins-leave {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 1; max-height: 220px; margin-bottom: 1px; }
+  to   { opacity: 0; max-height: 0; margin-bottom: 0; }
 }
 .ins-entering {
-  animation: ins-enter 150ms ease forwards;
+  animation: ins-enter 250ms ease forwards;
 }
 .ins-leaving {
-  animation: ins-leave 400ms ease forwards;
+  animation: ins-leave 350ms ease forwards;
   pointer-events: none;
+}
+
+/* 'also' subordinate type line */
+.ins-also {
+  font: 600 10px var(--cond);
+  letter-spacing: 0.18em;
+  color: var(--dim);
+  margin-top: 2px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
 }
 
 /* ── deck: replay controls ─────────────────────────────────────── */
