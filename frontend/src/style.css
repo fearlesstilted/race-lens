@@ -686,6 +686,171 @@ body {
   background: var(--red);
 }
 
+/* ── timing tower: extra trend column ────────────────────────── */
+.trow,
+.trow-hdr {
+  grid-template-columns: 36px 6px 56px 76px 76px 90px 18px 46px 36px;
+}
+@media (max-width: 1280px) {
+  .trow,
+  .trow-hdr {
+    grid-template-columns: 28px 5px 52px 60px 60px 68px 14px 38px 22px;
+  }
+}
+
+/* pace trend arrow */
+.pace-trend {
+  font: 800 12px var(--cond);
+  text-align: center;
+  line-height: 1;
+}
+.pace-trend.up   { color: #39b54a; }
+.pace-trend.down { color: var(--red); }
+
+/* fastest lap purple dot */
+.fl-dot {
+  color: #b388ff;
+  font-size: 10px;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+/* position change highlights */
+@keyframes pos-up-fade {
+  0%   { background-color: rgba(57, 181, 74, 0.06); }
+  100% { background-color: transparent; }
+}
+@keyframes pos-down-fade {
+  0%   { background-color: rgba(232, 0, 45, 0.06); }
+  100% { background-color: transparent; }
+}
+.trow-pos-up {
+  animation: pos-up-fade 2s ease-out forwards;
+}
+.trow-pos-down {
+  animation: pos-down-fade 2s ease-out forwards;
+}
+
+/* selected driver row */
+.trow-selected {
+  box-shadow: inset 2px 0 0 #fff;
+}
+
+/* ── focus panel ──────────────────────────────────────────────── */
+.focus-panel {
+  flex: 1;
+  min-height: 0;
+  max-height: 120px;
+  border-top: 1px solid var(--hair);
+  padding: 8px 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.focus-h2h-label {
+  font: italic 800 11px var(--cond);
+  letter-spacing: 0.35em;
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+.focus-cards {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.focus-cards.h2h {
+  gap: 8px;
+}
+.focus-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.focus-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-left: 3px solid var(--dim);
+  padding-left: 6px;
+  flex-wrap: wrap;
+}
+.focus-code {
+  font: italic 800 22px/1 var(--cond);
+  letter-spacing: 0.04em;
+}
+.focus-pos {
+  font: italic 700 16px var(--cond);
+  letter-spacing: 0.1em;
+}
+.focus-gap {
+  font: 600 12px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+.focus-tyre {
+  font: 800 12px var(--cond);
+}
+.focus-pits {
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  margin-left: auto;
+}
+.focus-laps {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.focus-lap-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.focus-lap-time {
+  font: 700 14px var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.focus-lap-delta {
+  font: 600 10px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.focus-lap-delta.up   { color: #39b54a; }
+.focus-lap-delta.down { color: var(--red); }
+.focus-int {
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+.focus-int b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.focus-delta-row {
+  display: flex;
+  gap: 14px;
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hair);
+  padding-top: 4px;
+}
+.focus-delta-row b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ── focused insight card ─────────────────────────────────────── */
+.ins-focused {
+  outline: 1px solid #fff;
+  outline-offset: -1px;
+}
+
 /* ── responsive ───────────────────────────────────────────────── */
 @media (max-width: 1380px) {
   .wrap {
@@ -699,7 +864,7 @@ body {
   }
   .trow,
   .trow-hdr {
-    grid-template-columns: 28px 5px 52px 60px 60px 68px 38px 22px;
+    grid-template-columns: 28px 5px 52px 60px 60px 68px 14px 38px 22px;
     gap: 4px;
     padding: 0 10px;
   }
