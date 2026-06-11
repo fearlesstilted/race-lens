@@ -64,6 +64,31 @@ def test_stream_speed_zero_returns_422(client):
     assert r.status_code == 422
 
 
+def test_track_endpoint(tmp_path, monkeypatch):
+    import json as _json
+    import racelens.api as api
+
+    track_data = {"session_id": "2024_mini_race", "viewbox": [600, 400], "points": [[10.0, 20.0], [30.0, 40.0]]}
+    (tmp_path / "2024_mini_race.jsonl").write_text(
+        dump_jsonl(mini_race()), encoding="utf-8"
+    )
+    (tmp_path / "2024_mini_race.track.json").write_text(
+        _json.dumps(track_data), encoding="utf-8"
+    )
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine.cache_clear()
+    c = TestClient(api.app)
+
+    r = c.get("/api/sessions/2024_mini_race/track")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["session_id"] == "2024_mini_race"
+    assert body["viewbox"] == [600, 400]
+    assert len(body["points"]) == 2
+
+    assert c.get("/api/sessions/nope/track").status_code == 404
+
+
 def test_timeline(client):
     t = client.get("/api/sessions/2024_mini_race/timeline").json()
     assert t["start_ms"] == 0

@@ -29,6 +29,12 @@ def main() -> None:
     )
     p_ingest_openf1.add_argument("-o", "--out", required=True, help="output .jsonl path")
 
+    p_track = sub.add_parser("track", help="export track outline from FastF1 telemetry")
+    p_track.add_argument("year", type=int)
+    p_track.add_argument("gp", help='Grand Prix name, e.g. "Monaco"')
+    p_track.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
+    p_track.add_argument("-o", "--out", required=True, help="output .track.json path")
+
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
@@ -56,6 +62,74 @@ def main() -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_jsonl(events), encoding="utf-8")
         print(f"{len(events)} events → {out}", file=sys.stderr)
+
+    elif args.cmd == "track":
+        import fastf1
+
+        cache_dir = Path("fastf1_cache")
+        cache_dir.mkdir(exist_ok=True)
+        fastf1.Cache.enable_cache(str(cache_dir))
+
+        session_map = {"R": "Race", "Q": "Qualifying", "FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3"}
+        session_name = session_map.get(args.session.upper(), args.session)
+
+        print(f"Loading {args.year} {args.gp} {session_name} …", file=sys.stderr)
+        ses = fastf1.get_session(args.year, args.gp, session_name)
+        ses.load(telemetry=True)
+
+        lap = ses.laps.pick_fastest()
+        pos = lap.get_pos_data()
+
+        xs = pos["X"].to_numpy()
+        ys = pos["Y"].to_numpy()
+
+        # Downsample to ~400 points uniformly
+        n = len(xs)
+        target = 400
+        if n > target:
+            step = n / target
+            indices = [int(round(i * step)) for i in range(target)]
+            indices = [min(i, n - 1) for i in indices]
+            xs = xs[indices]
+            ys = ys[indices]
+
+        # Normalize to viewBox 600x400 with padding 20, preserve aspect, invert Y
+        VW, VH = 600, 400
+        PAD = 20
+        x_min, x_max = float(xs.min()), float(xs.max())
+        y_min, y_max = float(ys.min()), float(ys.max())
+        x_range = x_max - x_min or 1.0
+        y_range = y_max - y_min or 1.0
+        avail_w = VW - 2 * PAD
+        avail_h = VH - 2 * PAD
+        scale = min(avail_w / x_range, avail_h / y_range)
+        # Center the smaller axis
+        offset_x = PAD + (avail_w - x_range * scale) / 2
+        offset_y = PAD + (avail_h - y_range * scale) / 2
+
+        points = []
+        for x, y in zip(xs, ys):
+            nx = round(offset_x + (x - x_min) * scale, 1)
+            # invert Y
+            ny = round(VH - (offset_y + (y - y_min) * scale), 1)
+            points.append([nx, ny])
+
+        # Close contour: ensure last point == first
+        if points and points[0] != points[-1]:
+            points.append(points[0])
+
+        # Build session_id from the output file stem
+        out_path = Path(args.out)
+        stem = out_path.stem  # e.g. "monaco_2024_race.track" → need just "monaco_2024_race"
+        if stem.endswith(".track"):
+            session_id = stem[: -len(".track")]
+        else:
+            session_id = stem
+
+        data = {"session_id": session_id, "viewbox": [VW, VH], "points": points}
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(data), encoding="utf-8")
+        print(f"{len(points)} points → {out_path}", file=sys.stderr)
 
     elif args.cmd == "state":
         from racelens.events.models import load_jsonl

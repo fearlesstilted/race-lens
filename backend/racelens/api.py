@@ -207,6 +207,15 @@ def live_stop() -> dict:
     return final_status
 
 
+@app.get("/api/sessions/{session_id}/track")
+def track(session_id: str) -> dict:
+    """Return pre-computed track outline as {session_id, viewbox, points}."""
+    path = FIXTURES_DIR / f"{session_id}.track.json"
+    if not path.is_file():
+        raise HTTPException(404, f"track data for '{session_id}' not found")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @app.get("/api/sessions/{session_id}/feed")
 def feed(
     session_id: str,
