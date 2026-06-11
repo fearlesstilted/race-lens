@@ -57,9 +57,7 @@ def render_feed(
 ) -> list[dict[str, Any]]:
     """Return feed items from events up to until_ms, newest first."""
 
-    # Work only with events up to until_ms
     visible = [e for e in events if e.session_time_ms <= until_ms]
-    # Sort ascending for processing
     visible_sorted = sorted(visible, key=lambda e: (e.session_time_ms, e.event_id))
 
     # Pre-build index: driver_id -> sorted list of (session_time_ms, compound)

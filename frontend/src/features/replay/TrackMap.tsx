@@ -3,6 +3,7 @@ import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
 import type { DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
+import { DEFAULT_LAP_MS } from '../../lib/liveGaps'
 import { teamColor } from './teamColors'
 
 /** Interpolate a real position from positions data at atMs.
@@ -57,8 +58,14 @@ const PIT_LANE_SPACING = 22
 // Correction smoothing tau in ms — how fast current_frac catches up to target_frac
 const CORRECTION_TAU_MS = 2000
 
+// Dead-reckoning speed multiplier while a safety car / VSC neutralises the field.
+const SC_SPEED_MULTIPLIER = 0.6
+
+// If a target fraction jumps more than half a lap, snap directly instead of easing.
+const HALF_LAP_SNAP = 0.5
+
 function median(values: number[]): number {
-  if (values.length === 0) return 78000
+  if (values.length === 0) return DEFAULT_LAP_MS
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
@@ -170,7 +177,7 @@ export const TrackMap = React.memo(function TrackMap({
   const driverLapMsRef = useRef<Map<string, number>>(new Map())
 
   // Peloton median fallback — updated on each drivers change
-  const pelotonMedianRef = useRef<number>(78000)
+  const pelotonMedianRef = useRef<number>(DEFAULT_LAP_MS)
 
   // Ref for positionsData used inside rAF closure
   const positionsDataRef = useRef<PositionsData | null>(null)
@@ -288,7 +295,7 @@ export const TrackMap = React.memo(function TrackMap({
         const status = sessionStatusRef.current
         let drMultiplier = 1
         if (status === 'red_flag') drMultiplier = 0
-        else if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') drMultiplier = 0.6
+        else if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') drMultiplier = SC_SPEED_MULTIPLIER
 
         const pelotonMs = pelotonMedianRef.current
 
@@ -302,9 +309,9 @@ export const TrackMap = React.memo(function TrackMap({
 
           // --- Soft correction toward target (circular, shortest path)
           let corrDelta = ((target - afterDR) % 1 + 1) % 1
-          if (corrDelta > 0.5) corrDelta -= 1 // allow backward correction
+          if (corrDelta > HALF_LAP_SNAP) corrDelta -= 1 // allow backward correction
           let next: number
-          if (Math.abs(corrDelta) > 0.5) {
+          if (Math.abs(corrDelta) > HALF_LAP_SNAP) {
             // Large snap (position data jump > half lap) — snap immediately
             next = target
           } else {
@@ -378,7 +385,6 @@ export const TrackMap = React.memo(function TrackMap({
     )
   }
 
-  // Pit positions computed once per render (static — no animation needed)
   const pitDrivers = classification.filter(id => drivers[id]?.in_pit)
 
   return (

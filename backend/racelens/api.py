@@ -217,7 +217,7 @@ def track(session_id: str) -> dict:
 
 
 @app.get("/api/sessions/{session_id}/positions")
-def positions(session_id: str):
+def positions(session_id: str) -> dict:
     """Return resampled car positions from Rust race-core pipeline.
 
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}

@@ -25,8 +25,20 @@ export type DriverLike = {
 /** Maximum deviation between estimated and official gap before we fall back. */
 const SANITY_THRESHOLD_S = 30
 
+/** Fallback lap time used when no telemetry lap times are available (78s ≈ a typical F1 lap). */
+export const DEFAULT_LAP_MS = 78000
+
+/**
+ * Telemetry fractions are considered degenerate when every estimated gap is below
+ * this many seconds — too close to zero to be physically plausible for trailing cars.
+ */
+const DEGENERATE_GAP_S = 0.05
+
+/** Threshold above which an official gap is "substantial" enough to contradict near-zero estimates. */
+const SUBSTANTIAL_GAP_S = 1
+
 function median(values: number[]): number {
-  if (values.length === 0) return 78
+  if (values.length === 0) return NaN
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
@@ -66,7 +78,6 @@ function interpolateFraction(
   const framesPerLap = lapMs / posData.tick_ms
   if (framesPerLap <= 0) return null
 
-  // Sub-frame interpolation alpha
   const alpha = fi - i0
 
   // Position within current lap as a fraction [0, 1)
@@ -118,7 +129,8 @@ export function computeLiveGaps(
     .filter((v): v is number => v !== null && v !== undefined && v > 0)
     .map((v) => v / 1000)
 
-  const medianLapS = median(lapTimesS)
+  const medianRawS = median(lapTimesS)
+  const medianLapS = Number.isNaN(medianRawS) ? DEFAULT_LAP_MS / 1000 : medianRawS
 
   // Compute fractional positions for all on-track drivers
   // Each driver's lap time is used to determine frames-per-lap for their fraction
@@ -163,7 +175,6 @@ export function computeLiveGaps(
       continue
     }
 
-    // Driver's own lap time in seconds
     const lapS = d.last_lap_ms !== null && d.last_lap_ms > 0
       ? d.last_lap_ms / 1000
       : medianLapS
@@ -217,8 +228,8 @@ export function computeLiveGaps(
     }).filter(({ r }) => r?.fromTelemetry)
 
     if (telEntries.length > 0) {
-      const allNearZero = telEntries.every(({ r }) => (r?.gap_s ?? 0) < 0.05)
-      const anyOfficialLarge = telEntries.some(({ off }) => off !== null && off !== undefined && off > 1)
+      const allNearZero = telEntries.every(({ r }) => (r?.gap_s ?? 0) < DEGENERATE_GAP_S)
+      const anyOfficialLarge = telEntries.some(({ off }) => off !== null && off !== undefined && off > SUBSTANTIAL_GAP_S)
       if (allNearZero && anyOfficialLarge) {
         console.warn('[liveGaps] telemetry degenerate (all gaps ~0, official >1s) — falling back to official')
         for (const id of classification) {
@@ -230,18 +241,6 @@ export function computeLiveGaps(
           }
         }
       }
-    }
-  }
-
-  // Console log: compare est vs official for P2 (first car with a gap)
-  const p2id = classification[1]
-  if (p2id && result.has(p2id)) {
-    const est = result.get(p2id)!
-    const off = drivers[p2id]?.gap_s
-    if (est.fromTelemetry && off !== null && off !== undefined) {
-      console.debug(
-        `[liveGaps] ${p2id} est=${est.gap_s?.toFixed(2)}s official=${off.toFixed(2)}s diff=${Math.abs((est.gap_s ?? 0) - off).toFixed(2)}s`
-      )
     }
   }
 

@@ -1,0 +1,14 @@
+/home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/deps/serde-8ff90be5cf8c823a.d: /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/build/serde-072bf629601dc367/out/private.rs
+
+/home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/deps/libserde-8ff90be5cf8c823a.rlib: /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/build/serde-072bf629601dc367/out/private.rs
+
+/home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/deps/libserde-8ff90be5cf8c823a.rmeta: /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/build/serde-072bf629601dc367/out/private.rs
+
+/home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/fidaczjo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/build/serde-072bf629601dc367/out/private.rs:
+
+# env-dep:OUT_DIR=/home/fidaczjo/Загрузки/f/f1pet/race-lens/rust/race-core/target/debug/build/serde-072bf629601dc367/out

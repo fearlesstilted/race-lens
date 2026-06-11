@@ -6,18 +6,6 @@ export const formatRaceTime = (ms: number) => {
   return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-export const formatLapTime = (ms: number | null) => {
-  if (ms === null) return '-'
-  const minutes = Math.floor(ms / 60_000)
-  const seconds = ((ms % 60_000) / 1000).toFixed(3).padStart(6, '0')
-  return `${minutes}:${seconds}`
-}
-
-export const formatDeltaSeconds = (value: number | null) => {
-  if (value === null) return '-'
-  return `${value.toFixed(1)}s`
-}
-
 // "monaco_2024_race" → "Monaco 2024 — Race"
 // Splits on underscore, Title Cases each part, joins with space,
 // then replaces the last word with " — LastWord" to mark the session type.

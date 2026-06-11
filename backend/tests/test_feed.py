@@ -1,8 +1,7 @@
 """Tests for render_feed: event ticker for the frontend."""
 from racelens.commentary.feed import render_feed
-from racelens.replay.engine import ReplayEngine
 
-from tests.test_replay import SID, mini_race
+from tests.test_replay import mini_race
 
 
 def test_feed_newest_first():

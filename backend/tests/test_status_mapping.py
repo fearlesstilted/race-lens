@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 
 import racelens.adapters.openf1_adapter as _of1
 from racelens.adapters._common import STATUS_TABLE, message_to_status

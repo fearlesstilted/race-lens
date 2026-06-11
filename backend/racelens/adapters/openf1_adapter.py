@@ -20,7 +20,7 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
-from racelens.adapters._common import STATUS_TABLE as _STATUS, message_to_status
+from racelens.adapters._common import message_to_status
 from racelens.events.models import Event, event
 
 _BASE = "https://api.openf1.org/v1"
@@ -264,7 +264,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
         compound = row.get("compound")
         tyre_age = row.get("tyre_age_at_start")
         lap_start = row.get("lap_start")
-        lap_end = row.get("lap_end")
 
         if compound is None:
             continue

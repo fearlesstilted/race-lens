@@ -8,7 +8,7 @@ Requires the `fastf1` extra:  pip install -e ".[fastf1]"
 """
 from __future__ import annotations
 
-from racelens.adapters._common import STATUS_TABLE, message_to_status
+from racelens.adapters._common import message_to_status
 from racelens.events.models import Event, event
 
 

@@ -11,6 +11,11 @@ export type Level = 'beginner' | 'pro'
 const LANG_KEY = 'racelens_lang'
 const LEVEL_KEY = 'racelens_level'
 
+/** How long the green-flag strip stays visible after race start or a restart. */
+const GREEN_FLAG_MS = 15000
+/** Debounce before loading a snapshot while the user is scrubbing. */
+const SCRUB_DEBOUNCE_MS = 150
+
 function readLang(): Lang {
   try { return (localStorage.getItem(LANG_KEY) as Lang) || 'en' } catch { return 'en' }
 }
@@ -140,10 +145,10 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
 
     if (prev !== null && NEUTRAL.has(prev) && status === 'started') {
       // Neutralisation ended → green flag
-      greenUntilRef.current = atMs + 15000
-    } else if (atMs < 15000 && status === 'started' && greenUntilRef.current === 0) {
+      greenUntilRef.current = atMs + GREEN_FLAG_MS
+    } else if (atMs < GREEN_FLAG_MS && status === 'started' && greenUntilRef.current === 0) {
       // Race start (only set once)
-      greenUntilRef.current = 15000
+      greenUntilRef.current = GREEN_FLAG_MS
     }
 
     prevStatusRef.current = status
@@ -151,7 +156,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
 
     if (isGreen) {
       // Determine which text to show: race start vs resumed
-      const text = atMs < 15000 && greenUntilRef.current <= 15000
+      const text = atMs < GREEN_FLAG_MS && greenUntilRef.current <= GREEN_FLAG_MS
         ? 'RACE START — LIGHTS OUT'
         : 'GREEN FLAG — RACING RESUMED'
       setGreenFlagText(text)
@@ -249,7 +254,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
       setAtMs(nextAtMs)
       window.setTimeout(() => {
         void loadSnapshot(nextAtMs, lang, level)
-      }, 150)
+      }, SCRUB_DEBOUNCE_MS)
     },
     [closeStream, lang, level, loadSnapshot],
   )
