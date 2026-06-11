@@ -10,7 +10,7 @@ dependencies = [
 [project.optional-dependencies]
 fastf1 = ["fastf1>=3.3"]
 api = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+dev = ["pytest>=8.0", "ruff>=0.4", "httpx2"]  # httpx2: starlette TestClient backend
 
 [build-system]
 requires = ["setuptools>=68"]
