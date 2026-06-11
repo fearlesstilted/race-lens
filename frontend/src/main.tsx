@@ -73,15 +73,27 @@ function App() {
         sessions={sessions}
         lap={state?.lap ?? 0}
         totalLaps={state?.total_laps ?? null}
+        lang={replay.lang}
+        level={replay.level}
         onSessionChange={handleSessionChange}
+        onLang={replay.setLang}
+        onLevel={replay.setLevel}
       />
       <StatusStrip status={sessionStatus} />
+      {replay.feedError && (
+        <div className="feed-error">{replay.feedError}</div>
+      )}
 
       <div className="wrap">
         <TimingTower rows={rows} battles={replay.battles} />
 
         <div className="col col-center">
-          <TrackMap />
+          <TrackMap
+            atMs={replay.atMs}
+            playing={replay.playing}
+            drivers={state?.drivers ?? {}}
+            classification={state?.classification ?? []}
+          />
           <RaceFeed items={replay.feed} />
         </div>
 
