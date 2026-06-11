@@ -57,3 +57,36 @@ export type InsightsResponse = {
   at_ms: number
   insights: Insight[]
 }
+
+export type FeedItem = {
+  at_ms: number
+  lap: number | null
+  text: string
+  kind: string // 'status' | 'fastest_lap' | 'pit' | 'info' | ...
+}
+
+export type FeedResponse = {
+  items: FeedItem[]
+}
+
+export type Battle = {
+  leader_id: string
+  chaser_id: string
+  gap_s: number
+}
+
+export type BattlesResponse = {
+  battles: Battle[]
+}
+
+export type CommentaryItem = {
+  at_ms: number
+  text: string
+  driver_ids: string[]
+  insight_id: string | null
+  level: string
+}
+
+export type CommentaryResponse = {
+  items: CommentaryItem[]
+}

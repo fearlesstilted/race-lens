@@ -1,4 +1,4 @@
-import type { InsightsResponse, RaceState, SessionSummary, Timeline } from './types'
+import type { BattlesResponse, CommentaryResponse, FeedResponse, InsightsResponse, RaceState, SessionSummary, Timeline } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -21,3 +21,12 @@ export const getInsights = (sessionId: string, atMs: number) =>
 
 export const streamUrl = (sessionId: string, speed: number, fromMs: number, tickMs = 1000) =>
   `/api/sessions/${encodeURIComponent(sessionId)}/stream?speed=${speed}&from_ms=${fromMs}&tick_ms=${tickMs}`
+
+export const getFeed = (sessionId: string, untilMs: number, limit = 30) =>
+  json<FeedResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/feed?until_ms=${untilMs}&limit=${limit}`)
+
+export const getBattles = (sessionId: string, atMs: number) =>
+  json<BattlesResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/battles?at_ms=${atMs}`)
+
+export const getCommentary = (sessionId: string, atMs: number, lang = 'en', level = 'standard') =>
+  json<CommentaryResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/commentary?at_ms=${atMs}&lang=${lang}&level=${level}`)
