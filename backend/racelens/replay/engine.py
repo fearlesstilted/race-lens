@@ -31,6 +31,7 @@ def _new_driver() -> dict[str, Any]:
         "pit_count": 0,
         "in_pit": False,
         "recent_laps_ms": [],
+        "retired": False,
     }
 
 
@@ -110,10 +111,26 @@ class ReplayEngine:
         else:
             dq["status"] = "good"
 
-        state["classification"] = sorted(
-            (d for d, s in state["drivers"].items() if s["position"] is not None),
+        # Mark retired drivers: more than 5 laps behind the leader (only when
+        # leader has completed at least 5 laps — avoids false positives early on).
+        leader_laps = max(
+            (s["laps_completed"] for s in state["drivers"].values()),
+            default=0,
+        )
+        for s in state["drivers"].values():
+            if leader_laps >= 5 and s["laps_completed"] <= leader_laps - 5:
+                s["retired"] = True
+
+        active = sorted(
+            (d for d, s in state["drivers"].items() if s["position"] is not None and not s["retired"]),
             key=lambda d: state["drivers"][d]["position"],
         )
+        retired = sorted(
+            (d for d, s in state["drivers"].items() if s["position"] is not None and s["retired"]),
+            key=lambda d: state["drivers"][d]["laps_completed"],
+            reverse=True,
+        )
+        state["classification"] = active + retired
         return state
 
     def state_hash(self, at_ms: int) -> str:

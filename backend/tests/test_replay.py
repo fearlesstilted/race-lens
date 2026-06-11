@@ -109,6 +109,51 @@ def test_no_future_leakage():
     assert full.state_at(cutoff) == truncated.state_at(cutoff)
 
 
+def test_retired_driver_goes_to_tail():
+    """Synthetic 3-driver race: OCO retires after lap 1, leader reaches lap 6+.
+
+    Expected: OCO is marked retired=True and appears at the end of classification;
+    the two active drivers come first sorted by position.
+    The gap threshold (leader_laps >= 5 and driver <= leader_laps - 5) must NOT
+    trigger in mini_race (3 laps) — existing tests must still pass.
+    """
+    from racelens.events.models import event as mkevent
+
+    SID2 = "2024_retired_test"
+    e = []
+    e.append(mkevent(SID2, "SessionStarted", 0, total_laps=10))
+    for drv, pos in [("VER", 1), ("HAM", 2), ("OCO", 3)]:
+        e.append(mkevent(SID2, "PositionChanged", 0, drv, position=pos))
+
+    # OCO completes only lap 1 (retires after that)
+    e.append(mkevent(SID2, "LapCompleted", 80_000, "OCO", lap=1, lap_time_ms=80_000))
+
+    # Leader and HAM continue to lap 6
+    for lap in range(1, 7):
+        t = lap * 80_000
+        e.append(mkevent(SID2, "LapCompleted", t, "VER", lap=lap, lap_time_ms=78_000))
+        e.append(mkevent(SID2, "LapCompleted", t + 1_000, "HAM", lap=lap, lap_time_ms=79_000))
+
+    engine = ReplayEngine(e)
+    state = engine.state_at(6 * 80_000 + 5_000)
+
+    # OCO should be retired
+    assert state["drivers"]["OCO"]["retired"] is True
+    # Active drivers not retired
+    assert state["drivers"]["VER"]["retired"] is False
+    assert state["drivers"]["HAM"]["retired"] is False
+    # OCO must appear at the tail of classification
+    assert state["classification"][-1] == "OCO"
+    assert "OCO" not in state["classification"][:2]
+
+
+def test_no_retired_in_mini_race():
+    """mini_race only has 3 laps — the 5-lap deficit never occurs; no retirements."""
+    state = ReplayEngine(mini_race()).state_at(300_000)
+    for drv_state in state["drivers"].values():
+        assert drv_state["retired"] is False
+
+
 def test_jsonl_round_trip():
     events = mini_race()
     restored = load_jsonl(dump_jsonl(events))
