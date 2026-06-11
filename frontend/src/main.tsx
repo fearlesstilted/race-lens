@@ -93,6 +93,7 @@ function App() {
             playing={replay.playing}
             drivers={state?.drivers ?? {}}
             classification={state?.classification ?? []}
+            sessionStatus={sessionStatus}
           />
           <RaceFeed items={replay.feed} />
         </div>
