@@ -38,9 +38,9 @@ export const TimingTower = React.memo(function TimingTower({ rows, battles }: Pr
         <span>POS</span>
         <span />
         <span>DRV</span>
-        <span>INT</span>
-        <span>GAP</span>
-        <span>LAST</span>
+        <span title="Gap to car ahead">INT</span>
+        <span title="Gap to leader">GAP</span>
+        <span title="Last lap time">LAST</span>
         <span>TYR</span>
         <span>PIT</span>
       </div>
@@ -55,13 +55,13 @@ export const TimingTower = React.memo(function TimingTower({ rows, battles }: Pr
           : isLead
             ? <span className="gap dim">—</span>
             : row.interval_s !== null
-              ? <span className="gap">{`+${row.interval_s.toFixed(3)}`}</span>
+              ? <span className="gap dim">{`+${row.interval_s.toFixed(1)}`}</span>
               : <span className="gap dim">—</span>
 
         const gapDisplay = isRetired
           ? <span className="gap dim">OUT</span>
           : isLead
-            ? <span className="gap dim">LEADER</span>
+            ? <span className="gap dim">—</span>
             : <span className={`gap${row.gap_s === null ? ' dim' : ''}`}>
                 {row.gap_s !== null ? `+${row.gap_s.toFixed(1)}` : '—'}
               </span>

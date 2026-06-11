@@ -249,11 +249,11 @@ body {
 /* ── timing tower ─────────────────────────────────────────────── */
 .trow-hdr {
   display: grid;
-  grid-template-columns: 36px 6px 56px 76px 76px 86px 46px 36px;
+  grid-template-columns: 36px 6px 56px 76px 76px 90px 46px 36px;
   align-items: center;
   gap: 12px;
   height: 22px;
-  padding: 0 20px 0 18px;
+  padding: 0 24px 0 18px;
   font: 600 11px var(--cond);
   letter-spacing: 0.2em;
   color: var(--dim);
@@ -262,11 +262,11 @@ body {
 }
 .trow {
   display: grid;
-  grid-template-columns: 36px 6px 56px 76px 76px 86px 46px 36px;
+  grid-template-columns: 36px 6px 56px 76px 76px 90px 46px 36px;
   align-items: center;
   gap: 12px;
   height: clamp(28px, calc((var(--tower-body-h, 600px) - 60px) / var(--row-count, 20)), 44px);
-  padding: 0 20px 0 18px;
+  padding: 0 24px 0 18px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
 }
@@ -447,6 +447,31 @@ body {
 }
 .ev .x b {
   font-weight: 600;
+}
+
+/* feed tag chips */
+.ev-tag {
+  display: inline-block;
+  font: 700 10px/1 var(--cond);
+  letter-spacing: 0.12em;
+  padding: 2px 5px;
+  margin-right: 7px;
+  vertical-align: middle;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.ev-tag-flag  { background: #e8002d33; color: var(--red); }
+.ev-tag-pit   { background: #f2a90033; color: var(--amber); }
+.ev-tag-fastest { background: #b388ff22; color: #b388ff; }
+.ev-tag-info  { background: #ffffff11; color: var(--dim); }
+
+/* new-event flash */
+@keyframes ev-flash {
+  0%   { background: #ffffff14; }
+  100% { background: transparent; }
+}
+.ev-flash {
+  animation: ev-flash 2s ease-out forwards;
 }
 
 /* ── insights: lower-thirds ───────────────────────────────────── */
@@ -674,7 +699,7 @@ body {
   }
   .trow,
   .trow-hdr {
-    grid-template-columns: 28px 5px 52px 60px 60px 60px 38px 22px;
+    grid-template-columns: 28px 5px 52px 60px 60px 68px 38px 22px;
     gap: 4px;
     padding: 0 10px;
   }
