@@ -18,6 +18,8 @@ type Props = {
   drivers: Record<string, DriverState>
   classification: string[]
   sessionStatus?: string
+  /** Session time (ms) when current neutralisation started — for elapsed timer in badge. */
+  neutralizationStartMs?: number | null
   selectedIds?: string[]
   /** Positions telemetry data lifted from parent (useReplay). If null, schematic mode is used. */
   positionsData: PositionsData | null
@@ -38,7 +40,7 @@ const PIT_LANE_SPACING = 22
 function statusWatermark(status: string): { text: string; color: string } | null {
   if (status === 'red_flag') return { text: 'RED FLAG', color: '#cc0000' }
   if (status === 'safety_car') return { text: 'SAFETY CAR', color: '#f2a900' }
-  if (status === 'virtual_safety_car' || status === 'vsc') return { text: 'VSC', color: '#f2a900' }
+  if (status === 'virtual_safety_car' || status === 'vsc') return { text: 'VIRTUAL SC', color: '#f2a900' }
   return null
 }
 
@@ -48,12 +50,27 @@ function trackStrokeColor(status: string): string {
   return '#26262e'
 }
 
+function trackShadow(status: string): string | undefined {
+  if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc')
+    return '0 0 18px 6px #f2a900aa'
+  if (status === 'red_flag') return '0 0 18px 6px #cc0000aa'
+  return undefined
+}
+
+/** Format elapsed ms as M:SS */
+function fmtElapsed(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 // Ghost cars: fractional positions +30s ahead, computed each render in schematic mode
 const GHOST_AHEAD_S = 30
 
 export const TrackMap = React.memo(function TrackMap({
-  sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, selectedIds = [],
-  positionsData, projection = false,
+  sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, neutralizationStartMs,
+  selectedIds = [], positionsData, projection = false,
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
@@ -101,8 +118,13 @@ export const TrackMap = React.memo(function TrackMap({
       .catch(() => setTrackError(true))
   }, [sessionId])
 
-  const watermark = statusWatermark(sessionStatus ?? '')
-  const trackStroke = trackStrokeColor(sessionStatus ?? '')
+  const status = sessionStatus ?? ''
+  const watermark = statusWatermark(status)
+  const trackStroke = trackStrokeColor(status)
+  const trackShadowFilter = trackShadow(status)
+  const elapsedTimer = watermark && neutralizationStartMs != null
+    ? fmtElapsed(atMs - neutralizationStartMs)
+    : null
   const top3 = classification.slice(0, 3)
   const hasFocus = selectedIds.length > 0
 
@@ -132,6 +154,13 @@ export const TrackMap = React.memo(function TrackMap({
 
         {trackData && (
           <>
+            {trackShadowFilter && (
+              <defs>
+                <filter id="track-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor={watermark?.color ?? '#f2a900'} floodOpacity="0.7" />
+                </filter>
+              </defs>
+            )}
             {/* Track base */}
             <path
               d={pathD}
@@ -140,6 +169,7 @@ export const TrackMap = React.memo(function TrackMap({
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="none"
+              filter={trackShadowFilter ? 'url(#track-glow)' : undefined}
             />
             {/* Invisible measurement path */}
             <path ref={pathRef} d={pathD} stroke="none" fill="none" />
@@ -168,23 +198,50 @@ export const TrackMap = React.memo(function TrackMap({
           strokeWidth={1}
         />
 
-        {/* Status watermark */}
+        {/* Status badge — prominent overlay for SC/VSC/red flag */}
         {watermark && (
-          <text
-            x={vw / 2}
-            y={vh / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill={watermark.color}
-            opacity={0.18}
-            fontSize={52}
-            fontStyle="italic"
-            fontWeight={900}
-            fontFamily="'Barlow Condensed', sans-serif"
-            letterSpacing="0.06em"
-          >
-            {watermark.text}
-          </text>
+          <g>
+            {/* Badge background pill */}
+            <rect
+              x={vw / 2 - 96}
+              y={vh / 2 - 22}
+              width={192}
+              height={44}
+              rx={6}
+              fill={watermark.color}
+              opacity={0.92}
+            />
+            <text
+              x={vw / 2}
+              y={elapsedTimer ? vh / 2 - 5 : vh / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#000"
+              fontSize={elapsedTimer ? 18 : 22}
+              fontStyle="italic"
+              fontWeight={900}
+              fontFamily="'Barlow Condensed', sans-serif"
+              letterSpacing="0.08em"
+            >
+              {watermark.text}
+            </text>
+            {elapsedTimer && (
+              <text
+                x={vw / 2}
+                y={vh / 2 + 13}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#000"
+                fontSize={14}
+                fontWeight={700}
+                fontFamily="'Barlow Condensed', sans-serif"
+                letterSpacing="0.04em"
+                opacity={0.8}
+              >
+                {elapsedTimer}
+              </text>
+            )}
+          </g>
         )}
 
         {/* On-track cars — initial transform is 0,0; rAF loop updates imperatively */}

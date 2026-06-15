@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FeedItem, Timeline } from '../../api/types'
+import type { FeedItem, RaceMarker, Timeline } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
 
 type Speed = 1 | 5 | 10
 const SPEEDS: Speed[] = [1, 5, 10]
+
+type Lang = 'en' | 'ru'
 
 type Props = {
   timeline: Timeline | null
@@ -13,6 +15,8 @@ type Props = {
   /** Wall-clock ms between stream frames — for cursor transition. */
   frameMs: number
   feed: FeedItem[]
+  markers?: RaceMarker[]
+  lang?: Lang
   /** When false (live mode) the scrub rail is disabled and speed controls hidden. */
   canScrub?: boolean
   /** Session clock string shown in live mode (e.g. "LAP 42"). */
@@ -98,7 +102,54 @@ function buildLapLabels(
 
 const SPOILER_KEY = 'racelens_spoiler_free'
 
-export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
+// ── Marker rendering helpers ──────────────────────────────────────────────────
+
+/** Minimum gap between marker groups as fraction of total width (1.5 %). */
+const CLUSTER_THRESHOLD_PCT = 1.5
+
+type MarkerStyle = {
+  color: string
+  shape: 'line' | 'triangle' | 'dot' | 'chevron'
+  zIndex: number
+}
+
+function markerStyle(kind: RaceMarker['kind']): MarkerStyle {
+  switch (kind) {
+    case 'RED_FLAG':    return { color: '#cc2222', shape: 'line',     zIndex: 5 }
+    case 'SAFETY_CAR':
+    case 'VSC':         return { color: '#f2a900', shape: 'line',     zIndex: 4 }
+    case 'CRASH':
+    case 'INCIDENT':    return { color: '#cc2222', shape: 'triangle', zIndex: 3 }
+    case 'PENALTY':     return { color: '#f2a900', shape: 'dot',      zIndex: 3 }
+    case 'LEAD_CHANGE': return { color: '#ffffff', shape: 'chevron',  zIndex: 2 }
+    case 'FASTEST_LAP': return { color: '#b388ff', shape: 'dot',      zIndex: 2 }
+    case 'PODIUM_CHANGE': return { color: '#555566', shape: 'line',   zIndex: 1 }
+    default:            return { color: '#888899', shape: 'dot',      zIndex: 1 }
+  }
+}
+
+/** Group close markers so they don't overlap. Returns cluster centers with merged info. */
+function clusterMarkers(
+  markers: RaceMarker[],
+  pctFn: (m: RaceMarker) => number,
+): { pct: number; items: RaceMarker[] }[] {
+  if (markers.length === 0) return []
+  const sorted = [...markers].sort((a, b) => a.at_ms - b.at_ms)
+  const groups: { pct: number; items: RaceMarker[] }[] = []
+  for (const m of sorted) {
+    const pct = pctFn(m)
+    const last = groups[groups.length - 1]
+    if (last && pct - last.pct < CLUSTER_THRESHOLD_PCT) {
+      last.items.push(m)
+      // keep highest-priority item's pct (first item) — no shift needed
+    } else {
+      groups.push({ pct, items: [m] })
+    }
+  }
+  return groups
+}
+
+export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, markers = [], lang = 'en', canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
     try { return localStorage.getItem(SPOILER_KEY) === '1' } catch { return false }
   })
@@ -121,6 +172,14 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, canS
     if (!timeline || duration <= 1) return []
     return buildLapLabels(timeline, startMs, duration)
   }, [timeline, startMs, duration])
+
+  // Marker clusters — respects spoilerFree (only show markers up to current atMs)
+  const markerClusters = useMemo(() => {
+    if (!timeline || duration <= 1 || markers.length === 0) return []
+    const visible = spoilerFree ? markers.filter((m) => m.at_ms <= atMs) : markers
+    const pctFn = (m: RaceMarker) => ((m.at_ms - startMs) / duration) * 100
+    return clusterMarkers(visible, pctFn)
+  }, [markers, spoilerFree, atMs, startMs, duration, timeline])
 
   const handleRailClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -218,6 +277,83 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, canS
           }}
           data-lap={currentLap !== null ? `LAP ${currentLap}` : ''}
         />
+        {/* Race markers */}
+        {markerClusters.map((cluster) => {
+          // Pick the highest-priority item in cluster for rendering
+          const primary = cluster.items.reduce((best, m) =>
+            markerStyle(m.kind).zIndex > markerStyle(best.kind).zIndex ? m : best,
+          )
+          const ms = markerStyle(primary.kind)
+          const tipText = cluster.items
+            .map((m) => `${lang === 'ru' ? m.text_ru : m.text_en} · Lap ${m.lap}`)
+            .join('\n')
+          const handleMarkerClick = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            if (canScrub) onScrub(primary.at_ms)
+          }
+          return (
+            <div
+              key={`m-${cluster.pct.toFixed(3)}`}
+              title={tipText}
+              onClick={handleMarkerClick}
+              style={{
+                position: 'absolute',
+                left: `${cluster.pct}%`,
+                top: 0,
+                transform: 'translateX(-50%)',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: ms.zIndex,
+                cursor: canScrub ? 'pointer' : 'default',
+                pointerEvents: 'auto',
+              }}
+            >
+              {ms.shape === 'line' && (
+                <span style={{
+                  display: 'block',
+                  width: '2px',
+                  height: '14px',
+                  background: ms.color,
+                  borderRadius: '1px',
+                  opacity: 0.85,
+                }} />
+              )}
+              {ms.shape === 'triangle' && (
+                <span style={{
+                  display: 'block',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '4px solid transparent',
+                  borderRight: '4px solid transparent',
+                  borderBottom: `7px solid ${ms.color}`,
+                  opacity: 0.9,
+                }} />
+              )}
+              {ms.shape === 'dot' && (
+                <span style={{
+                  display: 'block',
+                  width: '5px',
+                  height: '5px',
+                  borderRadius: '50%',
+                  background: ms.color,
+                  opacity: 0.9,
+                }} />
+              )}
+              {ms.shape === 'chevron' && (
+                <span style={{
+                  display: 'block',
+                  color: ms.color,
+                  fontSize: '9px',
+                  lineHeight: 1,
+                  opacity: 0.85,
+                  fontWeight: 700,
+                }}>‹</span>
+              )}
+            </div>
+          )
+        })}
       </div>
       {/* Single control row: play/speeds left, spoiler+time right */}
       <div className="deckrow">
