@@ -4,10 +4,17 @@ Transparent logistic model. Inputs are pace delta, gap, tyre age delta,
 and track overtake difficulty.
 
 Weights (documented):
-  w_pace      =  3.0   pace delta 1 s/lap ≈ meaningful advantage
-  w_gap       = -5.0   1 s gap ≈ hard to close in one lap
-  w_tyre      =  1.5   tyre age diff of 10 laps gives noticeable edge
-  w_diff      = -3.0   full difficulty (1.0) strongly suppresses probability
+  W_PACE =  2.0   pace delta 1 s/lap → meaningful but not decisive advantage
+  W_GAP  = -2.5   1 s gap is hard to close in one lap
+  W_TYRE =  0.8   tyre age diff of 10 laps gives a noticeable edge
+  W_DIFF = -1.0   full difficulty (1.0) suppresses probability noticeably
+  BIAS   =  1.5   baseline offset so a neutral DRS-fight (0.3 s gap, equal pace,
+                  medium track) lands around P≈0.5 rather than 0
+
+Calibration target:
+  equal pace + 0.3 s gap + same tyres + medium track → P ≈ 0.4–0.6
+  1.0 s gap with equal pace → noticeably lower
+  clear pace advantage of attacker → P well above 0.5
 """
 from __future__ import annotations
 
@@ -16,10 +23,11 @@ from typing import Any
 
 from racelens.forecast.tracks import track_params
 
-W_PACE: float = 3.0
-W_GAP: float = -5.0
-W_TYRE: float = 1.5
-W_DIFF: float = -3.0
+W_PACE: float = 2.0
+W_GAP: float = -2.5
+W_TYRE: float = 0.8
+W_DIFF: float = -1.0
+BIAS: float = 1.5
 
 
 def _logistic(x: float) -> float:
@@ -63,6 +71,13 @@ def overtake_probability(
     else:
         cls_dict = state.classification or {}
 
+    if ahead_id not in cls_dict:
+        return {"error": f"driver '{ahead_id}' not found in session state"}
+    if behind_id not in cls_dict:
+        return {"error": f"driver '{behind_id}' not found in session state"}
+    if ahead_id == behind_id:
+        return {"error": "ahead and behind must be different drivers"}
+
     ahead_info = cls_dict.get(ahead_id, {})
     behind_info = cls_dict.get(behind_id, {})
 
@@ -81,7 +96,8 @@ def overtake_probability(
     tyre_age_delta = ahead_age - behind_age  # positive = ahead more degraded
 
     logit = (
-        W_PACE * pace_delta_s
+        BIAS
+        + W_PACE * pace_delta_s
         + W_GAP * interval_s
         + W_TYRE * tyre_age_delta
         + W_DIFF * difficulty
