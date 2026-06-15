@@ -110,13 +110,19 @@ export type Forecast = {
   projected: Record<string, ForecastDriver>
 }
 
-export type PitSim = {
+export type PitSimEvidence = {
   pit_loss_s: number
   rejoin_gap_s: number
   rejoin_pos: number
   key_rival: string | null
   margin_s: number | null
   verdict: 'UNDERCUT_LIKELY' | 'UNLIKELY' | 'NO_RIVAL'
+}
+
+export type PitSim = {
+  driver: string
+  confidence: string
+  evidence: PitSimEvidence
   error?: string
 }
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { getOvertake } from '../../api/client'
 import type { CommentaryItem, Insight } from '../../api/types'
 
 type Props = {
@@ -6,7 +7,13 @@ type Props = {
   commentary: CommentaryItem[]
   selectedIds?: string[]
   sessionStatus?: string
+  /** Session ID for overtake % endpoint (replay only). */
+  sessionId?: string | null
+  atMs?: number
 }
+
+/** Cache overtake probabilities keyed by "ahead:behind" */
+const overtakeCache = new Map<string, number>()
 
 const MIN_VISIBLE_MS = 6000
 const ABSENT_THRESHOLD = 2
@@ -114,12 +121,14 @@ const InsightCard = React.memo(function InsightCard({
   text,
   leaving,
   focused,
+  overtakePct,
 }: {
   ins: Insight
   also: string[]
   text: string
   leaving: boolean
   focused: boolean
+  overtakePct?: number | null
 }) {
   const data = evidenceData(ins)
   return (
@@ -138,6 +147,9 @@ const InsightCard = React.memo(function InsightCard({
         <div className="ins-also">also: {also.join(' · ')}</div>
       )}
       {text && <p>{text}</p>}
+      {overtakePct !== null && overtakePct !== undefined && (
+        <div className="ins-overtake">OVERTAKE NEXT LAP: {Math.round(overtakePct * 100)}%</div>
+      )}
       {data.length > 0 && (
         <div className="data">
           {data.map((d) => (
@@ -158,11 +170,16 @@ type CardState = {
   appearedAt: number
   absentCount: number
   leaving: boolean
+  overtakePct: number | null
 }
 
 const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
 
-export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [], sessionStatus = '' }: Props) {
+function isBattleType(type: string): boolean {
+  return type.startsWith('BATTLE') || type.startsWith('TRAFFIC')
+}
+
+export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [], sessionStatus = '', sessionId, atMs = 0 }: Props) {
   const isNeutral = NEUTRAL_STATUSES.has(sessionStatus)
   const commentaryMap: Record<string, string> = useMemo(() => {
     const m: Record<string, string> = {}
@@ -259,7 +276,27 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
           appearedAt: now,
           absentCount: 0,
           leaving: false,
+          overtakePct: null,
         })
+        // Fetch overtake % for battle/traffic cards with 2 drivers
+        if (sessionId && isBattleType(group.primary.type) && group.primary.driver_ids.length === 2) {
+          const [ahead, behind] = group.primary.driver_ids
+          const cacheKey = `${ahead}:${behind}`
+          if (overtakeCache.has(cacheKey)) {
+            const card = cards.get(key)
+            if (card) card.overtakePct = overtakeCache.get(cacheKey)!
+          } else {
+            getOvertake(sessionId, atMs, ahead, behind)
+              .then((res) => {
+                if (!res.error) {
+                  overtakeCache.set(cacheKey, res.probability)
+                  const c = cardsRef.current.get(key)
+                  if (c) { c.overtakePct = res.probability; forceRender((n) => n + 1) }
+                }
+              })
+              .catch(() => undefined)
+          }
+        }
       } else {
         const card = cards.get(key)!
         card.ins = group.primary
@@ -302,6 +339,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       text: card.text,
       leaving: card.leaving,
       focused: isFocused(card.ins),
+      overtakePct: card.overtakePct,
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderTick, selectedIds])
@@ -314,7 +352,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       {scPitDrivers.length > 0 && (
         <ScPitWindowCard drivers={scPitDrivers} />
       )}
-      {displayItems.map(({ key, ins, also, text, leaving, focused }) => (
+      {displayItems.map(({ key, ins, also, text, leaving, focused, overtakePct }) => (
         <InsightCard
           key={key}
           ins={ins}
@@ -322,6 +360,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
           text={text}
           leaving={leaving}
           focused={focused}
+          overtakePct={overtakePct}
         />
       ))}
       {!hasVisible && displayItems.length === 0 && (

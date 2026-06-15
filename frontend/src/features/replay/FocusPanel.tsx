@@ -1,10 +1,14 @@
-import React, { useMemo } from 'react'
-import type { DriverState } from '../../api/types'
+import React, { useCallback, useMemo, useState } from 'react'
+import { getSimulatePit } from '../../api/client'
+import type { DriverState, PitSim, PitSimEvidence } from '../../api/types'
 import { teamColor } from './teamColors'
 
 type Props = {
   selectedIds: string[]
   drivers: Record<string, DriverState>
+  /** Session ID for pit-sim endpoint (replay only; null in live). */
+  sessionId: string | null
+  atMs: number
 }
 
 function fmtLap(ms: number | null | undefined): string {
@@ -44,13 +48,42 @@ function isPitLap(driver: DriverState): boolean {
   return (driver.last_lap_ms - medMs) >= 10000
 }
 
+/** Pit sim verdict card */
+function PitSimCard({ ev }: { ev: PitSimEvidence }) {
+  const verdictColor = ev.verdict === 'UNDERCUT_LIKELY' ? '#00c853' : ev.verdict === 'UNLIKELY' ? '#f2a900' : '#a0a0ac'
+  const verdictText = ev.verdict === 'UNDERCUT_LIKELY' ? 'UNDERCUT LIKELY' : ev.verdict === 'UNLIKELY' ? 'UNLIKELY' : 'NO RIVAL'
+  return (
+    <div className="pit-sim-card">
+      <div className="pit-sim-verdict" style={{ color: verdictColor }}>{verdictText}</div>
+      <div className="pit-sim-rows">
+        <span>REJOINS P{ev.rejoin_pos}</span>
+        {ev.key_rival && ev.margin_s !== null && (
+          <span>VS {ev.key_rival}: MARGIN {ev.margin_s.toFixed(1)}s</span>
+        )}
+        <span>PIT LOSS {ev.pit_loss_s.toFixed(1)}s</span>
+      </div>
+    </div>
+  )
+}
+
 /** Single-driver card (non-H2H mode) */
-function DriverCard({ driverId, driver }: { driverId: string; driver: DriverState }) {
+function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; driver: DriverState; sessionId: string | null; atMs: number }) {
   const color = teamColor(driverId)
   const laps = recentLaps(driver)
   const compound = driver.tyre_compound?.charAt(0).toUpperCase() ?? '?'
   const inPit = driver.in_pit
   const pitLap = !inPit && isPitLap(driver)
+  const [pitSim, setPitSim] = useState<PitSim | null>(null)
+  const [pitBusy, setPitBusy] = useState(false)
+
+  const handlePitNow = useCallback(() => {
+    if (!sessionId) return
+    setPitBusy(true)
+    getSimulatePit(sessionId, atMs, driverId)
+      .then((res) => { setPitSim(res) })
+      .catch(() => undefined)
+      .finally(() => setPitBusy(false))
+  }, [sessionId, atMs, driverId])
 
   return (
     <div className="focus-card">
@@ -90,6 +123,14 @@ function DriverCard({ driverId, driver }: { driverId: string; driver: DriverStat
       {driver.interval_s !== null && driver.position !== 1 && (
         <div className="focus-int">
           INT <b>+{driver.interval_s.toFixed(2)}s</b> to car ahead
+        </div>
+      )}
+      {sessionId && (
+        <div className="focus-pit-row">
+          <button className="b pit-now-btn" type="button" onClick={handlePitNow} disabled={pitBusy}>
+            {pitBusy ? '…' : 'PIT NOW'}
+          </button>
+          {pitSim && !pitSim.error && pitSim.evidence && <PitSimCard ev={pitSim.evidence} />}
         </div>
       )}
     </div>
@@ -185,7 +226,7 @@ function H2HDeltas({
   )
 }
 
-export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers }: Props) {
+export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, atMs }: Props) {
   if (selectedIds.length === 0) return null
 
   const [idA, idB] = selectedIds
@@ -213,7 +254,7 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers 
   return (
     <div className="focus-panel">
       <div className="focus-cards">
-        <DriverCard driverId={idA} driver={driverA} />
+        <DriverCard driverId={idA} driver={driverA} sessionId={sessionId} atMs={atMs} />
       </div>
     </div>
   )
