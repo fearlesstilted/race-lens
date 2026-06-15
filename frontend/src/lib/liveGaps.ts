@@ -6,6 +6,8 @@
  * estimates diverge too far (lapped cars, data gaps).
  */
 
+import { median as _medianTrack } from './trackGeometry'
+
 export type PositionsData = {
   session_id: string
   start_ms: number
@@ -36,13 +38,6 @@ const DEGENERATE_GAP_S = 0.05
 
 /** Threshold above which an official gap is "substantial" enough to contradict near-zero estimates. */
 const SUBSTANTIAL_GAP_S = 1
-
-function median(values: number[]): number {
-  if (values.length === 0) return NaN
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
-}
 
 /**
  * Compute the fractional position within the current lap [0, 1) for a driver at atMs.
@@ -129,8 +124,8 @@ export function computeLiveGaps(
     .filter((v): v is number => v !== null && v !== undefined && v > 0)
     .map((v) => v / 1000)
 
-  const medianRawS = median(lapTimesS)
-  const medianLapS = Number.isNaN(medianRawS) ? DEFAULT_LAP_MS / 1000 : medianRawS
+  // _medianTrack returns DEFAULT_LAP_MS (ms) on empty; lapTimesS is in seconds
+  const medianLapS = lapTimesS.length === 0 ? DEFAULT_LAP_MS / 1000 : _medianTrack(lapTimesS)
 
   // Compute fractional positions for all on-track drivers
   // Each driver's lap time is used to determine frames-per-lap for their fraction
