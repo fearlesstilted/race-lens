@@ -5,6 +5,7 @@ type Props = {
   insights: Insight[]
   commentary: CommentaryItem[]
   selectedIds?: string[]
+  sessionStatus?: string
 }
 
 const MIN_VISIBLE_MS = 6000
@@ -88,6 +89,25 @@ function groupByPair(insights: Insight[]): {
   return result
 }
 
+/** Grouped SC_PIT_WINDOW card — shown first under neutralization */
+const ScPitWindowCard = React.memo(function ScPitWindowCard({
+  drivers,
+}: {
+  drivers: string[]
+}) {
+  return (
+    <div className="ins ins-sc-pit">
+      <h4>
+        PIT NOW
+        <small>SC PIT WINDOW</small>
+      </h4>
+      <p>
+        {drivers.join(', ')} — cheap stop under SC
+      </p>
+    </div>
+  )
+})
+
 const InsightCard = React.memo(function InsightCard({
   ins,
   also,
@@ -140,7 +160,10 @@ type CardState = {
   leaving: boolean
 }
 
-export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [] }: Props) {
+const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
+
+export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [], sessionStatus = '' }: Props) {
+  const isNeutral = NEUTRAL_STATUSES.has(sessionStatus)
   const commentaryMap: Record<string, string> = useMemo(() => {
     const m: Record<string, string> = {}
     for (const c of commentary) {
@@ -155,9 +178,25 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   const isFocused = (ins: Insight) =>
     selectedIds.length > 0 && ins.driver_ids.some((id) => selectedIds.includes(id))
 
-  // Sort, then group by pair, then rank groups
+  // Collect all SC_PIT_WINDOW driver IDs (deduplicated) for grouped card
+  const scPitDrivers = useMemo(() => {
+    if (!isNeutral) return []
+    const seen = new Set<string>()
+    const drivers: string[] = []
+    for (const ins of insights) {
+      if (ins.type.startsWith('SC_PIT_WINDOW')) {
+        for (const d of ins.driver_ids) {
+          if (!seen.has(d)) { seen.add(d); drivers.push(d) }
+        }
+      }
+    }
+    return drivers
+  }, [insights, isNeutral])
+
+  // Sort, then group by pair, then rank groups (excluding SC_PIT_WINDOW when grouped)
   const incomingGroups = useMemo(() => {
-    const ranked = [...insights].sort((a, b) => {
+    const filtered = isNeutral ? insights.filter((ins) => !ins.type.startsWith('SC_PIT_WINDOW')) : insights
+    const ranked = [...filtered].sort((a, b) => {
       const af = isFocused(a) ? 0 : 1
       const bf = isFocused(b) ? 0 : 1
       if (af !== bf) return af - bf
@@ -272,6 +311,9 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
+      {scPitDrivers.length > 0 && (
+        <ScPitWindowCard drivers={scPitDrivers} />
+      )}
       {displayItems.map(({ key, ins, also, text, leaving, focused }) => (
         <InsightCard
           key={key}

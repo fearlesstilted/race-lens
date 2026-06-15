@@ -536,6 +536,13 @@ body {
 .ins.pace::before {
   background: #ffffff42;
 }
+.ins.ins-sc-pit {
+  border-top: 1px solid var(--amber);
+}
+.ins.ins-sc-pit::before {
+  background: var(--amber);
+  width: 3px;
+}
 .ins h4 {
   font: italic 700 19px var(--cond);
   letter-spacing: 0.05em;
@@ -615,6 +622,7 @@ body {
 .ph-g { background: #3a3a44; }
 .ph-r { background: var(--red); }
 .ph-s { background: var(--amber); }
+.ph-vsc { background: #f5c842; }
 .ph-neutral { background: #1d1d24; }
 
 /* Rail: compact, no minor ticks */

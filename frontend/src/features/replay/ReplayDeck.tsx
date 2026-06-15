@@ -19,24 +19,30 @@ type Props = {
   onSpeed: (s: Speed) => void
 }
 
+type PhaseKind = 'green' | 'red' | 'amber' | 'vsc'
+
 type PhaseSegment = {
-  kind: 'green' | 'red' | 'amber'
+  kind: PhaseKind
   pct: number
+  label?: string
 }
 
 function buildPhase(feed: FeedItem[], startMs: number, endMs: number): PhaseSegment[] {
   if (endMs <= startMs) return [{ kind: 'green', pct: 100 }]
 
-  const statusEvents: { ms: number; kind: 'green' | 'red' | 'amber' }[] = [
+  const statusEvents: { ms: number; kind: PhaseKind; label?: string }[] = [
     { ms: startMs, kind: 'green' },
   ]
 
   for (const item of feed) {
-    if (item.kind === 'red_flag' || item.kind === 'status' && item.text.toLowerCase().includes('red flag')) {
-      statusEvents.push({ ms: item.at_ms, kind: 'red' })
-    } else if (item.kind === 'safety_car' || item.text.toLowerCase().includes('safety car')) {
-      statusEvents.push({ ms: item.at_ms, kind: 'amber' })
-    } else if (item.kind === 'green_flag' || item.text.toLowerCase().includes('green flag') || item.text.toLowerCase().includes('race resumed')) {
+    const txt = item.text.toLowerCase()
+    if (item.kind === 'red_flag' || (item.kind === 'status' && txt.includes('red flag'))) {
+      statusEvents.push({ ms: item.at_ms, kind: 'red', label: 'RF' })
+    } else if (txt.includes('virtual safety car') || txt.includes('vsc')) {
+      statusEvents.push({ ms: item.at_ms, kind: 'vsc', label: 'VSC' })
+    } else if (item.kind === 'safety_car' || txt.includes('safety car')) {
+      statusEvents.push({ ms: item.at_ms, kind: 'amber', label: 'SC' })
+    } else if (item.kind === 'green_flag' || txt.includes('green flag') || txt.includes('race resumed')) {
       statusEvents.push({ ms: item.at_ms, kind: 'green' })
     }
   }
@@ -52,7 +58,7 @@ function buildPhase(feed: FeedItem[], startMs: number, endMs: number): PhaseSegm
     const next = statusEvents[i + 1]
     const segPct = ((next.ms - seg.ms) / duration) * 100
     if (segPct > 0) {
-      segments.push({ kind: seg.kind, pct: segPct })
+      segments.push({ kind: seg.kind, pct: segPct, label: seg.label })
     }
   }
 
@@ -135,7 +141,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
 
   const visiblePhases = useMemo(() => {
     if (!spoilerFree) return phases.map((seg, i) => ({ ...seg, key: i, neutral: false }))
-    const result: { kind: string; pct: number; key: number; neutral: boolean }[] = []
+    const result: { kind: PhaseKind; pct: number; key: number; neutral: boolean; label?: string }[] = []
     let accumulated = 0
     for (let i = 0; i < phases.length; i++) {
       const seg = phases[i]
@@ -145,8 +151,8 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
       } else if (segEnd > cursorPct) {
         const pastPct = cursorPct - accumulated
         const futurePct = segEnd - cursorPct
-        result.push({ kind: seg.kind, pct: pastPct, key: i * 100, neutral: false })
-        result.push({ kind: seg.kind, pct: futurePct, key: i * 100 + 1, neutral: true })
+        result.push({ kind: seg.kind, pct: pastPct, key: i * 100, neutral: false, label: seg.label })
+        result.push({ kind: seg.kind, pct: futurePct, key: i * 100 + 1, neutral: true, label: seg.label })
       } else {
         result.push({ ...seg, key: i, neutral: false })
       }
@@ -159,13 +165,28 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
     <div className="deck">
       {/* Phase strip — flush above rail */}
       <div className="phase">
-        {visiblePhases.map((seg) => (
-          <i
-            key={seg.key}
-            className={seg.neutral ? 'ph-neutral' : `ph-${seg.kind === 'red' ? 'r' : seg.kind === 'amber' ? 's' : 'g'}`}
-            style={{ width: `${seg.pct}%` }}
-          />
-        ))}
+        {visiblePhases.map((seg) => {
+          let cls: string
+          if (seg.neutral) {
+            cls = 'ph-neutral'
+          } else if (seg.kind === 'red') {
+            cls = 'ph-r'
+          } else if (seg.kind === 'amber') {
+            cls = 'ph-s'
+          } else if (seg.kind === 'vsc') {
+            cls = 'ph-vsc'
+          } else {
+            cls = 'ph-g'
+          }
+          return (
+            <i
+              key={seg.key}
+              className={cls}
+              style={{ width: `${seg.pct}%` }}
+              title={seg.label}
+            />
+          )
+        })}
       </div>
       {/* Timeline rail */}
       <div className="rail" ref={railRef} onClick={handleRailClick}>
