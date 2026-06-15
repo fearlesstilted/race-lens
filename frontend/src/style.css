@@ -1085,3 +1085,62 @@ body {
     height: 48vh;
   }
 }
+
+/* ── Live mode UI ─────────────────────────────────────────────── */
+.live-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 20px;
+  background: #0a0a0a;
+  border-bottom: 1px solid #ffffff0f;
+}
+.live-input {
+  font: 600 13px var(--cond);
+  letter-spacing: 0.1em;
+  background: none;
+  border: 1px solid #ffffff2b;
+  color: var(--ink);
+  padding: 6px 10px;
+  outline: none;
+}
+.live-input:focus {
+  border-color: var(--red);
+}
+.b.danger {
+  border-color: #c00;
+  color: #ff4444;
+}
+.b.danger:hover {
+  background: #c00;
+  color: #fff;
+}
+.live-pill {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+}
+.live-pill-good  { color: #39b54a; }
+.live-pill-warn  { color: #f5a623; }
+.live-pill-bad   { color: #ff4444; }
+.live-err {
+  font: 600 12px var(--cond);
+  color: #ff4444;
+  letter-spacing: 0.1em;
+}
+.live-badge {
+  font: 800 13px var(--cond);
+  letter-spacing: 0.25em;
+  color: #ff4444;
+  animation: blink 1.4s step-start infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+.rail-disabled {
+  cursor: default;
+  opacity: 0.35;
+  pointer-events: none;
+}

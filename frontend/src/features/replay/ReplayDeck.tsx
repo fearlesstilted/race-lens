@@ -13,6 +13,10 @@ type Props = {
   /** Wall-clock ms between stream frames — for cursor transition. */
   frameMs: number
   feed: FeedItem[]
+  /** When false (live mode) the scrub rail is disabled and speed controls hidden. */
+  canScrub?: boolean
+  /** Session clock string shown in live mode (e.g. "LAP 42"). */
+  liveLabel?: string | null
   onScrub: (ms: number) => void
   onPlay: () => void
   onPause: () => void
@@ -94,7 +98,7 @@ function buildLapLabels(
 
 const SPOILER_KEY = 'racelens_spoiler_free'
 
-export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onScrub, onPlay, onPause, onSpeed }: Props) {
+export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
     try { return localStorage.getItem(SPOILER_KEY) === '1' } catch { return false }
   })
@@ -120,12 +124,12 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
 
   const handleRailClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!railRef.current || !timeline) return
+      if (!railRef.current || !timeline || !canScrub) return
       const rect = railRef.current.getBoundingClientRect()
       const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1)
       onScrub(Math.round(startMs + ratio * duration))
     },
-    [timeline, startMs, duration, onScrub],
+    [timeline, startMs, duration, onScrub, canScrub],
   )
 
   const toggleSpoiler = useCallback(() => {
@@ -189,7 +193,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
         })}
       </div>
       {/* Timeline rail */}
-      <div className="rail" ref={railRef} onClick={handleRailClick}>
+      <div className={`rail${canScrub ? '' : ' rail-disabled'}`} ref={railRef} onClick={handleRailClick}>
         <div className="line" />
         <div
           className="played"
@@ -217,33 +221,42 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, onSc
       </div>
       {/* Single control row: play/speeds left, spoiler+time right */}
       <div className="deckrow">
-        {playing ? (
-          <button className="b primary" type="button" onClick={onPause}>
-            PAUSE
-          </button>
+        {canScrub ? (
+          <>
+            {playing ? (
+              <button className="b primary" type="button" onClick={onPause}>
+                PAUSE
+              </button>
+            ) : (
+              <button className="b primary" type="button" onClick={onPlay} disabled={!timeline}>
+                PLAY
+              </button>
+            )}
+            {SPEEDS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`b${speed === s ? ' on' : ''}`}
+                onClick={() => onSpeed(s)}
+              >
+                {s}×
+              </button>
+            ))}
+            <div className="sp" role="button" tabIndex={0} onClick={toggleSpoiler} onKeyDown={(e) => e.key === 'Enter' && toggleSpoiler()}>
+              SPOILER-FREE
+              <span className={`sw${spoilerFree ? ' sw-on' : ''}`} aria-checked={spoilerFree} role="switch" />
+            </div>
+            <span className="clock">
+              <small>SESSION</small>
+              {spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
+            </span>
+          </>
         ) : (
-          <button className="b primary" type="button" onClick={onPlay} disabled={!timeline}>
-            PLAY
-          </button>
+          <>
+            <span className="live-badge">● LIVE</span>
+            {liveLabel && <span className="clock"><small>SESSION</small>{liveLabel}</span>}
+          </>
         )}
-        {SPEEDS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={`b${speed === s ? ' on' : ''}`}
-            onClick={() => onSpeed(s)}
-          >
-            {s}×
-          </button>
-        ))}
-        <div className="sp" role="button" tabIndex={0} onClick={toggleSpoiler} onKeyDown={(e) => e.key === 'Enter' && toggleSpoiler()}>
-          SPOILER-FREE
-          <span className={`sw${spoilerFree ? ' sw-on' : ''}`} aria-checked={spoilerFree} role="switch" />
-        </div>
-        <span className="clock">
-          <small>SESSION</small>
-          {spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
-        </span>
       </div>
     </div>
   )

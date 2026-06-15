@@ -3,6 +3,8 @@ import type { SessionSummary } from '../../api/types'
 import { sessionLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
 
+type AppMode = 'replay' | 'live'
+
 type Props = {
   session: SessionSummary | null
   sessionId: string | null
@@ -11,38 +13,62 @@ type Props = {
   totalLaps: number | null
   lang: Lang
   level: Level
+  mode: AppMode
+  onModeChange: (mode: AppMode) => void
   onSessionChange: (id: string) => void
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, onSessionChange, onLang, onLevel }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, onModeChange, onSessionChange, onLang, onLevel }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   return (
     <div className="top">
       <div className="ident">
         <span>RACE LENS</span>
       </div>
-      <div className="sess">
-        {sessions.length > 1 ? (
-          <select
-            className="sess-select"
-            value={sessionId ?? ''}
-            onChange={(e) => onSessionChange(e.target.value)}
-          >
-            {sessions.map((s) => (
-              <option key={s.session_id} value={s.session_id}>
-                {sessionLabel(s.session_id)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <b>{label.toUpperCase()}</b>
-        )}
-        <i>Race · replay · source: FastF1</i>
-      </div>
+
+      {mode === 'replay' ? (
+        <div className="sess">
+          {sessions.length > 1 ? (
+            <select
+              className="sess-select"
+              value={sessionId ?? ''}
+              onChange={(e) => onSessionChange(e.target.value)}
+            >
+              {sessions.map((s) => (
+                <option key={s.session_id} value={s.session_id}>
+                  {sessionLabel(s.session_id)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <b>{label.toUpperCase()}</b>
+          )}
+          <i>Race · replay · source: FastF1</i>
+        </div>
+      ) : (
+        <div className="sess">
+          <b>LIVE</b>
+          <i>Near-live · OpenF1</i>
+        </div>
+      )}
 
       <div className="top-toggles">
+        {/* Mode toggle */}
+        <div className="tog-group">
+          <button
+            type="button"
+            className={`tog${mode === 'replay' ? ' tog-on' : ''}`}
+            onClick={() => onModeChange('replay')}
+          >REPLAY</button>
+          <button
+            type="button"
+            className={`tog${mode === 'live' ? ' tog-on' : ''}`}
+            onClick={() => onModeChange('live')}
+          >LIVE</button>
+        </div>
+        {/* Lang toggle */}
         <div className="tog-group">
           <button
             type="button"
