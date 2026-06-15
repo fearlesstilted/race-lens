@@ -93,3 +93,37 @@ export type CommentaryItem = {
 export type CommentaryResponse = {
   items: CommentaryItem[]
 }
+
+// ── Predictive / forecast types ───────────────────────────────────────────────
+
+export type ForecastDriver = {
+  projected_gap_s: number
+  current_pos: number
+  projected_pos: number
+  delta_pos: number
+}
+
+export type Forecast = {
+  at_ms: number
+  laps_ahead: number
+  projected_order: string[]
+  projected: Record<string, ForecastDriver>
+}
+
+export type PitSim = {
+  pit_loss_s: number
+  rejoin_gap_s: number
+  rejoin_pos: number
+  key_rival: string | null
+  margin_s: number | null
+  verdict: 'UNDERCUT_LIKELY' | 'UNLIKELY' | 'NO_RIVAL'
+  error?: string
+}
+
+export type Overtake = {
+  ahead: string
+  behind: string
+  probability: number
+  factors: Record<string, number | string | boolean>
+  error?: string
+}

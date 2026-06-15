@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, InsightsResponse, RaceState, SessionSummary, Timeline } from './types'
+import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -41,6 +41,27 @@ export type TrackData = { session_id: string; viewbox: [number, number]; points:
 
 export const getTrack = (sessionId: string) =>
   json<TrackData>(`/api/sessions/${encodeURIComponent(sessionId)}/track`)
+
+// ── Predictive endpoints (replay only; live forecast not implemented) ─────────
+//
+// NOTE: These endpoints are session-scoped (/sessions/{id}/…) and only
+// available in replay mode.  In live mode (DataSource kind='live') the
+// PROJECTION toggle is hidden so these are never called.
+
+export const getForecast = (sessionId: string, atMs: number, laps = 10) =>
+  json<Forecast>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/forecast?at_ms=${atMs}&laps=${laps}`,
+  )
+
+export const getSimulatePit = (sessionId: string, atMs: number, driver: string) =>
+  json<PitSim>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/simulate-pit?at_ms=${atMs}&driver=${encodeURIComponent(driver)}`,
+  )
+
+export const getOvertake = (sessionId: string, atMs: number, ahead: string, behind: string) =>
+  json<Overtake>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/overtake?at_ms=${atMs}&ahead=${encodeURIComponent(ahead)}&behind=${encodeURIComponent(behind)}`,
+  )
 
 // ── Live endpoints ────────────────────────────────────────────────────────────
 
