@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline } from './types'
+import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -61,6 +61,11 @@ export const getSimulatePit = (sessionId: string, atMs: number, driver: string) 
 export const getOvertake = (sessionId: string, atMs: number, ahead: string, behind: string) =>
   json<Overtake>(
     `/api/sessions/${encodeURIComponent(sessionId)}/overtake?at_ms=${atMs}&ahead=${encodeURIComponent(ahead)}&behind=${encodeURIComponent(behind)}`,
+  )
+
+export const getMarkers = (sessionId: string, untilMs?: number) =>
+  json<MarkersResponse>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/markers${untilMs !== undefined ? `?until_ms=${untilMs}` : ''}`,
   )
 
 // ── Live endpoints ────────────────────────────────────────────────────────────

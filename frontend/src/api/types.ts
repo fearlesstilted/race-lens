@@ -133,3 +133,33 @@ export type Overtake = {
   factors: Record<string, number | string | boolean>
   error?: string
 }
+
+// ── Race markers ──────────────────────────────────────────────────────────────
+
+export type MarkerKind =
+  | 'RED_FLAG'
+  | 'SAFETY_CAR'
+  | 'VSC'
+  | 'GREEN'
+  | 'INCIDENT'
+  | 'CRASH'
+  | 'PENALTY'
+  | 'LEAD_CHANGE'
+  | 'PODIUM_CHANGE'
+  | 'FASTEST_LAP'
+
+export type MarkerSeverity = 'critical' | 'high' | 'medium' | 'low'
+
+export type RaceMarker = {
+  at_ms: number
+  lap: number
+  kind: MarkerKind
+  severity: MarkerSeverity
+  driver_ids: string[]
+  text_en: string
+  text_ru: string
+}
+
+export type MarkersResponse = {
+  markers: RaceMarker[]
+}

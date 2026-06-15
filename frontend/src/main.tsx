@@ -311,6 +311,7 @@ function App() {
             drivers={state?.drivers ?? {}}
             classification={state?.classification ?? []}
             sessionStatus={sessionStatus}
+            neutralizationStartMs={replay.neutralizationStartMs}
             selectedIds={selectedIds}
             positionsData={effectivePositionsData}
             projection={mode === 'replay' && projection}
@@ -350,6 +351,8 @@ function App() {
         speed={replay.speed}
         frameMs={replay.frameMs}
         feed={replay.feed}
+        markers={replay.markers}
+        lang={replay.lang}
         canScrub={replay.canScrub}
         liveLabel={mode === 'live' ? liveLabel : null}
         onScrub={replay.scrub}

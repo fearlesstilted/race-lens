@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getCommentary, getFeed, getTimeline } from '../../api/client'
-import type { Battle, CommentaryItem, FeedItem, Insight, RaceState, Timeline } from '../../api/types'
+import { getCommentary, getFeed, getMarkers, getTimeline } from '../../api/client'
+import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, Timeline } from '../../api/types'
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
 import { computeLiveGaps } from '../../lib/liveGaps'
@@ -24,6 +24,8 @@ export type ReplayModel = {
   feed: FeedItem[]
   commentary: CommentaryItem[]
   timeline: Timeline | null
+  /** All race markers for the session (full race, no until_ms filter). Filtered by atMs when spoilerFree. */
+  markers: RaceMarker[]
   playing: boolean
   speed: Speed
   /** Wall-clock ms between stream frames (for CSS transitions). */
@@ -78,6 +80,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
+  const [markers, setMarkers] = useState<RaceMarker[]>([])
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setFeed, setCommentary,
@@ -102,7 +105,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   const { loadSnapshot } = useSnapshotLoader(sessionId, set)
   const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
-  const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(state)
+  const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(atMs, markers)
 
   // Recompute live gaps whenever state or positions data changes
   useEffect(() => {
@@ -128,6 +131,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     setFeedError(null)
     setPositionsData(null)
     setLiveGaps(new Map())
+    setMarkers([])
     resetGreenFlag()
 
     if (!source) return
@@ -141,6 +145,11 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     // Replay path: load timeline + first snapshot
     const sid = source.sessionId
     let cancelled = false
+
+    // Fetch markers for full race (non-critical, best-effort)
+    getMarkers(sid)
+      .then((r) => { if (!cancelled) setMarkers(r.markers) })
+      .catch(() => { if (!cancelled) setMarkers([]) })
 
     // Fetch positions telemetry (non-critical, best-effort)
     fetch(`/api/sessions/${encodeURIComponent(sid)}/positions`)
@@ -242,7 +251,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       : null
 
   return {
-    state, insights, battles, feed, commentary, timeline,
+    state, insights, battles, feed, commentary, timeline, markers,
     playing, speed, frameMs, atMs, loading, error, feedError,
     lang, level, positionsData, liveGaps,
     greenFlag, greenFlagText, neutralizationStartMs,
