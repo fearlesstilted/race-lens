@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCommentary, getFeed, getTimeline } from '../../api/client'
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceState, Timeline } from '../../api/types'
+import type { DataSource } from '../../api/dataSource'
+import { buildStreamUrl } from '../../api/dataSource'
 import { computeLiveGaps } from '../../lib/liveGaps'
 import type { LiveGapResult, PositionsData } from '../../lib/liveGaps'
 import { LANG_KEY, LEVEL_KEY, readLang, readLevel, tickMs } from './replayTypes'
@@ -42,6 +44,8 @@ export type ReplayModel = {
   greenFlagText: string
   /** session_time_ms of the event that established the current session_status (from backend state). */
   neutralizationStartMs: number | null
+  /** Whether scrubbing is available (replay only — live is play-forward only). */
+  canScrub: boolean
   scrub: (atMs: number) => void
   play: () => void
   pause: () => void
@@ -50,7 +54,14 @@ export type ReplayModel = {
   setLevel: (level: Level) => void
 }
 
-export const useReplay = (sessionId: string | null): ReplayModel => {
+/**
+ * Core replay/live hook. Accepts a DataSource that determines whether we're
+ * replaying a recorded session or tracking a live one.
+ *
+ * Replay: full scrub/speed controls, snapshot loader, timeline.
+ * Live:   stream-only, scrub disabled, no timeline, speed controls hidden.
+ */
+export const useReplay = (source: DataSource | null): ReplayModel => {
   const [state, setState] = useState<RaceState | null>(null)
   const [insights, setInsights] = useState<Insight[]>([])
   const [battles, setBattles] = useState<Battle[]>([])
@@ -73,8 +84,24 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setAtMs, setLoading, setError, setFeedError, setPlaying,
   }), [])
 
+  // Derive stable values from source
+  const isReplay = source?.kind === 'replay'
+  const isLive = source?.kind === 'live'
+  const sessionId = source?.kind === 'replay' ? source.sessionId : null
+  const active = source !== null
+
+  // Stream URL factory — stable per source+lang+level to avoid spurious reconnects
+  const getStreamUrl = useCallback(
+    (s: Speed, ms: number, l: Lang, lv: Level) => {
+      if (!source) return ''
+      return buildStreamUrl(source, l, lv, s, ms)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [source?.kind, sessionId],
+  )
+
   const { loadSnapshot } = useSnapshotLoader(sessionId, set)
-  const { closeStream, openStream } = useReplayStream(sessionId, set)
+  const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
   const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(state)
 
   // Recompute live gaps whenever state or positions data changes
@@ -86,7 +113,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setLiveGaps(computeLiveGaps(positionsData, state.at_ms, state.classification, state.drivers))
   }, [state, positionsData])
 
-  // Session change: reset everything and load timeline + first snapshot
+  // Source change: reset everything, then load appropriately
   useEffect(() => {
     closeStream()
     setPlaying(false)
@@ -103,18 +130,26 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setLiveGaps(new Map())
     resetGreenFlag()
 
-    if (!sessionId) return
+    if (!source) return
 
+    if (source.kind === 'live') {
+      // Live: open stream immediately (backend already started by UI)
+      openStream(speed, 0, lang, level)
+      return
+    }
+
+    // Replay path: load timeline + first snapshot
+    const sid = source.sessionId
     let cancelled = false
 
     // Fetch positions telemetry (non-critical, best-effort)
-    fetch(`/api/sessions/${encodeURIComponent(sessionId)}/positions`)
+    fetch(`/api/sessions/${encodeURIComponent(sid)}/positions`)
       .then((r) => r.ok ? r.json() as Promise<PositionsData> : null)
       .then((d) => { if (!cancelled) setPositionsData(d) })
       .catch(() => { if (!cancelled) setPositionsData(null) })
 
     setLoading(true)
-    getTimeline(sessionId)
+    getTimeline(sid)
       .then((nextTimeline) => {
         if (cancelled) return undefined
         setTimeline(nextTimeline)
@@ -135,7 +170,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     }
     // lang/level intentionally NOT in deps — session change resets; lang/level trigger own effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closeStream, loadSnapshot, resetGreenFlag, sessionId])
+  }, [source?.kind, sessionId])
 
   // Re-fetch feed + commentary when lang/level change (without resetting position).
   useEffect(() => {
@@ -157,6 +192,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
 
   const scrub = useCallback(
     (nextAtMs: number) => {
+      if (!isReplay) return // live: scrub disabled
       closeStream()
       setPlaying(false)
       setAtMs(nextAtMs)
@@ -164,13 +200,13 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
         void loadSnapshot(nextAtMs, lang, level)
       }, SCRUB_DEBOUNCE_MS)
     },
-    [closeStream, lang, level, loadSnapshot],
+    [closeStream, isReplay, lang, level, loadSnapshot],
   )
 
   const play = useCallback(() => {
-    if (!sessionId) return
+    if (!source) return
     openStream(speed, atMs, lang, level)
-  }, [atMs, lang, level, openStream, sessionId, speed])
+  }, [atMs, lang, level, openStream, source, speed])
 
   const pause = useCallback(() => {
     closeStream()
@@ -180,9 +216,9 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const setSpeed = useCallback(
     (nextSpeed: Speed) => {
       setSpeedValue(nextSpeed)
-      if (playing) openStream(nextSpeed, atMs, lang, level)
+      if (playing && isReplay) openStream(nextSpeed, atMs, lang, level)
     },
-    [atMs, lang, level, openStream, playing],
+    [atMs, isReplay, lang, level, openStream, playing],
   )
 
   const setLang = useCallback((nextLang: Lang) => {
@@ -210,6 +246,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     playing, speed, frameMs, atMs, loading, error, feedError,
     lang, level, positionsData, liveGaps,
     greenFlag, greenFlagText, neutralizationStartMs,
+    canScrub: isReplay,
     scrub, play, pause, setSpeed, setLang, setLevel,
   }
 }
