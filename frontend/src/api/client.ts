@@ -99,3 +99,19 @@ export const liveStreamUrl = (lang: string, level: string, tickS = 2) =>
   `/api/live/stream?tick_s=${tickS}&lang=${lang}&level=${level}`
 
 export const getLiveState = () => json<import('./types').RaceState>('/api/live/state')
+
+// ── Live lobby ────────────────────────────────────────────────────────────────
+
+export interface LiveSessionInfo {
+  session_name: string
+  session_key: number
+  session_type: string
+  date_start: string
+  started: boolean
+}
+
+export const getLiveSessions = (year: number, country?: string): Promise<LiveSessionInfo[]> => {
+  const params = new URLSearchParams({ year: String(year) })
+  if (country) params.set('country', country)
+  return json<LiveSessionInfo[]>(`/api/live/sessions?${params.toString()}`)
+}

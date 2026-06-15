@@ -4,6 +4,7 @@ import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
+import { LiveLobby } from './features/replay/LiveLobby'
 import { ForecastStrip } from './features/replay/ForecastStrip'
 import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
@@ -271,13 +272,34 @@ function App() {
         onProjection={setProjection}
       />
 
-      {mode === 'live' && (
-        <LiveForm
-          isLiveActive={isLiveActive}
-          liveStatus={liveStatusData}
-          onStarted={() => setIsLiveActive(true)}
-          onStopped={() => { setIsLiveActive(false); setLiveStatusData(null) }}
+      {mode === 'live' && !isLiveActive && (
+        <LiveLobby
+          onStart={async (y, c, sessionName) => {
+            try {
+              await liveStart(y, c, sessionName)
+              setIsLiveActive(true)
+            } catch {
+              // error is surfaced inside LiveLobby via the live/start call failure
+            }
+          }}
+          onStop={() => { setIsLiveActive(false); setLiveStatusData(null) }}
         />
+      )}
+      {mode === 'live' && isLiveActive && (
+        <div className="live-bar">
+          <LiveStatusPill status={liveStatusData} />
+          <button
+            className="b danger"
+            type="button"
+            onClick={async () => {
+              try { await liveStop() } catch { /* ignore */ }
+              setIsLiveActive(false)
+              setLiveStatusData(null)
+            }}
+          >
+            STOP
+          </button>
+        </div>
       )}
 
       <StatusStrip
