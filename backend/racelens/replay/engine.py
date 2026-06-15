@@ -77,6 +77,7 @@ class ReplayEngine:
             "at_ms": None,
             "lap": 0,
             "session_status": "unknown",
+            "status_since_ms": 0,
             "total_laps": None,
             "classification": [],
             "drivers": {},
@@ -148,11 +149,13 @@ class ReplayEngine:
 
         if e.type == "SessionStarted":
             state["session_status"] = "started"
+            state["status_since_ms"] = e.session_time_ms
             state["total_laps"] = p.get("total_laps")
 
         elif e.type == "SessionStatusChanged":
             new_status = p.get("status", state["session_status"])
             state["session_status"] = new_status
+            state["status_since_ms"] = e.session_time_ms
             if new_status in {"red_flag", "safety_car", "vsc"}:
                 for drv in state["drivers"].values():
                     drv["recent_laps_ms"] = []

@@ -154,6 +154,20 @@ def test_no_retired_in_mini_race():
         assert drv_state["retired"] is False
 
 
+def test_status_since_ms():
+    """status_since_ms reflects session_time_ms of the event that set the current status."""
+    engine = ReplayEngine(mini_race())
+    # Before any status change: SessionStarted fires at 0
+    s_early = engine.state_at(50_000)
+    assert s_early["session_status"] == "started"
+    assert s_early["status_since_ms"] == 0
+
+    # After finish: SessionStatusChanged fires at 250_000
+    s_late = engine.state_at(300_000)
+    assert s_late["session_status"] == "finished"
+    assert s_late["status_since_ms"] == 250_000
+
+
 def test_jsonl_round_trip():
     events = mini_race()
     restored = load_jsonl(dump_jsonl(events))

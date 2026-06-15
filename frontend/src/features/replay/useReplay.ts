@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCommentary, getFeed, getTimeline } from '../../api/client'
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceState, Timeline } from '../../api/types'
 import { computeLiveGaps } from '../../lib/liveGaps'
@@ -40,7 +40,7 @@ export type ReplayModel = {
   greenFlag: boolean
   /** Text to display in the green flag strip. */
   greenFlagText: string
-  /** The at_ms when the current neutralization period (SC/VSC/red flag) started. Null when not under neutralization. */
+  /** session_time_ms of the event that established the current session_status (from backend state). */
   neutralizationStartMs: number | null
   scrub: (atMs: number) => void
   play: () => void
@@ -67,8 +67,6 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
-  const [neutralizationStartMs, setNeutralizationStartMs] = useState<number | null>(null)
-  const prevStatusRef = useRef<string | null>(null)
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setFeed, setCommentary,
@@ -78,24 +76,6 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const { loadSnapshot } = useSnapshotLoader(sessionId, set)
   const { closeStream, openStream } = useReplayStream(sessionId, set)
   const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(state)
-
-  // Track neutralization start time by detecting status transitions
-  useEffect(() => {
-    if (!state) return
-    const current = state.session_status
-    const prev = prevStatusRef.current
-    const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
-    const isNeutral = NEUTRAL_STATUSES.has(current)
-    const wasNeutral = prev !== null && NEUTRAL_STATUSES.has(prev)
-    if (isNeutral && !wasNeutral) {
-      // Transition into neutralization — record the at_ms when it started
-      setNeutralizationStartMs(state.at_ms)
-    } else if (!isNeutral && wasNeutral) {
-      // Transition out of neutralization
-      setNeutralizationStartMs(null)
-    }
-    prevStatusRef.current = current
-  }, [state])
 
   // Recompute live gaps whenever state or positions data changes
   useEffect(() => {
@@ -121,8 +101,6 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setFeedError(null)
     setPositionsData(null)
     setLiveGaps(new Map())
-    setNeutralizationStartMs(null)
-    prevStatusRef.current = null
     resetGreenFlag()
 
     if (!sessionId) return
@@ -219,6 +197,13 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
 
   // Wall-clock interval between frames: tick_ms(session) / speed
   const frameMs = tickMs(speed) / speed
+
+  // Derive neutralization start from backend state (works correctly after scrub)
+  const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
+  const neutralizationStartMs =
+    state !== null && NEUTRAL_STATUSES.has(state.session_status)
+      ? state.status_since_ms
+      : null
 
   return {
     state, insights, battles, feed, commentary, timeline,

@@ -622,7 +622,7 @@ body {
 .ph-g { background: #3a3a44; }
 .ph-r { background: var(--red); }
 .ph-s { background: var(--amber); }
-.ph-vsc { background: #f5c842; }
+.ph-vsc { background: repeating-linear-gradient(90deg, #f5c842 0px, #f5c842 4px, transparent 4px, transparent 8px); }
 .ph-neutral { background: #1d1d24; }
 
 /* Rail: compact, no minor ticks */

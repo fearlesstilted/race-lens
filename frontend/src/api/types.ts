@@ -47,6 +47,7 @@ export type RaceState = {
   at_ms: number
   lap: number
   session_status: string
+  status_since_ms: number
   total_laps: number | null
   classification: string[]
   drivers: Record<string, DriverState>
