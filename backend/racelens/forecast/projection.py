@@ -4,16 +4,39 @@ Projects future race order based on current pace, tyre degradation trend,
 and fuel load reduction. All inputs come from RaceState; no external data required.
 
 Model:
-  base_ms          = mean of recent_laps_ms (fallback: last_lap_ms)
-  tyre_deg_ms_lap  = slope of recent_laps_ms over last 3 laps (clamped 0–500 ms/lap)
+  base_ms          = mean of clean recent_laps_ms (fallback: last_lap_ms)
+  tyre_deg_ms_lap  = slope of clean recent_laps_ms over last 3 laps (clamped 0–500 ms/lap)
   fuel_gain_ms_lap = FUEL_EFFECT_MS / total_laps (car gets lighter each lap)
   projected_lap(n) = base_ms + tyre_deg_ms_lap*n - fuel_gain_ms_lap*n
+
+Outlier filtering:
+  LAP_OUTLIER_FACTOR = 1.15 — laps more than 15% above the median are treated as
+  in-laps, out-laps, or yellow-flag laps and excluded before computing base/slope.
+  This prevents pit-stop anomalies (e.g. an 83 s out-lap vs 78 s normal pace) from
+  inflating the projected lap time and producing absurd race-order forecasts.
 """
 from __future__ import annotations
 
+import statistics
 from typing import Any
 
 FUEL_EFFECT_MS: float = 30.0  # ms gained over full race distance (car lightens)
+LAP_OUTLIER_FACTOR: float = 1.15  # laps >15% above median are pit/out/yellow-flag laps
+
+
+def _clean_laps(laps: list[float]) -> list[float]:
+    """Return laps with out-laps/in-laps/yellow-flag laps removed.
+
+    Uses the median of all laps as the reference; any lap more than
+    LAP_OUTLIER_FACTOR * median is considered anomalous and dropped.
+    Falls back to the full list if fewer than 1 clean lap remains.
+    """
+    if len(laps) < 2:
+        return laps
+    med = statistics.median(laps)
+    threshold = med * LAP_OUTLIER_FACTOR
+    clean = [lap for lap in laps if lap <= threshold]
+    return clean if clean else laps
 
 
 def _slope(values: list[float]) -> float:
@@ -81,13 +104,15 @@ def project_order(state: Any, laps_ahead: int = 10) -> dict:
         last: float | None = info.get("last_lap_ms")
 
         if len(recent) >= 2:
-            base_ms = sum(recent) / len(recent)
+            clean = _clean_laps(recent)
+            base_ms = sum(clean) / len(clean)
         elif last is not None:
             base_ms = last
+            clean = []
         else:
             continue  # not enough data
 
-        deg_ms_lap = _tyre_deg(recent) if recent else 0.0
+        deg_ms_lap = _tyre_deg(clean) if len(clean) >= 2 else (_tyre_deg(recent) if recent else 0.0)
         current_gap_ms = (info.get("gap_s") or 0.0) * 1000.0
 
         # Accumulate projected lap times relative to lap 0 (now)
