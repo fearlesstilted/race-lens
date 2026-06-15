@@ -97,7 +97,7 @@ def main() -> None:
         target = 400
         if n > target:
             step = n / target
-            indices = [int(round(i * step)) for i in range(target)]
+            indices = [round(i * step) for i in range(target)]
             indices = [min(i, n - 1) for i in indices]
             xs = xs[indices]
             ys = ys[indices]
@@ -130,10 +130,7 @@ def main() -> None:
         # Build session_id from the output file stem
         out_path = Path(args.out)
         stem = out_path.stem  # e.g. "monaco_2024_race.track" → need just "monaco_2024_race"
-        if stem.endswith(".track"):
-            session_id = stem[: -len(".track")]
-        else:
-            session_id = stem
+        session_id = stem[:-len(".track")] if stem.endswith(".track") else stem
 
         data = {
             "session_id": session_id,

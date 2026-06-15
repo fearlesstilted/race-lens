@@ -86,27 +86,20 @@ def render_feed(
         driver_id: str | None = e.driver_id
 
         if e.type == "SessionStarted":
-            if lang == "ru":
-                text = "Свет погас — старт!"
-            else:
-                text = "Lights out — race start!"
+            text = "Свет погас — старт!" if lang == "ru" else "Lights out — race start!"
             driver_id = None
 
         elif e.type == "LapCompleted":
             lap_ms = e.payload.get("lap_time_ms")
-            if lap_ms is not None:
-                if best_ms is None or lap_ms < best_ms:
-                    best_ms = lap_ms
-                    drv = e.driver_id or "?"
-                    text = f"Fastest lap: {drv} {_fmt_ms(lap_ms)}"
-                    driver_id = e.driver_id
+            if lap_ms is not None and (best_ms is None or lap_ms < best_ms):
+                best_ms = lap_ms
+                drv = e.driver_id or "?"
+                text = f"Fastest lap: {drv} {_fmt_ms(lap_ms)}"
+                driver_id = e.driver_id
 
         elif e.type == "PitIn":
             drv = e.driver_id or "?"
-            if lang == "ru":
-                text = f"{drv} заезжает в боксы"
-            else:
-                text = f"{drv} pits"
+            text = f"{drv} заезжает в боксы" if lang == "ru" else f"{drv} pits"
             driver_id = e.driver_id
 
         elif e.type == "PitOut":
@@ -129,19 +122,13 @@ def render_feed(
                 else:
                     text = f"{drv} rejoins on {cname_en}"
             else:
-                if lang == "ru":
-                    text = f"{drv} выезжает из боксов"
-                else:
-                    text = f"{drv} rejoins"
+                text = f"{drv} выезжает из боксов" if lang == "ru" else f"{drv} rejoins"
             driver_id = e.driver_id
 
         elif e.type == "SessionStatusChanged":
             status = e.payload.get("status", "")
             if status == "started" and prev_status is not None and prev_status != "started":
-                if lang == "ru":
-                    text = "Гонка возобновлена"
-                else:
-                    text = "Race resumed"
+                text = "Гонка возобновлена" if lang == "ru" else "Race resumed"
                 emitted_status.add(status)
             elif status in _STATUS_EN:
                 text = _STATUS_RU.get(status, status) if lang == "ru" else _STATUS_EN[status]
@@ -168,11 +155,7 @@ def render_feed(
                 continue
             # Avoid duplicating SessionStatusChanged items that already cover SC/VSC/red flag
             dup = False
-            if "RED" in msg_up and "red_flag" in emitted_status:
-                dup = True
-            elif "SAFETY CAR" in msg_up and not "VIRTUAL" in msg_up and "safety_car" in emitted_status:
-                dup = True
-            elif "VIRTUAL" in msg_up and "vsc" in emitted_status:
+            if ("RED" in msg_up and "red_flag" in emitted_status) or ("SAFETY CAR" in msg_up and not "VIRTUAL" in msg_up and "safety_car" in emitted_status) or ("VIRTUAL" in msg_up and "vsc" in emitted_status):
                 dup = True
             if dup:
                 continue

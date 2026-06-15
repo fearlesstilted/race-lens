@@ -9,6 +9,7 @@ separate "watch list" entity surfaced via the dedicated /battles endpoint.
 """
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 from racelens.insights._base import mk_insight
@@ -27,7 +28,7 @@ def detect_battles(state: dict[str, Any]) -> list[dict[str, Any]]:
     order = state["classification"]
     battles = []
 
-    for defender_id, attacker_id in zip(order, order[1:]):
+    for defender_id, attacker_id in itertools.pairwise(order):
         defender = drivers.get(defender_id)
         attacker = drivers.get(attacker_id)
         if defender is None or attacker is None:

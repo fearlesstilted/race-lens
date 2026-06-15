@@ -5,6 +5,7 @@ the car that everyone is stuck behind.
 """
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 from racelens.insights._base import mk_insight
@@ -23,7 +24,7 @@ def detect_drs_train(state: dict[str, Any]) -> list[dict[str, Any]]:
     insights = []
 
     chain: list[str] = []
-    for ahead_id, behind_id in zip(order, order[1:]):
+    for ahead_id, behind_id in itertools.pairwise(order):
         interval = drivers[behind_id]["interval_s"]
         linked = (
             interval is not None

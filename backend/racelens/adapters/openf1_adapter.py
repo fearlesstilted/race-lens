@@ -22,6 +22,7 @@ from typing import Any
 
 from racelens.adapters._common import message_to_status
 from racelens.events.models import Event, event
+import contextlib
 
 _BASE = "https://api.openf1.org/v1"
 _TIMEOUT = 30
@@ -210,10 +211,8 @@ def ingest_openf1(session_key: int) -> list[Event]:
 
         lap_time_ms: int | None = None
         if duration is not None:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 lap_time_ms = round(float(duration) * 1000)
-            except (TypeError, ValueError):
-                pass
 
         events.append(mk(sid, "LapCompleted", t_end_ms, drv, lap=lap_no,
                          lap_time_ms=lap_time_ms))
@@ -282,10 +281,8 @@ def ingest_openf1(session_key: int) -> list[Event]:
                     ds = _parse_iso(lr.get("date_start"))
                     dur = lr.get("lap_duration")
                     if ds is not None and dur is not None:
-                        try:
+                        with contextlib.suppress(TypeError, ValueError):
                             t_ms = to_ms(ds + float(dur))
-                        except (TypeError, ValueError):
-                            pass
                     break
 
         events.append(mk(sid, "TyreStintUpdated", t_ms, drv,

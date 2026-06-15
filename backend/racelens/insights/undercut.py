@@ -7,6 +7,7 @@ higher the risk for the defender.
 """
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 from racelens.insights._base import mk_insight
@@ -25,7 +26,7 @@ def detect_undercut_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
     order = state["classification"]
     insights = []
 
-    for ahead_id, behind_id in zip(order, order[1:]):
+    for ahead_id, behind_id in itertools.pairwise(order):
         ahead, behind = drivers[ahead_id], drivers[behind_id]
         interval = behind["interval_s"]
         if interval is None or interval > STRIKE_RANGE_S:

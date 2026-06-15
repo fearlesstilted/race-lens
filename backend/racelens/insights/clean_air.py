@@ -56,10 +56,7 @@ def detect_clean_air_pace(state: dict[str, Any]) -> list[dict[str, Any]]:
         vs_race_leader_ms = None
 
     # severity: medium when fastest clean-air car is quicker than the leader
-    if vs_race_leader_ms is not None and vs_race_leader_ms < 0:
-        severity = "medium"
-    else:
-        severity = "info"
+    severity = "medium" if vs_race_leader_ms is not None and vs_race_leader_ms < 0 else "info"
 
     return [mk_insight(
         insight_id=f"clean_air_pace:{fastest_id}:{state['at_ms']}",
