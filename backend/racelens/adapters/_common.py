@@ -8,7 +8,12 @@ from __future__ import annotations
 # (chequeRED FLAG).
 STATUS_TABLE: tuple[tuple[str, str], ...] = (
     ("CHEQUERED FLAG", "finished"),
+    # VSC endings must come before the generic VSC DEPLOYED and SAFETY CAR DEPLOYED
+    ("VIRTUAL SAFETY CAR ENDING", "started"),
     ("VIRTUAL SAFETY CAR DEPLOYED", "vsc"),
+    # "SAFETY CAR IN THIS LAP" means the SC is returning next lap — racing resumes.
+    # It must come BEFORE "SAFETY CAR DEPLOYED" (which is a substring-overlap risk).
+    ("SAFETY CAR IN THIS LAP", "started"),
     ("SAFETY CAR DEPLOYED", "safety_car"),
     ("RED FLAG", "red_flag"),
     ("GREEN LIGHT", "started"),

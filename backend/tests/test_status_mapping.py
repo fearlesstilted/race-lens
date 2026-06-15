@@ -52,6 +52,22 @@ def test_unknown_message_returns_none():
     assert message_to_status("DEBRIS ON TRACK") is None
 
 
+def test_sc_in_this_lap_gives_started():
+    """Miami 2026: 'SAFETY CAR IN THIS LAP' means the SC is withdrawing — race resumes."""
+    assert message_to_status("SAFETY CAR IN THIS LAP") == "started"
+
+
+def test_vsc_ending_gives_started():
+    """'VIRTUAL SAFETY CAR ENDING' signals VSC withdrawal — race is about to resume."""
+    assert message_to_status("VIRTUAL SAFETY CAR ENDING") == "started"
+
+
+def test_sc_deployed_not_sc_in_this_lap():
+    """'SAFETY CAR IN THIS LAP' must resolve before 'SAFETY CAR DEPLOYED' (substring check)."""
+    assert message_to_status("SAFETY CAR IN THIS LAP") == "started"
+    assert message_to_status("SAFETY CAR DEPLOYED") == "safety_car"
+
+
 def test_status_table_chequered_before_red_flag():
     """Structural check: 'CHEQUERED FLAG' must appear before 'RED FLAG' in
     STATUS_TABLE so that first-match semantics produce the correct result."""
