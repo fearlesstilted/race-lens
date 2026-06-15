@@ -100,10 +100,23 @@ TEMPLATES: dict[tuple[str, str, str], str] = {
     ("BATTLE_DETECTED", "ru", "beginner"):
         "{a} прямо за {b} — всего {gap:.2f}с при равном темпе. "
         "Обгон может случиться в любой момент.",
+
+    ("SC_PIT_WINDOW", "en", "pro"):
+        "{a} should pit now: Safety Car halves pit-stop time loss. "
+        "Tyres are {age} laps old — ideal window to change rubber.",
+    ("SC_PIT_WINDOW", "en", "beginner"):
+        "With the Safety Car out, pitting costs {a} much less time than usual. "
+        "Great moment to change tyres ({age} laps old).",
+    ("SC_PIT_WINDOW", "ru", "pro"):
+        "{a} стоит заехать в боксы: машина безопасности вдвое снижает потерю времени. "
+        "Резине {age} кругов — идеальный момент для смены.",
+    ("SC_PIT_WINDOW", "ru", "beginner"):
+        "Под машиной безопасности пит-стоп для {a} обходится дешевле обычного. "
+        "Самый выгодный момент сменить резину ({age} кругов).",
 }
 
 _BASE_TYPES = (
-    "TRAFFIC_RISK", "DRS_TRAIN", "PIT_WINDOW", "UNDERCUT_RISK",
+    "TRAFFIC_RISK", "DRS_TRAIN", "PIT_WINDOW", "SC_PIT_WINDOW", "UNDERCUT_RISK",
     "DEGRADATION_TREND", "CLEAN_AIR_PACE_LEADER", "BATTLE_DETECTED",
 )
 
@@ -136,6 +149,8 @@ def _params(base: str, ins: dict[str, Any]) -> dict[str, Any]:
         positions = ev.get("positions", [0, 0])
         return {"a": ids[0], "b": ids[1], "gap": ev["interval_s"],
                 "p1": positions[0], "p2": positions[1]}
+    if base == "SC_PIT_WINDOW":
+        return {"a": ids[0], "age": ev["tyre_age_laps"]}
     return {}
 
 
