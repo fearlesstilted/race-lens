@@ -5,8 +5,28 @@ All async logic is tested via _poll_once() (sync), which the async loop wraps.
 import asyncio
 import pytest
 
+from racelens.events.models import event
 from racelens.live.runner import LiveRunner
-from tests.test_replay import mini_race
+from tests.test_replay import mini_race, SID
+
+
+def _big_race(n_laps: int = 60, n_drivers: int = 20) -> list:
+    """Synthetic n_lap / n_driver race that produces ~(2 + n_drivers*4 + n_laps*n_drivers)
+    events — enough to slice into 100 / 500 / 2000 bands for incremental tests."""
+    drivers = [f"D{i:02d}" for i in range(1, n_drivers + 1)]
+    evs = []
+    evs.append(event(SID, "SessionStarted", 0, total_laps=n_laps))
+    for i, drv in enumerate(drivers):
+        evs.append(event(SID, "PositionChanged", 0, drv, position=i + 1))
+        evs.append(event(SID, "TyreStintUpdated", 0, drv, compound="M", age_laps=0))
+    for lap in range(1, n_laps + 1):
+        base_ms = lap * 90_000
+        for i, drv in enumerate(drivers):
+            t = base_ms + i * 500
+            evs.append(event(SID, "LapCompleted", t, drv, lap=lap, lap_time_ms=88_000 + i * 200))
+            evs.append(event(SID, "GapUpdated", t + 100, drv, gap_s=round(i * 1.2, 3)))
+    evs.append(event(SID, "SessionStatusChanged", n_laps * 90_000 + 60_000, status="finished"))
+    return evs
 
 
 def _sliced_fetch(slices):
@@ -261,6 +281,92 @@ def test_sse_generator_ends_after_stop():
     chunks = asyncio.run(_collect())
     assert len(chunks) == 1
     assert chunks[0] == "event: end\ndata: {}\n\n"
+
+
+# ── Incremental live growth ────────────────────────────────────────────────────
+
+def test_live_incremental():
+    """Simulate a live feed catching up: 100 → 500 → all events.
+
+    Verifies:
+    - engine.events grows after each poll
+    - state_now().at_ms advances (session time moves forward)
+    - no duplicates accumulate in _all
+    - data_quality stays "good"
+    """
+    all_events = _big_race(n_laps=60, n_drivers=20)
+    total = len(all_events)
+    assert total >= 2000, f"fixture too small ({total}); adjust _big_race params"
+
+    slice_100 = all_events[:100]
+    slice_500 = all_events[:500]
+    slice_all = all_events  # full set
+
+    slices = [slice_100, slice_500, slice_all]
+    runner = LiveRunner(_sliced_fetch(slices), poll_interval_s=2.0)
+
+    # --- poll 1: 100 events ---
+    runner._poll_once()
+    assert runner.status()["events_total"] == 100
+    assert runner.status()["data_quality"] == "good"
+    state1 = runner.state_now()
+    assert "at_ms" in state1
+    at_ms_1 = state1["at_ms"]
+
+    # --- poll 2: 500 events ---
+    runner._poll_once()
+    assert runner.status()["events_total"] == 500
+    assert runner.status()["new_last_poll"] == 400
+    state2 = runner.state_now()
+    at_ms_2 = state2["at_ms"]
+    assert at_ms_2 >= at_ms_1, "session time must not go backwards after more data"
+
+    # --- poll 3: full set ---
+    runner._poll_once()
+    assert runner.status()["events_total"] == total
+    state3 = runner.state_now()
+    at_ms_3 = state3["at_ms"]
+    assert at_ms_3 >= at_ms_2, "session time must not go backwards after full data"
+    assert state3["live_status"]["data_quality"] == "good"
+
+    # No duplicates: _all keys unique, count matches total
+    assert len(runner._all) == total, "duplicate events crept into _all"
+
+    # at_ms_3 should be at the last session_time_ms in the full event list
+    expected_max_ms = max(e.session_time_ms for e in all_events)
+    assert at_ms_3 == expected_max_ms, (
+        f"state_now() at_ms={at_ms_3} != max session_time_ms={expected_max_ms}"
+    )
+
+
+def test_live_source_truncation_does_not_lose_events():
+    """If the source returns FEWER events than a previous poll (e.g. OpenF1 blip),
+    already-accumulated events must NOT be discarded from _all.
+
+    This is the key resilience invariant: _all grows monotonically.
+    """
+    all_events = mini_race()
+    total = len(all_events)
+
+    # Sequence: full → truncated (source blinks) → full again
+    slices = [all_events, all_events[:3], all_events]
+    runner = LiveRunner(_sliced_fetch(slices), poll_interval_s=2.0)
+
+    runner._poll_once()
+    assert runner.status()["events_total"] == total, "poll 1 should have all events"
+
+    runner._poll_once()
+    # Source returned only 3 events — but we must KEEP everything accumulated
+    assert runner.status()["events_total"] == total, (
+        "source truncation must not shrink _all — accumulated events are never lost"
+    )
+    assert runner.status()["new_last_poll"] == 0, (
+        "truncated poll should report 0 new events (all 3 were already seen)"
+    )
+    assert runner.status()["data_quality"] == "good"
+
+    runner._poll_once()
+    assert runner.status()["events_total"] == total
 
 
 # ── API-level test ─────────────────────────────────────────────────────────────

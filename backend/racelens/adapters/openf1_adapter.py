@@ -367,6 +367,13 @@ def ingest_openf1(session_key: int) -> list[Event]:
         if status:
             events.append(mk(sid, "SessionStatusChanged", t_ms, status=status))
 
+    # TODO(live-map): OpenF1 /location endpoint streams X/Y car positions at ~3.7 Hz
+    # during a live session.  Ingest that here to replace dead-reckoning in the
+    # live-map view with real position data.  Endpoint:
+    #   GET /location?session_key=<key>  → [{driver_number, date, x, y, z}, ...]
+    # Suggested event type: CarPosition(t_ms, driver, x, y).
+    # Sample at ~1 Hz for the replay engine (native 3.7 Hz would flood _all).
+
     # ── Assign ingest_seq and sort ────────────────────────────────────────────
     # ingest_seq is already assigned in creation order (arrival order)
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
