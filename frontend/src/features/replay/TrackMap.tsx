@@ -27,11 +27,17 @@ const PIT_LANE_Y = 370
 const PIT_LANE_X_START = 30
 const PIT_LANE_SPACING = 22
 
-function statusWatermark(status: string): string | null {
-  if (status === 'red_flag') return 'RED FLAG'
-  if (status === 'safety_car') return 'SAFETY CAR'
-  if (status === 'virtual_safety_car' || status === 'vsc') return 'VIRTUAL SC'
+function statusWatermark(status: string): { text: string; color: string } | null {
+  if (status === 'red_flag') return { text: 'RED FLAG', color: '#cc0000' }
+  if (status === 'safety_car') return { text: 'SAFETY CAR', color: '#f2a900' }
+  if (status === 'virtual_safety_car' || status === 'vsc') return { text: 'VSC', color: '#f2a900' }
   return null
+}
+
+function trackStrokeColor(status: string): string {
+  if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') return '#f2a900'
+  if (status === 'red_flag') return '#cc0000'
+  return '#26262e'
 }
 
 export const TrackMap = React.memo(function TrackMap({
@@ -56,6 +62,7 @@ export const TrackMap = React.memo(function TrackMap({
   }, [sessionId])
 
   const watermark = statusWatermark(sessionStatus ?? '')
+  const trackStroke = trackStrokeColor(sessionStatus ?? '')
   const top3 = classification.slice(0, 3)
   const hasFocus = selectedIds.length > 0
 
@@ -88,7 +95,7 @@ export const TrackMap = React.memo(function TrackMap({
             {/* Track base */}
             <path
               d={pathD}
-              stroke="#26262e"
+              stroke={trackStroke}
               strokeWidth={12}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -128,15 +135,15 @@ export const TrackMap = React.memo(function TrackMap({
             y={vh / 2}
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="#ffffff"
-            opacity={0.1}
+            fill={watermark.color}
+            opacity={0.18}
             fontSize={52}
             fontStyle="italic"
             fontWeight={900}
             fontFamily="'Barlow Condensed', sans-serif"
             letterSpacing="0.06em"
           >
-            {watermark}
+            {watermark.text}
           </text>
         )}
 
