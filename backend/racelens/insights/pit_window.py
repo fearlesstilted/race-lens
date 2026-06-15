@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 PIT_LOSS_S = 20.0       # Monaco-ish stationary + lane loss; parametrize per track later
 MIN_TYRE_AGE_LAPS = 8   # fresher than this → a stop is not strategically interesting
 
@@ -34,19 +36,18 @@ def detect_pit_window(state: dict[str, Any]) -> list[dict[str, Any]]:
         if margin <= 0:
             continue
 
-        insights.append({
-            "insight_id": f"pit_window:{drv}:{state['at_ms']}",
-            "type": "PIT_WINDOW_OPEN",
-            "severity": "medium",
-            "confidence": "medium",  # static pit loss model
-            "created_at_ms": state["at_ms"],
-            "lap": state["lap"],
-            "driver_ids": [drv],
-            "evidence": {
+        insights.append(mk_insight(
+            insight_id=f"pit_window:{drv}:{state['at_ms']}",
+            type_="PIT_WINDOW_OPEN",
+            driver_ids=[drv],
+            severity="medium",
+            confidence="medium",  # static pit loss model
+            evidence={
                 "pit_loss_s": PIT_LOSS_S,
                 "margin_s": round(margin, 3),
                 "gap_to_next_behind_s": round(min(behind_gaps) - gap, 3),
                 "tyre_age_laps": d["tyre_age_laps"],
             },
-        })
+            state=state,
+        ))
     return insights

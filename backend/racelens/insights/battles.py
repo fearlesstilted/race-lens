@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 BATTLE_INTERVAL_THRESHOLD_S = 1.2   # within DRS / attack range
 BATTLE_PACE_DIFF_MAX_MS = 600        # lap-time difference cap (real wheel-to-wheel fight)
 
@@ -48,18 +50,14 @@ def detect_battles(state: dict[str, Any]) -> list[dict[str, Any]]:
         def_pos = order.index(defender_id) + 1
         att_pos = def_pos + 1
 
-        battles.append({
-            "insight_id": f"battle:{defender_id}:{attacker_id}:{state['at_ms']}",
-            "type": "BATTLE_DETECTED",
-            "severity": "medium",
-            "confidence": "high",
-            "created_at_ms": state["at_ms"],
-            "lap": state["lap"],
-            "driver_ids": [defender_id, attacker_id],
-            "evidence": {
-                "interval_s": interval,
-                "positions": [def_pos, att_pos],
-            },
-        })
+        battles.append(mk_insight(
+            insight_id=f"battle:{defender_id}:{attacker_id}:{state['at_ms']}",
+            type_="BATTLE_DETECTED",
+            driver_ids=[defender_id, attacker_id],
+            severity="medium",
+            confidence="high",
+            evidence={"interval_s": interval, "positions": [def_pos, att_pos]},
+            state=state,
+        ))
 
     return battles

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 MIN_TYRE_AGE_LAPS = 8  # fresher than this → stop not strategically interesting yet
 
 
@@ -29,17 +31,13 @@ def detect_sc_pit(state: dict[str, Any]) -> list[dict[str, Any]]:
         if age is None or age < MIN_TYRE_AGE_LAPS:
             continue
         pos = d.get("position")
-        insights.append({
-            "insight_id": f"sc_pit:{drv}:{state['at_ms']}",
-            "type": "SC_PIT_WINDOW",
-            "severity": "high",
-            "confidence": "high",
-            "created_at_ms": state["at_ms"],
-            "lap": state["lap"],
-            "driver_ids": [drv],
-            "evidence": {
-                "tyre_age_laps": age,
-                "position": pos,
-            },
-        })
+        insights.append(mk_insight(
+            insight_id=f"sc_pit:{drv}:{state['at_ms']}",
+            type_="SC_PIT_WINDOW",
+            driver_ids=[drv],
+            severity="high",
+            confidence="high",
+            evidence={"tyre_age_laps": age, "position": pos},
+            state=state,
+        ))
     return insights

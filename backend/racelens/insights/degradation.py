@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 DRIFT_THRESHOLD_MS = 400
 DRIFT_HIGH_MS = 1500
 MIN_TYRE_AGE_LAPS = 5
@@ -39,19 +41,14 @@ def detect_degradation(state: dict[str, Any]) -> list[dict[str, Any]]:
             continue
 
         severity = "high" if drift >= DRIFT_HIGH_MS else "medium"
-        insights.append({
-            "insight_id": f"degradation:{drv_id}:{state['at_ms']}",
-            "type": "DEGRADATION_TREND_DETECTED",
-            "severity": severity,
-            "confidence": "high",
-            "created_at_ms": state["at_ms"],
-            "lap": state["lap"],
-            "driver_ids": [drv_id],
-            "evidence": {
-                "laps_ms": laps,
-                "drift_ms": drift,
-                "tyre_age_laps": age,
-            },
-        })
+        insights.append(mk_insight(
+            insight_id=f"degradation:{drv_id}:{state['at_ms']}",
+            type_="DEGRADATION_TREND_DETECTED",
+            driver_ids=[drv_id],
+            severity=severity,
+            confidence="high",
+            evidence={"laps_ms": laps, "drift_ms": drift, "tyre_age_laps": age},
+            state=state,
+        ))
 
     return insights

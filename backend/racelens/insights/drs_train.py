@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 CHAIN_INTERVAL_S = 1.0
 MIN_TRAIN_SIZE = 3  # cars including the head
 MAX_TRAIN_SIZE = 8  # larger chains are SC/race-start compression, not a DRS train
@@ -44,17 +46,16 @@ def detect_drs_train(state: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _train(state: dict[str, Any], chain: list[str]) -> dict[str, Any]:
     drivers = state["drivers"]
-    return {
-        "insight_id": f"drs_train:{chain[0]}:{state['at_ms']}",
-        "type": "DRS_TRAIN_ACTIVE",
-        "severity": "medium" if len(chain) < 5 else "high",
-        "confidence": "high",
-        "created_at_ms": state["at_ms"],
-        "lap": state["lap"],
-        "driver_ids": list(chain),  # head first
-        "evidence": {
+    return mk_insight(
+        insight_id=f"drs_train:{chain[0]}:{state['at_ms']}",
+        type_="DRS_TRAIN_ACTIVE",
+        driver_ids=list(chain),  # head first
+        severity="medium" if len(chain) < 5 else "high",
+        confidence="high",
+        evidence={
             "cars": len(chain),
             "head": chain[0],
             "intervals_s": [drivers[d]["interval_s"] for d in chain[1:]],
         },
-    }
+        state=state,
+    )

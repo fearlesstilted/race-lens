@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 CLEAN_AIR_INTERVAL_THRESHOLD_S = 2.5   # gap beyond which a driver is in clear air
 MIN_LAPS_WINDOW = 3                     # recent_laps_ms must have exactly 3 entries
 
@@ -59,19 +61,16 @@ def detect_clean_air_pace(state: dict[str, Any]) -> list[dict[str, Any]]:
     else:
         severity = "info"
 
-    return [
-        {
-            "insight_id": f"clean_air_pace:{fastest_id}:{state['at_ms']}",
-            "type": "CLEAN_AIR_PACE_LEADER",
-            "severity": severity,
-            "confidence": "high",
-            "created_at_ms": state["at_ms"],
-            "lap": state["lap"],
-            "driver_ids": [fastest_id],
-            "evidence": {
-                "avg_lap_ms": round(fastest_avg, 1),
-                "vs_race_leader_ms": vs_race_leader_ms,
-                "drivers_in_clean_air": len(clean_air),
-            },
-        }
-    ]
+    return [mk_insight(
+        insight_id=f"clean_air_pace:{fastest_id}:{state['at_ms']}",
+        type_="CLEAN_AIR_PACE_LEADER",
+        driver_ids=[fastest_id],
+        severity=severity,
+        confidence="high",
+        evidence={
+            "avg_lap_ms": round(fastest_avg, 1),
+            "vs_race_leader_ms": vs_race_leader_ms,
+            "drivers_in_clean_air": len(clean_air),
+        },
+        state=state,
+    )]

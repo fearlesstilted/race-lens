@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from racelens.insights._base import mk_insight
+
 STRIKE_RANGE_S = 3.5      # within this, a good outlap usually closes the gap
 HIGH_RISK_RANGE_S = 1.0
 MIN_TYRE_AGE_LAPS = 10    # nobody undercuts on fresh tyres
@@ -38,19 +40,18 @@ def detect_undercut_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
             continue
 
         severity = "high" if interval <= HIGH_RISK_RANGE_S else "medium"
-        insights.append({
-            "insight_id": f"undercut:{behind_id}:{state['at_ms']}",
-            "type": f"UNDERCUT_RISK_{severity.upper()}",
-            "severity": severity,
-            "confidence": "medium",  # static outlap-gain model
-            "created_at_ms": state["at_ms"],
-            "lap": state["lap"],
-            "driver_ids": [behind_id, ahead_id],  # attacker, defender
-            "evidence": {
+        insights.append(mk_insight(
+            insight_id=f"undercut:{behind_id}:{state['at_ms']}",
+            type_=f"UNDERCUT_RISK_{severity.upper()}",
+            driver_ids=[behind_id, ahead_id],  # attacker, defender
+            severity=severity,
+            confidence="medium",  # static outlap-gain model
+            evidence={
                 "interval_s": interval,
                 "attacker_tyre_age_laps": behind["tyre_age_laps"],
                 "defender_tyre_age_laps": ahead["tyre_age_laps"],
                 "pace_delta_ms": ahead["last_lap_ms"] - behind["last_lap_ms"],
             },
-        })
+            state=state,
+        ))
     return insights
