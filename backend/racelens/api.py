@@ -128,7 +128,7 @@ async def live_start(
     year: int = Query(...),
     country: str = Query(...),
     session: str = Query(default="Race"),
-    poll_s: float = Query(default=5.0, gt=0),
+    poll_s: float = Query(default=2.0, gt=0),
 ) -> dict:
     """Find the OpenF1 session and start polling.
 
@@ -169,7 +169,7 @@ def live_status() -> dict:
 
 @app.get("/api/live/stream")
 async def live_stream(
-    tick_s: float = Query(default=5.0, gt=0),
+    tick_s: float = Query(default=2.0, gt=0),
     lang: str = "en",
     level: str = "pro",
 ) -> StreamingResponse:

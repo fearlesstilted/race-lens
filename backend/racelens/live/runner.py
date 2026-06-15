@@ -25,13 +25,16 @@ class LiveRunner:
         seen so far.  In production this is
         ``lambda: ingest_openf1(session_key)``; in tests a fake.
     poll_interval_s:
-        Seconds between polls (default 5.0).
+        Seconds between polls (default 2.0).
+        OpenF1 publishes data with ~3 s source-side delay — that is the floor;
+        our poll merely avoids adding extra latency on top.  Do not go below
+        1.5 s — polling faster than the source refresh cadence is pointless.
     """
 
     def __init__(
         self,
         fetch_events: Callable[[], list[Event]],
-        poll_interval_s: float = 5.0,
+        poll_interval_s: float = 2.0,
     ) -> None:
         self._fetch = fetch_events
         self._interval = poll_interval_s
