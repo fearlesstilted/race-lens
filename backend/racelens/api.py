@@ -225,14 +225,22 @@ def live_sessions(
     from racelens.adapters.openf1_adapter import _get as openf1_get, _parse_iso
     from datetime import datetime, timezone
 
-    params: dict = {"year": year}
-    if country:
-        params["country_name"] = country
-
     try:
-        rows = openf1_get("/sessions", params)
+        rows = openf1_get("/sessions", {"year": year})
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
         raise HTTPException(502, "OpenF1 unavailable") from exc
+
+    # Match like find_session: country can be a country, circuit or city
+    # (Miami → country "United States"/location "Miami"; Austria → location
+    # "Spielberg"), so filter across all three fields instead of country_name.
+    if country:
+        needle = country.lower()
+        rows = [
+            r for r in rows
+            if needle in str(r.get("country_name", "")).lower()
+            or needle in str(r.get("circuit_short_name", "")).lower()
+            or needle in str(r.get("location", "")).lower()
+        ]
 
     now_ts = datetime.now(timezone.utc).timestamp()
 
