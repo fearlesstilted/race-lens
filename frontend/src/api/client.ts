@@ -41,3 +41,35 @@ export type TrackData = { session_id: string; viewbox: [number, number]; points:
 
 export const getTrack = (sessionId: string) =>
   json<TrackData>(`/api/sessions/${encodeURIComponent(sessionId)}/track`)
+
+// ── Live endpoints ────────────────────────────────────────────────────────────
+
+export type LiveStartResult = { session_key: number; poll_interval_s: number; status: string }
+export type LiveStatusResult = {
+  is_running: boolean
+  poll_count: number
+  last_poll_ok: boolean | null
+  last_poll_at: string | null
+  error_count: number
+  data_quality: string // 'good' | 'degraded' | 'stalled'
+}
+
+const post = async <T>(path: string): Promise<T> => {
+  const response = await fetch(path, { method: 'POST' })
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${path}`)
+  return (await response.json()) as T
+}
+
+export const liveStart = (year: number, country: string, session: string, pollS = 2) =>
+  post<LiveStartResult>(
+    `/api/live/start?year=${year}&country=${encodeURIComponent(country)}&session=${encodeURIComponent(session)}&poll_s=${pollS}`,
+  )
+
+export const liveStatus = () => json<LiveStatusResult>('/api/live/status')
+
+export const liveStop = () => post<LiveStatusResult>('/api/live/stop')
+
+export const liveStreamUrl = (lang: string, level: string, tickS = 2) =>
+  `/api/live/stream?tick_s=${tickS}&lang=${lang}&level=${level}`
+
+export const getLiveState = () => json<import('./types').RaceState>('/api/live/state')
