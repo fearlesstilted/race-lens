@@ -222,7 +222,7 @@ body {
 /* ── layout grid ──────────────────────────────────────────────── */
 .wrap {
   display: grid;
-  grid-template-columns: 420px 1fr 360px;
+  grid-template-columns: 400px 1fr 370px;
   gap: 0;
   padding: 0 24px;
   min-height: 0;
@@ -400,27 +400,30 @@ body {
   overflow: hidden;
 }
 .map {
-  height: 48vh;
-  min-height: 220px;
+  height: 52vh;
+  min-height: 260px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   border-bottom: 1px solid var(--hair);
   position: relative;
   flex-shrink: 0;
+  padding: 8px;
 }
 .map svg {
   width: 100%;
   height: 100%;
-  max-width: 640px;
+  display: block;
 }
 .map .note {
   position: absolute;
-  right: 18px;
-  bottom: 12px;
+  right: 14px;
+  bottom: 10px;
   font: 600 10px var(--cond);
   letter-spacing: 0.25em;
   color: #55555f;
+  z-index: 2;
+  pointer-events: none;
 }
 .map-pit {
   position: absolute;
@@ -436,11 +439,19 @@ body {
   flex: 1;
   overflow-y: hidden;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 .col-center .ev-scroll:hover {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #3a3a44 transparent;
+}
+/* RACE FEED label — compact */
+.col-center .ev-scroll > .label {
+  padding: 10px 22px 6px;
+  flex-shrink: 0;
 }
 /* When focus panel replaces the feed, it should fill remaining space with scroll */
 .col-center .focus-panel,
@@ -1046,20 +1057,31 @@ body {
 }
 
 /* ── responsive ───────────────────────────────────────────────── */
+@media (max-width: 1500px) {
+  .map {
+    height: 50vh;
+  }
+}
 @media (max-width: 1380px) {
   .wrap {
-    grid-template-columns: 400px 1fr 340px;
+    grid-template-columns: 380px 1fr 330px;
   }
 }
 @media (max-width: 1280px) {
   .wrap {
-    grid-template-columns: 360px 1fr 300px;
+    grid-template-columns: 340px 1fr 290px;
     padding: 0 12px;
+  }
+  .col-insights {
+    width: 290px;
   }
   .ins {
     padding: 10px 14px;
   }
   .lapbox .n {
     font-size: 24px;
+  }
+  .map {
+    height: 48vh;
   }
 }

@@ -74,7 +74,7 @@ export const TrackMap = React.memo(function TrackMap({
 
   return (
     <div className="map">
-      <svg width={vw} height={vh} viewBox={`0 0 ${vw} ${vh}`} fill="none">
+      <svg viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" fill="none" style={{ width: '100%', height: '100%' }}>
         {trackError && (
           <text
             x={vw / 2}
