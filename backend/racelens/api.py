@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 
 from racelens.adapters.openf1_adapter import find_session, ingest_openf1
 from racelens.commentary.feed import render_feed
+from racelens.events_significant import significant_events
 from racelens.commentary.renderer import render_all
 from racelens.events.models import load_jsonl
 from racelens.forecast.overtake import overtake_probability
@@ -276,6 +277,20 @@ def feed(
     """Event feed for the frontend: spoiler-free, newest-first human-readable items."""
     eng = _engine(session_id)
     return render_feed(eng.events, until_ms, lang=lang, limit=limit)
+
+
+@app.get("/api/sessions/{session_id}/markers")
+def markers(
+    session_id: str,
+    until_ms: Optional[int] = Query(default=None, ge=0),
+) -> dict:
+    """Significant race events for timeline markers and highlight summaries.
+
+    Spoiler-free: pass until_ms to restrict to events at or before that timestamp.
+    Without until_ms the full race is returned.
+    """
+    eng = _engine(session_id)
+    return {"markers": significant_events(eng.events, until_ms=until_ms, state_engine=eng)}
 
 
 @app.get("/api/sessions/{session_id}/timeline")
