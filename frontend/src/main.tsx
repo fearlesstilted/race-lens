@@ -117,7 +117,14 @@ function App() {
         onLang={replay.setLang}
         onLevel={replay.setLevel}
       />
-      <StatusStrip status={sessionStatus} greenFlag={replay.greenFlag} greenFlagText={replay.greenFlagText} />
+      <StatusStrip
+        status={sessionStatus}
+        lap={state?.lap ?? null}
+        atMs={replay.atMs}
+        neutralizationStartMs={replay.neutralizationStartMs}
+        greenFlag={replay.greenFlag}
+        greenFlagText={replay.greenFlagText}
+      />
       {replay.feedError && (
         <div className="feed-error">{replay.feedError}</div>
       )}
@@ -161,6 +168,7 @@ function App() {
           insights={replay.insights}
           commentary={replay.commentary}
           selectedIds={selectedIds}
+          sessionStatus={sessionStatus}
         />
       </div>
 

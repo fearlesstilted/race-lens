@@ -40,6 +40,8 @@ export type ReplayModel = {
   greenFlag: boolean
   /** Text to display in the green flag strip. */
   greenFlagText: string
+  /** The at_ms when the current neutralization period (SC/VSC/red flag) started. Null when not under neutralization. */
+  neutralizationStartMs: number | null
   scrub: (atMs: number) => void
   play: () => void
   pause: () => void
@@ -65,6 +67,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
+  const [neutralizationStartMs, setNeutralizationStartMs] = useState<number | null>(null)
+  const prevStatusRef = useRef<string | null>(null)
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setFeed, setCommentary,
@@ -74,6 +78,24 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
   const { loadSnapshot } = useSnapshotLoader(sessionId, set)
   const { closeStream, openStream } = useReplayStream(sessionId, set)
   const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(state)
+
+  // Track neutralization start time by detecting status transitions
+  useEffect(() => {
+    if (!state) return
+    const current = state.session_status
+    const prev = prevStatusRef.current
+    const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
+    const isNeutral = NEUTRAL_STATUSES.has(current)
+    const wasNeutral = prev !== null && NEUTRAL_STATUSES.has(prev)
+    if (isNeutral && !wasNeutral) {
+      // Transition into neutralization — record the at_ms when it started
+      setNeutralizationStartMs(state.at_ms)
+    } else if (!isNeutral && wasNeutral) {
+      // Transition out of neutralization
+      setNeutralizationStartMs(null)
+    }
+    prevStatusRef.current = current
+  }, [state])
 
   // Recompute live gaps whenever state or positions data changes
   useEffect(() => {
@@ -99,6 +121,8 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     setFeedError(null)
     setPositionsData(null)
     setLiveGaps(new Map())
+    setNeutralizationStartMs(null)
+    prevStatusRef.current = null
     resetGreenFlag()
 
     if (!sessionId) return
@@ -200,7 +224,7 @@ export const useReplay = (sessionId: string | null): ReplayModel => {
     state, insights, battles, feed, commentary, timeline,
     playing, speed, frameMs, atMs, loading, error, feedError,
     lang, level, positionsData, liveGaps,
-    greenFlag, greenFlagText,
+    greenFlag, greenFlagText, neutralizationStartMs,
     scrub, play, pause, setSpeed, setLang, setLevel,
   }
 }
