@@ -26,7 +26,7 @@ def detect_degradation(state: dict[str, Any]) -> list[dict[str, Any]]:
 
     for drv_id, d in drivers.items():
         laps = d.get("recent_laps_ms", [])
-        if len(laps) != 3:
+        if len(laps) != 3:  # 3 == RECENT_LAPS_WINDOW in racelens/replay/engine.py
             continue
         # Each lap must be strictly slower than the previous
         if not (laps[0] < laps[1] < laps[2]):

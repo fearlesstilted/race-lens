@@ -10,7 +10,7 @@ from typing import Any
 from racelens.insights._base import mk_insight
 
 CLEAN_AIR_INTERVAL_THRESHOLD_S = 2.5   # gap beyond which a driver is in clear air
-MIN_LAPS_WINDOW = 3                     # recent_laps_ms must have exactly 3 entries
+MIN_LAPS_WINDOW = 3  # must match RECENT_LAPS_WINDOW in racelens/replay/engine.py
 
 
 

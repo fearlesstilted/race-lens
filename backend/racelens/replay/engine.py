@@ -17,6 +17,9 @@ from typing import Any, Iterable
 
 from racelens.events.models import Event
 
+# Number of recent laps tracked per driver — used in insight detectors (clean_air, degradation).
+RECENT_LAPS_WINDOW = 3
+
 
 def _new_driver() -> dict[str, Any]:
     return {
@@ -168,7 +171,7 @@ class ReplayEngine:
                 d["last_lap_ms"] = lap_ms
                 if d["best_lap_ms"] is None or lap_ms < d["best_lap_ms"]:
                     d["best_lap_ms"] = lap_ms
-                d["recent_laps_ms"] = (d["recent_laps_ms"] + [lap_ms])[-3:]
+                d["recent_laps_ms"] = (d["recent_laps_ms"] + [lap_ms])[-RECENT_LAPS_WINDOW:]
             if d["tyre_age_laps"] is not None:
                 d["tyre_age_laps"] += 1
             state["lap"] = max(state["lap"], e.lap or 0)
