@@ -211,6 +211,47 @@ def live_stop() -> dict:
     return final_status
 
 
+@app.get("/api/live/sessions")
+def live_sessions(
+    year: int = Query(...),
+    country: Optional[str] = Query(default=None),
+) -> list[dict]:
+    """List sessions for a given year (and optional country) from OpenF1.
+
+    Returns a list sorted by date_start.  Each item includes a `started` flag
+    that is True when the current UTC time is >= date_start.
+    """
+    import urllib.error
+    from racelens.adapters.openf1_adapter import _get as openf1_get, _parse_iso
+    from datetime import datetime, timezone
+
+    params: dict = {"year": year}
+    if country:
+        params["country_name"] = country
+
+    try:
+        rows = openf1_get("/sessions", params)
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+        raise HTTPException(502, "OpenF1 unavailable") from exc
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    result = []
+    for row in rows:
+        date_start = str(row.get("date_start") or "")
+        ts = _parse_iso(date_start) if date_start else None
+        result.append({
+            "session_name": str(row.get("session_name") or ""),
+            "session_key": int(row["session_key"]),
+            "session_type": str(row.get("session_type") or ""),
+            "date_start": date_start,
+            "started": ts is not None and now_ts >= ts,
+        })
+
+    result.sort(key=lambda x: x["date_start"])
+    return result
+
+
 @app.get("/api/sessions/{session_id}/forecast")
 def forecast(
     session_id: str,
