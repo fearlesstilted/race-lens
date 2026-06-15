@@ -4,6 +4,7 @@ import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
+import { ForecastStrip } from './features/replay/ForecastStrip'
 import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
 import { RaceFeed } from './features/replay/RaceFeed'
@@ -136,6 +137,9 @@ function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const prevSessionRef = useRef<string | null>(null)
 
+  // PROJECTION toggle — replay only, persisted in sessionStorage
+  const [projection, setProjection] = useState(false)
+
   // Build DataSource from current mode
   const source = useMemo<DataSource | null>(() => {
     if (mode === 'replay') {
@@ -259,10 +263,12 @@ function App() {
         lang={replay.lang}
         level={replay.level}
         mode={mode}
+        projection={projection}
         onModeChange={handleModeSwitch}
         onSessionChange={handleSessionChange}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
+        onProjection={setProjection}
       />
 
       {mode === 'live' && (
@@ -307,12 +313,18 @@ function App() {
             sessionStatus={sessionStatus}
             selectedIds={selectedIds}
             positionsData={effectivePositionsData}
+            projection={mode === 'replay' && projection}
           />
+          {mode === 'replay' && projection && sessionId && (
+            <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+          )}
           {hasFocus ? (
             <>
               <FocusPanel
                 selectedIds={selectedIds}
                 drivers={state?.drivers ?? {}}
+                sessionId={mode === 'replay' ? sessionId : null}
+                atMs={replay.atMs}
               />
               <RaceFeed items={replay.feed.slice(-4)} compact />
             </>
@@ -326,6 +338,8 @@ function App() {
           commentary={replay.commentary}
           selectedIds={selectedIds}
           sessionStatus={sessionStatus}
+          sessionId={mode === 'replay' ? sessionId : null}
+          atMs={replay.atMs}
         />
       </div>
 

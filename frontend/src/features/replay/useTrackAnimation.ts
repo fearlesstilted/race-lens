@@ -26,6 +26,12 @@ export type TrackAnimation = {
   pathRef: React.RefObject<SVGPathElement | null>
   /** Callback ref factory for each car's <g> element. */
   registerCar: (driverId: string) => (el: SVGGElement | null) => void
+  /** Current schematic fraction per driver — readable by ghost-car overlay. */
+  currentFracRef: React.RefObject<Map<string, number>>
+  /** Estimated lap ms per driver — readable by ghost-car overlay. */
+  driverLapMsRef: React.RefObject<Map<string, number>>
+  /** Peloton median lap ms — fallback for ghost-car overlay. */
+  pelotonMedianRef: React.RefObject<number>
 }
 
 export function useTrackAnimation({
@@ -196,5 +202,5 @@ export function useTrackAnimation({
     else carGroupRefs.current.delete(driverId)
   }
 
-  return { pathRef, registerCar }
+  return { pathRef, registerCar, currentFracRef, driverLapMsRef, pelotonMedianRef }
 }

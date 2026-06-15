@@ -14,13 +14,15 @@ type Props = {
   lang: Lang
   level: Level
   mode: AppMode
+  projection: boolean
   onModeChange: (mode: AppMode) => void
   onSessionChange: (id: string) => void
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
+  onProjection: (on: boolean) => void
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, onModeChange, onSessionChange, onLang, onLevel }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, onModeChange, onSessionChange, onLang, onLevel, onProjection }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   return (
     <div className="top">
@@ -93,6 +95,16 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
             onClick={() => onLevel('pro')}
           >PRO</button>
         </div>
+        {/* PROJECTION toggle — replay only */}
+        {mode === 'replay' && (
+          <div className="tog-group">
+            <button
+              type="button"
+              className={`tog${projection ? ' tog-on' : ''}`}
+              onClick={() => onProjection(!projection)}
+            >PROJECTION</button>
+          </div>
+        )}
       </div>
 
       <div className="lapbox">

@@ -1144,3 +1144,85 @@ body {
   opacity: 0.35;
   pointer-events: none;
 }
+
+/* ── Forecast strip ─────────────────────────────────────────────── */
+.forecast-strip {
+  border-top: 1px solid var(--hair);
+  padding: 6px 12px 8px;
+  background: #0e0e14;
+}
+.forecast-label {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  margin-bottom: 5px;
+}
+.forecast-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.forecast-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font: 600 12px var(--cond);
+  letter-spacing: 0.06em;
+}
+.forecast-pos {
+  color: var(--dim);
+  font-size: 11px;
+}
+.forecast-id {
+  color: var(--ink);
+}
+.forecast-delta {
+  font-size: 11px;
+  font-weight: 800;
+}
+.proj-up { color: #00c853; }
+.proj-dn { color: var(--red); }
+.proj-eq { color: var(--dim); }
+
+/* ── Pit sim card ───────────────────────────────────────────────── */
+.focus-pit-row {
+  margin-top: 8px;
+  border-top: 1px solid var(--hair);
+  padding-top: 8px;
+}
+.pit-now-btn {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.2em;
+  background: none;
+  border: 1px solid #ffffff22;
+  color: var(--ink);
+  padding: 4px 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.pit-now-btn:hover { border-color: var(--amber); color: var(--amber); }
+.pit-now-btn:disabled { opacity: 0.4; cursor: default; }
+.pit-sim-card {
+  padding: 6px 0;
+}
+.pit-sim-verdict {
+  font: italic 800 17px var(--cond);
+  letter-spacing: 0.1em;
+  margin-bottom: 5px;
+}
+.pit-sim-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 600 11px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+/* ── Overtake % in insight cards ───────────────────────────────── */
+.ins-overtake {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  color: #00c853;
+  margin-top: 4px;
+}

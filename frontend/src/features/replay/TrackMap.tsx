@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
 import type { DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
-import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
+import { DEFAULT_LAP_MS } from '../../lib/liveGaps'
+import { buildPathD, interpolateRealPos, startFinishLine } from '../../lib/trackGeometry'
 import { teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
@@ -20,6 +21,13 @@ type Props = {
   selectedIds?: string[]
   /** Positions telemetry data lifted from parent (useReplay). If null, schematic mode is used. */
   positionsData: PositionsData | null
+  /** Whether the PROJECTION overlay (ghost cars) is enabled. */
+  projection?: boolean
+}
+
+/** Advance a fractional lap position forward by ghostSec seconds. */
+function advanceGhostFrac(frac: number, ghostSec: number, lapMs: number): number {
+  return ((frac + (ghostSec * 1000) / lapMs) % 1 + 1) % 1
 }
 
 // Pit lane: a horizontal row below the map bottom edge
@@ -40,16 +48,48 @@ function trackStrokeColor(status: string): string {
   return '#26262e'
 }
 
+// Ghost cars: fractional positions +30s ahead, computed each render in schematic mode
+const GHOST_AHEAD_S = 30
+
 export const TrackMap = React.memo(function TrackMap({
   sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, selectedIds = [],
-  positionsData,
+  positionsData, projection = false,
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
 
-  const { pathRef, registerCar } = useTrackAnimation({
+  // Ghost positions (schematic mode): updated by rAF or atMs changes via a shared ref
+  const ghostFracsRef = useRef<Map<string, number>>(new Map())
+
+  const { pathRef, registerCar, currentFracRef, driverLapMsRef, pelotonMedianRef } = useTrackAnimation({
     atMs, playing, playbackSpeed, drivers, classification, sessionStatus, positionsData,
   })
+
+  // Ghost positions for schematic mode — recomputed on atMs change
+  const [ghostPositions, setGhostPositions] = useState<Map<string, [number, number]>>(new Map())
+
+  useEffect(() => {
+    if (!projection || positionsData) {
+      setGhostPositions(new Map())
+      return
+    }
+    const path = pathRef.current
+    if (!path) return
+    const totalLength = path.getTotalLength()
+    const positions = new Map<string, [number, number]>()
+    const pelotonMs = pelotonMedianRef.current
+    for (const driverId of classification) {
+      if (drivers[driverId]?.in_pit || drivers[driverId]?.retired) continue
+      const frac = currentFracRef.current.get(driverId)
+      if (frac === undefined) continue
+      const lapMs = driverLapMsRef.current.get(driverId) ?? pelotonMs
+      const ghostFrac = advanceGhostFrac(frac, GHOST_AHEAD_S, lapMs)
+      const pt = path.getPointAtLength(ghostFrac * totalLength)
+      positions.set(driverId, [pt.x, pt.y])
+    }
+    setGhostPositions(positions)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atMs, projection, positionsData, classification])
 
   // Fetch track data whenever session changes
   useEffect(() => {
@@ -188,6 +228,16 @@ export const TrackMap = React.memo(function TrackMap({
               </g>
             )
           })}
+
+        {/* Ghost cars — projection overlay, +30s ahead, schematic mode only */}
+        {projection && !positionsData && [...ghostPositions.entries()].map(([driverId, [gx, gy]]) => {
+          const color = teamColor(driverId)
+          return (
+            <g key={`ghost-${driverId}`} transform={`translate(${gx.toFixed(1)},${gy.toFixed(1)})`} opacity={0.35} pointerEvents="none">
+              <circle r={7} fill="none" stroke={color} strokeWidth={1.5} />
+            </g>
+          )
+        })}
 
         {/* Pit lane cars — static row, no animation */}
         {pitDrivers.map((driverId, i) => {
