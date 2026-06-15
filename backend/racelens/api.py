@@ -25,6 +25,7 @@ from racelens.events.models import load_jsonl
 from racelens.forecast.overtake import overtake_probability
 from racelens.forecast.pit_sim import simulate_pit
 from racelens.forecast.projection import project_order
+from racelens.forecast.win_prob import win_probability
 from racelens.insights.battles import detect_battles
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
@@ -257,6 +258,47 @@ def live_sessions(
         })
 
     result.sort(key=lambda x: x["date_start"])
+    return result
+
+
+@app.get("/api/sessions/{session_id}/win-prob")
+def win_prob(
+    session_id: str,
+    at_ms: int = Query(ge=0),
+):
+    """Win probability for every driver at a given timestamp."""
+    engine = _engine(session_id)
+    state = engine.state_at(at_ms)
+    return win_probability(state, session_id)
+
+
+@app.get("/api/sessions/{session_id}/win-prob-series")
+def win_prob_series(
+    session_id: str,
+    until_ms: int = Query(ge=0),
+    samples: int = Query(default=20, ge=2, le=100),
+):
+    """Win probability series up to until_ms in N evenly-spaced samples.
+
+    Returns [{at_ms, probs: {driver: prob}}] ascending by at_ms.
+    """
+    engine = _engine(session_id)
+    start_ms = engine.events[0].session_time_ms if engine.events else 0
+    if until_ms <= start_ms:
+        return []
+
+    step = max(1, (until_ms - start_ms) // (samples - 1))
+    points = list(range(start_ms, until_ms, step))
+    if not points or points[-1] < until_ms:
+        points.append(until_ms)
+    # Deduplicate and cap
+    points = sorted(set(points))
+
+    result = []
+    for t in points:
+        state = engine.state_at(t)
+        wp = win_probability(state, session_id)
+        result.append({"at_ms": t, "probs": wp["win_prob"]})
     return result
 
 
