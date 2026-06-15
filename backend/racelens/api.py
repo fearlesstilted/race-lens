@@ -21,6 +21,9 @@ from racelens.adapters.openf1_adapter import find_session, ingest_openf1
 from racelens.commentary.feed import render_feed
 from racelens.commentary.renderer import render_all
 from racelens.events.models import load_jsonl
+from racelens.forecast.overtake import overtake_probability
+from racelens.forecast.pit_sim import simulate_pit
+from racelens.forecast.projection import project_order
 from racelens.insights.battles import detect_battles
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
@@ -205,6 +208,40 @@ def live_stop() -> dict:
     _live.stop()
     _live = None
     return final_status
+
+
+@app.get("/api/sessions/{session_id}/forecast")
+def forecast(
+    session_id: str,
+    at_ms: int = Query(ge=0),
+    laps: int = Query(default=10, ge=1, le=50),
+):
+    engine = _engine(session_id)
+    state = engine.state_at(at_ms)
+    return project_order(state, laps_ahead=laps)
+
+
+@app.get("/api/sessions/{session_id}/simulate-pit")
+def simulate_pit_endpoint(
+    session_id: str,
+    at_ms: int = Query(ge=0),
+    driver: str = Query(...),
+):
+    engine = _engine(session_id)
+    state = engine.state_at(at_ms)
+    return simulate_pit(state, driver, session_id)
+
+
+@app.get("/api/sessions/{session_id}/overtake")
+def overtake_endpoint(
+    session_id: str,
+    at_ms: int = Query(ge=0),
+    ahead: str = Query(...),
+    behind: str = Query(...),
+):
+    engine = _engine(session_id)
+    state = engine.state_at(at_ms)
+    return overtake_probability(state, ahead, behind, session_id)
 
 
 @app.get("/api/sessions/{session_id}/track")

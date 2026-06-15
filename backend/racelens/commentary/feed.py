@@ -155,7 +155,7 @@ def render_feed(
                 continue
             # Avoid duplicating SessionStatusChanged items that already cover SC/VSC/red flag
             dup = False
-            if ("RED" in msg_up and "red_flag" in emitted_status) or ("SAFETY CAR" in msg_up and not "VIRTUAL" in msg_up and "safety_car" in emitted_status) or ("VIRTUAL" in msg_up and "vsc" in emitted_status):
+            if ("RED" in msg_up and "red_flag" in emitted_status) or ("SAFETY CAR" in msg_up and "VIRTUAL" not in msg_up and "safety_car" in emitted_status) or ("VIRTUAL" in msg_up and "vsc" in emitted_status):
                 dup = True
             if dup:
                 continue
