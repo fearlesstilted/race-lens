@@ -11,6 +11,17 @@
   --hard: #ececec;
   --cond: 'Barlow Condensed', sans-serif;
   --body: 'Inter', -apple-system, sans-serif;
+
+  /* ── spacing scale (4px base) ───────────────────────────── */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  /* ── column-label height: all three columns on one baseline */
+  --col-label-h: 36px;
 }
 
 * {
@@ -365,14 +376,19 @@ body {
   font-size: 12px;
 }
 .label {
-  font: 600 12px var(--cond);
+  font: 600 11px var(--cond);
   letter-spacing: 0.34em;
   color: var(--dim);
-  padding: 18px 22px 10px;
+  /* fixed height so all three column labels sit on one baseline */
+  height: var(--col-label-h);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s5);
   position: sticky;
   top: 0;
   background: var(--bg);
   z-index: 1;
+  border-bottom: 1px solid var(--hair);
 }
 
 /* ── timing tower ─────────────────────────────────────────────── */
@@ -382,12 +398,11 @@ body {
   grid-template-columns: 38px 6px 58px 78px 78px 92px 18px 52px 34px;
   align-items: center;
   gap: 10px;
-  height: 24px;
-  padding: 0 24px 0 18px;
-  font: 600 11px var(--cond);
-  letter-spacing: 0.2em;
+  height: 28px;
+  padding: 0 var(--s5) 0 18px;
+  font: 600 10px var(--cond);
+  letter-spacing: 0.22em;
   color: var(--dim);
-  border-top: 1px solid var(--hair);
   border-bottom: 1px solid var(--hair);
 }
 .trow {
@@ -395,8 +410,8 @@ body {
   grid-template-columns: 38px 6px 58px 78px 78px 92px 18px 52px 34px;
   align-items: center;
   gap: 10px;
-  height: clamp(36px, calc((var(--tower-body-h, 600px) - 60px) / var(--row-count, 20)), 46px);
-  padding: 0 24px 0 18px;
+  height: clamp(36px, calc((var(--tower-body-h, 600px) - 64px) / var(--row-count, 20)), 46px);
+  padding: 0 var(--s5) 0 18px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
 }
@@ -443,6 +458,7 @@ body {
   font: 600 13px var(--cond);
   color: var(--dim);
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .pos {
   font: italic 800 17px var(--cond);
@@ -451,6 +467,7 @@ body {
   text-align: center;
   line-height: 26px;
   transform: skewX(-8deg);
+  font-variant-numeric: tabular-nums;
 }
 .trow.lead .pos {
   background: var(--red);
@@ -484,6 +501,7 @@ body {
   font: 600 16px var(--cond);
   text-align: right;
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 .gap.dim {
   color: var(--dim);
@@ -508,7 +526,7 @@ body {
   opacity: 0.45;
 }
 .trow-empty {
-  padding: 16px 18px;
+  padding: var(--s4) 18px;
   color: var(--dim);
   font: 600 12px var(--cond);
   letter-spacing: 0.2em;
@@ -569,9 +587,8 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #3a3a44 transparent;
 }
-/* RACE FEED label — compact */
+/* RACE FEED label — matches column label height/style */
 .col-center .ev-scroll > .label {
-  padding: 10px 22px 6px;
   flex-shrink: 0;
 }
 /* When focus panel replaces the feed, it should fill remaining space with scroll */
@@ -585,8 +602,8 @@ body {
 .ev {
   display: grid;
   grid-template-columns: 38px 72px 1fr;
-  gap: 10px;
-  padding: 10px 22px;
+  gap: var(--s2);
+  padding: var(--s2) var(--s5);
   border-top: 1px solid #ffffff0a;
   font-size: 14px;
 }
@@ -647,7 +664,7 @@ body {
 }
 .ins {
   margin: 0 0 1px;
-  padding: 16px 22px;
+  padding: var(--s4) var(--s5);
   border-top: 1px solid #ffffff0a;
   position: relative;
   /* Smooth max-height collapse on exit */
@@ -659,7 +676,7 @@ body {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 3px;   /* uniform severity bar width */
   background: var(--amber);
 }
 .ins.high::before {
@@ -696,10 +713,10 @@ body {
   margin-top: 4px;
 }
 .ins .data {
-  margin-top: 7px;
+  margin-top: var(--s2);
   display: flex;
-  gap: 18px;
-  font: 600 14px var(--cond);
+  gap: var(--s5);
+  font: 600 13px var(--cond);
   letter-spacing: 0.06em;
   color: var(--dim);
   font-variant-numeric: tabular-nums;
@@ -739,7 +756,7 @@ body {
 /* ── deck: replay controls ─────────────────────────────────────── */
 /* Target total height ~72px: phase(4) + rail(30) + deckrow(38) */
 .deck {
-  padding: 0 32px 8px;
+  padding: 0 var(--s6) var(--s2);
   border-top: 1px solid var(--hair);
 }
 /* Phase strip: 4px, flush above rail */
@@ -811,8 +828,8 @@ body {
 .deckrow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 8px;
+  gap: var(--s2);
+  margin-top: var(--s2);
 }
 .b {
   font: 600 13px var(--cond);
@@ -820,8 +837,13 @@ body {
   background: none;
   border: 1px solid #ffffff2b;
   color: var(--ink);
-  padding: 8px 18px;
+  /* uniform button height across all deck controls */
+  height: 32px;
+  padding: 0 var(--s4);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 .b:disabled {
   opacity: 0.4;
@@ -923,15 +945,15 @@ body {
 .focus-panel {
   flex-shrink: 0;
   border-top: 1px solid var(--hair);
-  padding: 10px 16px 12px;
+  padding: var(--s2) var(--s4) var(--s3);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s1);
 }
-/* H2H panel taller */
+/* H2H panel — same padding scale */
 .focus-panel-h2h {
-  padding: 10px 14px 12px;
+  padding: var(--s2) var(--s3) var(--s3);
 }
 .focus-h2h-label {
   font: italic 800 11px var(--cond);
@@ -1199,7 +1221,7 @@ body {
     width: auto;
   }
   .ins {
-    padding: 10px 14px;
+    padding: var(--s2) var(--s3);
   }
   .lapbox .n {
     font-size: clamp(20px, 2vw, 28px);
@@ -1388,15 +1410,15 @@ body {
 
   /* Deck simplified on mobile — full-width touch targets */
   .deck {
-    padding: 0 16px 8px;
+    padding: 0 var(--s4) var(--s2);
   }
   .b {
-    padding: 10px 14px;
-    min-height: 44px;
+    padding: 0 var(--s3);
+    height: 44px;  /* touch-friendly on mobile */
   }
   .deckrow {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--s2);
   }
   /* speed buttons in a row */
   .deckrow .sp {
@@ -1494,30 +1516,33 @@ body {
 /* ── Forecast strip ─────────────────────────────────────────────── */
 .forecast-strip {
   border-top: 1px solid var(--hair);
-  padding: 6px 12px 8px;
+  padding: var(--s1) var(--s3) var(--s2);
   background: #0e0e14;
 }
 .forecast-label {
+  /* unified section label — same as .label but inline */
   font: 700 10px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
-  margin-bottom: 5px;
+  margin-bottom: var(--s1);
 }
 .forecast-rows {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--s1) var(--s4);
 }
 .forecast-row {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--s1);
   font: 600 12px var(--cond);
   letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
 }
 .forecast-pos {
   color: var(--dim);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .forecast-id {
   color: var(--ink);
@@ -1525,6 +1550,7 @@ body {
 .forecast-delta {
   font-size: 11px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 .proj-up { color: #00c853; }
 .proj-dn { color: var(--red); }
@@ -1635,7 +1661,8 @@ body {
   font: 700 11px var(--cond);
   letter-spacing: 0.18em;
   color: #00c853;
-  margin-top: 4px;
+  margin-top: var(--s1);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Win Probability Graph ──────────────────────────────────────── */
@@ -1643,13 +1670,14 @@ body {
   position: relative;
   background: var(--bg);
   border-top: 1px solid var(--hair);
-  padding: 6px 0 4px 0;
+  padding: var(--s1) 0 var(--s1) 0;
 }
 .win-prob-label {
   font: 700 10px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
-  padding: 0 0 2px 34px;
+  padding: 0 0 var(--s1) 34px;
+  font-variant-numeric: tabular-nums;
 }
 .win-prob-loading {
   position: absolute;
@@ -1666,6 +1694,7 @@ body {
 .win-prob-axis {
   font: 600 9px var(--cond);
   fill: #ffffff44;
+  font-variant-numeric: tabular-nums;
 }
 .win-prob-driver {
   font: 700 9px var(--cond);
@@ -1703,7 +1732,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 8px;
+  padding: var(--s2) var(--s3);
   border-bottom: 1px solid var(--hair);
   flex-shrink: 0;
 }
@@ -1731,9 +1760,9 @@ body {
 .hl-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s2);
   width: 100%;
-  padding: 6px 12px;
+  padding: var(--s1) var(--s3);
   background: none;
   border: none;
   color: var(--ink);
@@ -1798,7 +1827,7 @@ body {
 .dotd-header {
   display: flex;
   flex-direction: column;
-  padding: 10px 12px 8px;
+  padding: var(--s2) var(--s3);
   border-bottom: 1px solid var(--hair);
   flex-shrink: 0;
 }
@@ -1819,13 +1848,13 @@ body {
   letter-spacing: 0.1em;
 }
 .dotd-hero {
-  margin: 10px 12px 6px;
-  padding: 8px 12px;
+  margin: var(--s2) var(--s3) var(--s1);
+  padding: var(--s2) var(--s3);
   border-left: 3px solid var(--dim);
   background: #0c0c14;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--s1);
   flex-shrink: 0;
 }
 .dotd-hero-code {
@@ -1850,9 +1879,9 @@ body {
 .dotd-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s2);
   width: 100%;
-  padding: 5px 12px;
+  padding: var(--s1) var(--s3);
   background: none;
   border: none;
   color: var(--ink);
@@ -1891,6 +1920,7 @@ body {
   width: 30px;
   text-align: right;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .dotd-check {
   font: 600 10px var(--cond);
