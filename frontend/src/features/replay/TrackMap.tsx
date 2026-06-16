@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
-import type { DriverState } from '../../api/types'
+import type { Battle, DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
 import { DEFAULT_LAP_MS } from '../../lib/liveGaps'
 import { buildPathD, interpolateRealPos, startFinishLine } from '../../lib/trackGeometry'
@@ -25,6 +25,8 @@ type Props = {
   positionsData: PositionsData | null
   /** Whether the PROJECTION overlay (ghost cars) is enabled. */
   projection?: boolean
+  /** Active battles for on-map highlights */
+  battles?: Battle[]
 }
 
 /** Advance a fractional lap position forward by ghostSec seconds. */
@@ -32,10 +34,13 @@ function advanceGhostFrac(frac: number, ghostSec: number, lapMs: number): number
   return ((frac + (ghostSec * 1000) / lapMs) % 1 + 1) % 1
 }
 
-// Pit lane: a horizontal row below the map bottom edge
-const PIT_LANE_Y = 370
-const PIT_LANE_X_START = 30
-const PIT_LANE_SPACING = 22
+// Pit lane overlay — fixed position in bottom-left of SVG coordinate space
+// These are SVG units, sized relative to typical 600x400 viewbox
+const PIT_BOX_X = 16
+const PIT_BOX_Y_TOP = 340
+const PIT_BOX_HEIGHT = 38
+const PIT_BOX_CAR_Y = PIT_BOX_Y_TOP + 22
+const PIT_CAR_SPACING = 20
 
 function statusWatermark(status: string): { text: string; color: string } | null {
   if (status === 'red_flag') return { text: 'RED FLAG', color: '#cc0000' }
@@ -70,7 +75,7 @@ const GHOST_AHEAD_S = 30
 
 export const TrackMap = React.memo(function TrackMap({
   sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, neutralizationStartMs,
-  selectedIds = [], positionsData, projection = false,
+  selectedIds = [], positionsData, projection = false, battles = [],
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
@@ -205,15 +210,33 @@ export const TrackMap = React.memo(function TrackMap({
           </>
         )}
 
-        {/* Pit lane indicator */}
-        <line
-          x1={PIT_LANE_X_START - 8}
-          y1={PIT_LANE_Y}
-          x2={PIT_LANE_X_START + pitDrivers.length * PIT_LANE_SPACING + 8}
-          y2={PIT_LANE_Y}
-          stroke="#f2a90044"
-          strokeWidth={1}
-        />
+        {/* Pit lane pocket */}
+        {trackData && (
+          <g>
+            {/* Background rect */}
+            <rect
+              x={PIT_BOX_X - 4}
+              y={PIT_BOX_Y_TOP}
+              width={Math.max(56, pitDrivers.length * PIT_CAR_SPACING + 16)}
+              height={PIT_BOX_HEIGHT}
+              fill="#0c0c0f"
+              stroke="#f2a90044"
+              strokeWidth={0.8}
+            />
+            {/* PIT LANE label */}
+            <text
+              x={PIT_BOX_X}
+              y={PIT_BOX_Y_TOP + 9}
+              fill="#f2a90088"
+              fontSize={6}
+              fontFamily="'Barlow Condensed', sans-serif"
+              fontWeight={700}
+              letterSpacing="0.2em"
+            >
+              PIT LANE
+            </text>
+          </g>
+        )}
 
         {/* Status badge — prominent overlay for SC/VSC/red flag */}
         {watermark && (
@@ -261,6 +284,16 @@ export const TrackMap = React.memo(function TrackMap({
           </g>
         )}
 
+        {/* Battle highlight connector lines — drawn before cars so cars sit on top */}
+        {battles.map((b) => {
+          const lDrv = drivers[b.leader_id]
+          const cDrv = drivers[b.chaser_id]
+          if (lDrv?.in_pit || lDrv?.retired || cDrv?.in_pit || cDrv?.retired) return null
+          // We can't access the rAF-updated positions directly in React render.
+          // Draw an ambient glow ring on the chaser instead (visible in all modes).
+          return null // rings handled per-car below
+        })}
+
         {/* On-track cars — initial transform is 0,0; rAF loop updates imperatively */}
         {classification
           .filter(id => !drivers[id]?.in_pit && !drivers[id]?.retired)
@@ -271,6 +304,14 @@ export const TrackMap = React.memo(function TrackMap({
             const isDimmed = hasFocus && !isSelected
             const r = isSelected ? 9 : 7
             const showLabel = isSelected || isTop3
+            const inBattle = battles.some(b => b.chaser_id === driverId || b.leader_id === driverId)
+            const compound = drivers[driverId]?.tyre_compound?.charAt(0).toUpperCase() ?? null
+            const compoundColor =
+              compound === 'S' ? '#ff2d2d' :
+              compound === 'M' ? '#ffd900' :
+              compound === 'H' ? '#ececec' :
+              compound === 'I' ? '#39b54a' :
+              compound === 'W' ? '#0067ff' : null
             return (
               <g
                 key={driverId}
@@ -278,6 +319,14 @@ export const TrackMap = React.memo(function TrackMap({
                 transform="translate(0,0)"
                 opacity={isDimmed ? 0.5 : 1}
               >
+                {/* Battle glow ring */}
+                {inBattle && (
+                  <circle r={r + 5} fill="none" stroke="#f2a900" strokeWidth={1.2} opacity={0.7} />
+                )}
+                {/* Compound ring */}
+                {compoundColor && !inBattle && (
+                  <circle r={r + 3} fill="none" stroke={compoundColor} strokeWidth={1} opacity={0.55} />
+                )}
                 <circle
                   r={r}
                   fill={color}
@@ -313,15 +362,25 @@ export const TrackMap = React.memo(function TrackMap({
           )
         })}
 
-        {/* Pit lane cars — static row, no animation */}
+        {/* Pit lane cars — in the pit pocket */}
         {pitDrivers.map((driverId, i) => {
           const color = teamColor(driverId)
+          const cx = PIT_BOX_X + 4 + i * PIT_CAR_SPACING
           return (
-            <g
-              key={driverId}
-              transform={`translate(${PIT_LANE_X_START + i * PIT_LANE_SPACING},${PIT_LANE_Y})`}
-            >
-              <circle r={5} fill={color} opacity={0.6} />
+            <g key={driverId} transform={`translate(${cx},${PIT_BOX_CAR_Y})`}>
+              <circle r={5} fill={color} opacity={0.85} />
+              <text
+                x={0}
+                y={-9}
+                textAnchor="middle"
+                fill="#f2a900"
+                fontSize={5.5}
+                fontFamily="'Barlow Condensed', sans-serif"
+                fontWeight={700}
+                letterSpacing="0.04em"
+              >
+                {driverId}
+              </text>
             </g>
           )
         })}

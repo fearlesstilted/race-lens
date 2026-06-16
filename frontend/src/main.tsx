@@ -465,6 +465,7 @@ function App() {
             selectedIds={selectedIds}
             positionsData={effectivePositionsData}
             projection={mode === 'replay' && projection}
+            battles={replay.battles}
           />
           {mode === 'replay' && projection && sessionId && (
             <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
