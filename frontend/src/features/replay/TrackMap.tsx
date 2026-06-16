@@ -185,6 +185,23 @@ export const TrackMap = React.memo(function TrackMap({
                 strokeLinecap="round"
               />
             )}
+            {/* Corner numbers */}
+            {(trackData.corners ?? []).map((c) => (
+              <text
+                key={`c${c.number}`}
+                x={c.x + 4}
+                y={c.y - 4}
+                textAnchor="start"
+                dominantBaseline="auto"
+                fill="#8a8a9a"
+                fontSize={9}
+                fontFamily="'Barlow Condensed', sans-serif"
+                letterSpacing="0"
+                pointerEvents="none"
+              >
+                {c.number}
+              </text>
+            ))}
           </>
         )}
 

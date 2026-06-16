@@ -127,6 +127,18 @@ def main() -> None:
         if points and points[0] != points[-1]:
             points.append(points[0])
 
+        # Corners (turn numbers) — same normalization as points
+        corners = []
+        try:
+            circuit_info = ses.get_circuit_info()
+            if circuit_info is not None and hasattr(circuit_info, "corners"):
+                for _, row in circuit_info.corners.iterrows():
+                    cx = round(offset_x + (float(row["X"]) - x_min) * scale, 1)
+                    cy = round(VH - (offset_y + (float(row["Y"]) - y_min) * scale), 1)
+                    corners.append({"number": int(row["Number"]), "x": cx, "y": cy})
+        except Exception:
+            corners = []
+
         # Build session_id from the output file stem
         out_path = Path(args.out)
         stem = out_path.stem  # e.g. "monaco_2024_race.track" → need just "monaco_2024_race"
@@ -138,6 +150,7 @@ def main() -> None:
             "extent_dm": [x_min, y_min, x_max, y_max],
             "padding": PAD,
             "points": points,
+            "corners": corners,
         }
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(data), encoding="utf-8")
