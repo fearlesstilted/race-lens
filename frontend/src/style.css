@@ -398,12 +398,12 @@ body {
 }
 
 /* ── timing tower ─────────────────────────────────────────────── */
-/* columns: POS | bar | DRV | INT(opt) | GAP | LAST | trend | TYR+age | PITS(opt) */
+/* columns: POS | bar | DRV | TYR | AGE(opt) | LAST | trend | GAP | INT(opt) | PIT(opt) */
 .trow-hdr {
   display: grid;
-  grid-template-columns: 38px 6px 58px 78px 78px 92px 18px 52px 34px;
+  grid-template-columns: 38px 6px 54px 28px 28px 104px 18px 68px 68px 34px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   height: 28px;
   padding: 0 var(--s5) 0 18px;
   font: 600 10px var(--cond);
@@ -413,24 +413,32 @@ body {
 }
 .trow {
   display: grid;
-  grid-template-columns: 38px 6px 58px 78px 78px 92px 18px 52px 34px;
+  grid-template-columns: 38px 6px 54px 28px 28px 104px 18px 68px 68px 34px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   height: clamp(36px, calc((var(--tower-body-h, 600px) - 64px) / var(--row-count, 20)), 46px);
   padding: 0 var(--s5) 0 18px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
 }
-/* Hide INT and PITS columns below 1500px */
+/* Adaptive: hide INT (col 9) + PIT (col 10) below 1500px */
 @media (max-width: 1500px) {
   .trow-hdr,
   .trow {
-    grid-template-columns: 38px 6px 58px 0 78px 92px 18px 52px 0;
+    grid-template-columns: 38px 6px 54px 28px 28px 104px 18px 68px 0 0;
   }
-  .trow-hdr > :nth-child(4),
-  .trow-hdr > :nth-child(9),
-  .trow > :nth-child(4),
-  .trow > :nth-child(9) {
+  .col-int,
+  .col-pit {
+    display: none;
+  }
+}
+/* Hide AGE (col 5) below 1150px — keep TYR/LAST/GAP/DRV/POS */
+@media (max-width: 1150px) {
+  .trow-hdr,
+  .trow {
+    grid-template-columns: 38px 6px 54px 28px 0 104px 18px 68px 0 0;
+  }
+  .col-age {
     display: none;
   }
 }
@@ -450,14 +458,16 @@ body {
   vertical-align: middle;
   line-height: 1;
 }
-/* last lap column */
+/* last lap column — wide enough for m:ss.mmm */
 .last-lap {
-  font: 600 17px var(--cond);
+  font: 600 15px var(--cond);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   text-align: right;
   white-space: nowrap;
-  overflow: visible;
+  overflow: hidden;
+  text-overflow: clip;
+  letter-spacing: 0.01em;
 }
 /* pit count */
 .pits-count {
@@ -490,18 +500,23 @@ body {
 .ty {
   font: 800 15px var(--cond);
   text-align: center;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
 }
 .ty.M { color: var(--med); }
 .ty.H { color: var(--hard); }
 .ty.S { color: var(--soft); }
 .ty.I { color: #39b54a; }
 .ty.W { color: #0067ff; }
-.ty .age {
+/* tyre age — separate column */
+.tyre-age {
+  font: 600 12px var(--cond);
   color: var(--dim);
-  font: 600 11px var(--cond);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* fresh tyre accent — just out of pits */
+.tyre-age.fresh {
+  color: var(--amber);
+  font-weight: 800;
 }
 .gap {
   font: 600 16px var(--cond);

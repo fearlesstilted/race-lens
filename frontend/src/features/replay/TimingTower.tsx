@@ -18,8 +18,8 @@ function fmtLastLap(ms: number | null): string {
   if (ms === null || ms <= 0) return '—'
   const m = Math.floor(ms / 60000)
   const s = Math.floor((ms % 60000) / 1000)
-  const t = Math.floor((ms % 1000) / 100)
-  return `${m}:${String(s).padStart(2, '0')}.${t}`
+  const millis = Math.floor(ms % 1000)
+  return `${m}:${String(s).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
 }
 
 /** Pace trend: compare last_lap_ms vs mean of recent_laps_ms (fallback: best_lap_ms). */
@@ -172,12 +172,13 @@ export const TimingTower = React.memo(function TimingTower({
         <span>POS</span>
         <span />
         <span>DRV</span>
-        <span title="Gap to car ahead">INT</span>
-        <span title="Gap to leader">GAP</span>
+        <span title="Tyre compound">TYR</span>
+        <span className="col-age" title="Tyre age laps">AGE</span>
         <span title="Last lap time">LAST</span>
         <span />
-        <span>TYR</span>
-        <span>PIT</span>
+        <span title="Gap to leader">GAP</span>
+        <span className="col-int" title="Gap to car ahead">INT</span>
+        <span className="col-pit">PIT</span>
       </div>
       {rows.map((row) => {
         const isLead = row.position === 1
@@ -244,15 +245,20 @@ export const TimingTower = React.memo(function TimingTower({
               {row.id}
               {row.in_pit && !isRetired && <span className="pit-tag">PIT</span>}
             </span>
-            {intDisplay}
-            {gapDisplay}
+            <span className={`ty ${compound}`}>
+              {isRetired ? '—' : compound}
+            </span>
+            <span className={`col-age tyre-age${!isRetired && row.tyre_age_laps != null && row.tyre_age_laps <= 2 ? ' fresh' : ''}`}>
+              {isRetired ? '' : (row.tyre_age_laps ?? '—')}
+            </span>
             <span className="last-lap">
               {isRetired ? '—' : fmtLastLap(row.last_lap_ms)}
               {hasFastestLap && !isRetired && <span className="fl-dot" title="Fastest lap">●</span>}
             </span>
             {trendEl}
-            <span className={`ty ${compound}`}>{isRetired ? '—' : <>{compound}<span className="age">{row.tyre_age_laps ?? '—'}</span></>}</span>
-            <span className="pits-count">{row.pit_count ?? 0}</span>
+            {gapDisplay}
+            {intDisplay}
+            <span className="col-pit pits-count">{row.pit_count ?? 0}</span>
           </div>
         )
       })}
