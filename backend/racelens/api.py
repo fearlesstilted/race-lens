@@ -21,7 +21,9 @@ from racelens.adapters.openf1_adapter import find_session, ingest_openf1
 from racelens.commentary.feed import render_feed
 from racelens.events_significant import significant_events
 from racelens.commentary.renderer import render_all
+from racelens.driver_of_day import driver_of_day as _driver_of_day
 from racelens.events.models import load_jsonl
+from racelens.highlights import highlights as _highlights
 from racelens.forecast.overtake import overtake_probability
 from racelens.forecast.pit_sim import simulate_pit
 from racelens.forecast.projection import project_order
@@ -407,6 +409,26 @@ def markers(
     """
     eng = _engine(session_id)
     return {"markers": significant_events(eng.events, until_ms=until_ms, state_engine=eng)}
+
+
+@app.get("/api/sessions/{session_id}/highlights")
+def get_highlights(
+    session_id: str,
+    top_n: int = Query(default=8, ge=1, le=50),
+) -> dict:
+    """Top-N most dramatic moments of the race, sorted chronologically.
+
+    Suitable for a 'race in 60 seconds' highlight reel.
+    """
+    eng = _engine(session_id)
+    return {"highlights": _highlights(eng.events, eng, top_n=top_n)}
+
+
+@app.get("/api/sessions/{session_id}/driver-of-day")
+def get_driver_of_day(session_id: str) -> dict:
+    """Algorithmic Driver of the Day: top candidates ranked by performance score."""
+    eng = _engine(session_id)
+    return _driver_of_day(eng.events, eng)
 
 
 @app.get("/api/sessions/{session_id}/timeline")
