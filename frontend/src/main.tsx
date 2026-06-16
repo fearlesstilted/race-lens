@@ -500,45 +500,48 @@ function App() {
             projection={mode === 'replay' && projection}
             battles={replay.battles}
           />
-          {hasFocus ? (
-            <>
-              <FocusPanel
-                selectedIds={selectedIds}
-                drivers={state?.drivers ?? {}}
-                sessionId={mode === 'replay' ? sessionId : null}
-                atMs={replay.atMs}
-              />
-              <RaceFeed items={replay.feed.slice(-4)} compact />
-            </>
-          ) : (
-            <div className="ctr-bottom">
-              <CenterTabs
-                activeTab={centerTab}
-                showForecast={mode === 'replay' && projection}
-                showWinProb={mode === 'replay' && winProb}
-                onTab={setCenterTab}
-              />
-              <div className="ctr-pane">
-                {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
-                {centerTab === 'FORECAST' && mode === 'replay' && projection && sessionId && (
-                  <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
-                )}
-                {centerTab === 'WIN%' && mode === 'replay' && winProb && sessionId && (
-                  <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
-                )}
-              </div>
+          {/* Center always keeps map + tabs — selecting drivers must never hide
+              forecast/win%. Driver focus moves to the right column instead. */}
+          <div className="ctr-bottom">
+            <CenterTabs
+              activeTab={centerTab}
+              showForecast={mode === 'replay' && projection}
+              showWinProb={mode === 'replay' && winProb}
+              onTab={setCenterTab}
+            />
+            <div className="ctr-pane">
+              {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
+              {centerTab === 'FORECAST' && mode === 'replay' && projection && sessionId && (
+                <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+              )}
+              {centerTab === 'WIN%' && mode === 'replay' && winProb && sessionId && (
+                <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        <InsightPanel
-          insights={replay.insights}
-          commentary={replay.commentary}
-          selectedIds={selectedIds}
-          sessionStatus={sessionStatus}
-          sessionId={mode === 'replay' ? sessionId : null}
-          atMs={replay.atMs}
-        />
+        {/* Right column: driver focus when 1-2 selected, else insights feed. */}
+        {hasFocus ? (
+          <div className="col col-insights col-focus">
+            <div className="label">DRIVER FOCUS</div>
+            <FocusPanel
+              selectedIds={selectedIds}
+              drivers={state?.drivers ?? {}}
+              sessionId={mode === 'replay' ? sessionId : null}
+              atMs={replay.atMs}
+            />
+          </div>
+        ) : (
+          <InsightPanel
+            insights={replay.insights}
+            commentary={replay.commentary}
+            selectedIds={selectedIds}
+            sessionStatus={sessionStatus}
+            sessionId={mode === 'replay' ? sessionId : null}
+            atMs={replay.atMs}
+          />
+        )}
       </div>
 
       <ReplayDeck

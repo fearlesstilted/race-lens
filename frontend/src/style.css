@@ -629,6 +629,29 @@ body {
   min-height: 0;
   max-height: none;
 }
+/* Focus now lives in the right column (replaces WHAT TO WATCH on selection). */
+.col-focus {
+  display: flex;
+  flex-direction: column;
+}
+.col-focus .focus-panel,
+.col-focus .focus-panel-h2h {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: none;
+  border-top: none;
+}
+/* H2H stacks vertically in the narrower right column instead of side-by-side. */
+.col-focus .h2h-body {
+  flex-direction: column;
+}
+.col-focus .h2h-divider {
+  width: auto;
+  height: 1px;
+  background: var(--hair);
+  margin: var(--s2) 0;
+}
 .ev {
   display: grid;
   grid-template-columns: 38px 72px 1fr;
