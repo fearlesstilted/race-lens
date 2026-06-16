@@ -268,25 +268,31 @@ body {
   display: none;
   background: #000;
   border-bottom: 1px solid var(--hair);
+  width: 100%;
+  overflow: hidden;
 }
 .mob-tabbar-inner {
   display: flex;
   height: 44px;
+  width: 100%;
 }
 .mob-tab {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  font: 700 11px var(--cond);
-  letter-spacing: 0.18em;
+  font: 700 clamp(9px, 2.4vw, 11px) var(--cond);
+  letter-spacing: clamp(0.04em, 0.8vw, 0.14em);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--dim);
   cursor: pointer;
   min-height: 44px;
-  padding: 0;
+  padding: 0 2px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .mob-tab.mob-tab-on {
   color: var(--ink);
@@ -698,11 +704,15 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 6px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .ins h4 small {
   font: 600 10px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
+  flex-shrink: 0;
 }
 .ins.high h4 small {
   color: var(--red);
@@ -711,6 +721,8 @@ body {
   color: #c4c4cd;
   font-size: 14.5px;
   margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ins .data {
   margin-top: var(--s2);
@@ -1294,6 +1306,18 @@ body {
   .lapbox .word, .lapbox .of {
     font-size: 10px;
   }
+  /* Show HIGHLIGHTS+DOTD section in settings drawer on tablet */
+  .drawer-panels-group {
+    display: block;
+  }
+  /* Insight text wrapping on 1024–1366px */
+  .ins p {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .ins h4 {
+    flex-wrap: wrap;
+  }
 }
 
 /* ── mobile <768px ──────────────────────────────────────────────── */
@@ -1375,6 +1399,10 @@ body {
   }
   .top-panels {
     display: none;
+  }
+  /* Show HIGHLIGHTS+DOTD section in settings drawer on mobile */
+  .drawer-panels-group {
+    display: block;
   }
 
   /* Lapbox compact */
@@ -1708,6 +1736,39 @@ body {
   gap: 6px;
   padding: 0 8px;
   position: relative;
+}
+
+/* ── drawer panels group (HIGHLIGHTS + DOTD inside settings drawer) ── */
+.drawer-panels-group {
+  /* shown only on mobile/tablet via media query */
+  display: none;
+}
+.drawer-panels-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Inside drawer the hl-wrap/dotd-wrap trigger buttons fill full width */
+.drawer-panels-inner .hl-wrap,
+.drawer-panels-inner .dotd-wrap {
+  width: 100%;
+}
+.drawer-panels-inner .hl-wrap > .tog,
+.drawer-panels-inner .dotd-wrap > .tog {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+/* Panels inside drawer: static position, full width, no shadow/border-radius */
+.drawer-panels-inner .hl-panel,
+.drawer-panels-inner .dotd-panel {
+  position: static;
+  width: 100%;
+  max-height: 320px;
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 4px;
 }
 
 /* ── Highlights panel ─────────────────────────────────────────── */
