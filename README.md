@@ -3,19 +3,27 @@
 [![CI](https://github.com/fearlesstilted/race-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/fearlesstilted/race-lens/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Open-source motorsport replay and intelligence engine.
+Open-source motorsport replay **and prediction** engine.
 
 ```
 raw motorsport data → normalized event timeline → deterministic race state
-                    → structured insights → replay / live UI / API
+   → strategy insights + forward forecast → replay / live UI / API
 ```
 
-Race Lens normalizes timing data (FastF1, OpenF1) into an immutable event timeline,
-deterministically reconstructs race state at any timestamp, and generates structured
-strategy insights — traffic risk, DRS trains, pit windows, undercut risk — with
-human-readable commentary in English and Russian. Replay-first: the same engine
-drives historical replay, simulated-live, and near-live mode. Spoiler-free by
-construction: state at time `t` uses only events up to `t`.
+Race Lens normalizes timing data (FastF1, OpenF1) into an immutable event timeline and
+deterministically reconstructs race state at any timestamp. On top of that state it does
+two things most fan tools don't:
+
+- **Explains the present** — structured strategy insights (traffic, DRS trains, pit
+  windows, undercut risk, tyre degradation, clean-air pace) with human commentary in
+  English and Russian, no LLM required.
+- **Projects the future** — a deterministic forecast layer: projected finishing order,
+  live win probability, overtake probability, an interactive **pit-stop / undercut
+  simulator**, and **"what-if" counterfactual re-runs** ("what if Leclerc pitted now?").
+
+Replay-first: the same engine drives historical replay, simulated-live, and near-live mode
+(polling OpenF1 during a real session). Spoiler-free by construction — state at time `t`
+uses only events up to `t`. Plain explainable models throughout; no machine learning.
 
 ## Demo
 
@@ -27,11 +35,14 @@ construction: state at time `t` uses only events up to `t`.
 |---|---|---|
 | **Events** | Deterministic IDs, typed envelope, dedupe | [`racelens/events/`](backend/racelens/events/) |
 | **Replay engine** | `state_at(t)`, snapshots, no future leakage | [`racelens/replay/`](backend/racelens/replay/) |
-| **Insights** | 6 detectors: traffic risk, DRS train, pit window, undercut, tyre degradation, clean air pace | [`racelens/insights/`](backend/racelens/insights/) |
+| **Insights** | 7 detectors: traffic, DRS train, pit window, undercut, tyre degradation, clean-air pace, SC pit window | [`racelens/insights/`](backend/racelens/insights/) |
+| **Forecast** | Projected order, win probability, overtake probability, pit simulator, what-if counterfactuals — explainable, no ML | [`racelens/forecast/`](backend/racelens/forecast/) |
+| **Significant events** | Crashes, penalties, lead changes, flags → timeline markers, highlights, driver-of-the-day | [`racelens/events_significant.py`](backend/racelens/events_significant.py) |
 | **Commentary** | EN/RU × beginner/pro templates, no AI required | [`racelens/commentary/`](backend/racelens/commentary/) |
 | **API / SSE** | FastAPI REST + Server-Sent Events stream + live polling | [`racelens/api.py`](backend/racelens/api.py) |
 | **Adapters** | FastF1 and OpenF1 normalized to the same envelope | [`racelens/adapters/`](backend/racelens/adapters/) |
 | **race-core** | Rust CLI resampler: raw JSONL → positions.json (500 ms ticks, linear interp, normalised to SVG viewbox) | [`rust/race-core/`](rust/race-core/) |
+| **Frontend** | React + TS broadcast UI: timing tower, telemetry track map, insight feed, forecast & projection overlays | [`frontend/src/`](frontend/src/) |
 
 ## Quickstart
 
@@ -40,7 +51,7 @@ construction: state at time `t` uses only events up to `t`.
 ```bash
 cd backend
 pip install -e ".[dev,api]"
-python -m pytest -q          # 126 tests, all pass
+python -m pytest -q          # 260+ tests, all pass (race fixtures are committed)
 ```
 
 **Ingest a session (FastF1):**
@@ -101,21 +112,48 @@ docker compose up
 
 ## API Endpoints
 
+**State & replay**
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/sessions` | List available sessions |
 | `GET` | `/api/sessions/{id}/state?at_ms=N` | Race state snapshot at timestamp |
-| `GET` | `/api/sessions/{id}/timeline` | Full event timeline |
+| `GET` | `/api/sessions/{id}/timeline` | Event timeline + lap markers |
+| `GET` | `/api/sessions/{id}/track` | Track outline (from telemetry) |
+| `GET` | `/api/sessions/{id}/positions` | Resampled car positions for the map |
+| `GET` | `/api/sessions/{id}/stream?speed=N` | SSE simulated-live stream |
+
+**Insight & narrative**
+
+| Method | Path | Description |
+|--------|------|-------------|
 | `GET` | `/api/sessions/{id}/insights?at_ms=N` | Structured strategy insights |
 | `GET` | `/api/sessions/{id}/battles?at_ms=N` | Active wheel-to-wheel battles |
-| `GET` | `/api/sessions/{id}/commentary?at_ms=N&lang=en&level=pro` | Human-readable commentary |
-| `GET` | `/api/sessions/{id}/feed?until_ms=N&lang=en&limit=30` | Spoiler-free event ticker (newest first) |
-| `GET` | `/api/sessions/{id}/stream?speed=N` | SSE simulated-live stream |
-| `POST` | `/api/live/start` | Start near-live polling runner |
-| `GET` | `/api/live/state` | Current near-live state |
-| `GET` | `/api/live/status` | Runner status |
-| `GET` | `/api/live/stream` | SSE near-live stream |
-| `POST` | `/api/live/stop` | Stop near-live runner |
+| `GET` | `/api/sessions/{id}/commentary?at_ms=N&lang=&level=` | Human-readable commentary |
+| `GET` | `/api/sessions/{id}/feed?until_ms=N&lang=&limit=` | Spoiler-free event ticker |
+| `GET` | `/api/sessions/{id}/markers` | Significant-event timeline markers |
+| `GET` | `/api/sessions/{id}/highlights?top_n=N` | Top dramatic moments ("race in 60s") |
+| `GET` | `/api/sessions/{id}/driver-of-day` | Computed driver-of-the-day + candidates |
+
+**Forecast (prediction)**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sessions/{id}/forecast?at_ms=&laps=` | Projected finishing order |
+| `GET` | `/api/sessions/{id}/win-prob?at_ms=N` | Win probability per driver |
+| `GET` | `/api/sessions/{id}/win-prob-series?until_ms=&samples=` | Win-probability over time |
+| `GET` | `/api/sessions/{id}/overtake?at_ms=&ahead=&behind=` | Overtake probability for a pair |
+| `GET` | `/api/sessions/{id}/simulate-pit?at_ms=&driver=` | Undercut verdict if driver pits now |
+| `GET` | `/api/sessions/{id}/what-if?at_ms=&scenario=&driver=` | Counterfactual finish (pit_now / stay_out / no_safety_car) |
+
+**Near-live (OpenF1 polling)**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/live/sessions?year=&country=` | Sessions of a race weekend + start times |
+| `POST` | `/api/live/start` | Start polling a session |
+| `GET` | `/api/live/state` · `/status` · `/stream` | Current state · runner status · SSE |
+| `POST` | `/api/live/stop` | Stop the runner |
 
 ## Status
 
@@ -124,16 +162,20 @@ docker compose up
 - [x] Determinism / dirty-data / no-future-leakage tests (`backend/tests/`)
 - [x] FastF1 ingestion adapter + CLI (`ingest`, `state`) — session time rebased
       to race start, gaps/intervals derived from line-crossing times
-- [x] Real fixture: Monaco 2024 race, 4919 events (regenerate via `ingest`)
-- [x] FastAPI: `/sessions`, `/state`, `/timeline`, `/insights`
+- [x] Committed race fixtures: Monaco 2024, Spain 2024, Miami 2026 (events; regenerate positions via the pipeline)
+- [x] FastAPI: 25 endpoints (state, insight, forecast, near-live)
 - [x] Simulated-live stream (SSE, `/stream?speed=N`)
-- [x] Insights: traffic risk, DRS train, pit window, undercut risk
-- [x] Commentary renderer: EN/RU × beginner/pro templates, /commentary endpoint, no AI required
-- [x] OpenF1 adapter — same envelope from a second source (near-live foundation)
-- [x] Near-live mode: polling runner over the OpenF1 adapter, /api/live/*
+- [x] Insights: traffic, DRS train, pit window, undercut, tyre degradation, clean-air pace, SC pit window
+- [x] Commentary renderer: EN/RU × beginner/pro templates, no AI required
+- [x] OpenF1 adapter — same envelope from a second source
+- [x] Near-live mode: polling runner over OpenF1, `/api/live/*`, simple live lobby (sessions + countdown)
 - [x] Rust race-core resampler: raw telemetry JSONL → positions.json (500 ms ticks, linear interp, null gaps, SVG-normalised)
-- [x] Real car positions in TrackMap: LIVE TELEMETRY mode with rAF interpolation; schematic dead-reckoning retained as 404 fallback
-- [ ] Frontend (Vite + React + TS) — in progress
+- [x] Real car positions in TrackMap (LIVE TELEMETRY); schematic dead-reckoning fallback
+- [x] Neutralization handling: red flag / safety car / VSC detection + visualization, deterministic green-flag flash
+- [x] Significant-event markers, race highlights, computed driver-of-the-day
+- [x] **Forecast layer**: projected order, win probability, overtake probability, pit simulator, what-if counterfactuals
+- [x] Frontend (Vite + React + TS): broadcast UI with replay/live modes, telemetry map, forecast & projection overlays
+- [ ] UI/UX polish pass; live rehearsal on a real race weekend
 
 ## Disclaimer
 
