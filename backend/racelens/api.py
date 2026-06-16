@@ -25,6 +25,7 @@ from racelens.events.models import load_jsonl
 from racelens.forecast.overtake import overtake_probability
 from racelens.forecast.pit_sim import simulate_pit
 from racelens.forecast.projection import project_order
+from racelens.forecast.what_if import VALID_SCENARIOS, what_if
 from racelens.forecast.win_prob import win_probability
 from racelens.insights.battles import detect_battles
 from racelens.insights.registry import detect_all
@@ -322,6 +323,30 @@ def simulate_pit_endpoint(
     engine = _engine(session_id)
     state = engine.state_at(at_ms)
     return simulate_pit(state, driver, session_id)
+
+
+@app.get("/api/sessions/{session_id}/what-if")
+def what_if_endpoint(
+    session_id: str,
+    at_ms: int = Query(ge=0),
+    scenario: str = Query(...),
+    driver: Optional[str] = Query(default=None),
+):
+    """Counterfactual race-finish projection.
+
+    scenario: baseline | pit_now | stay_out | no_safety_car
+    driver: required for pit_now / stay_out
+    """
+    if scenario not in VALID_SCENARIOS:
+        raise HTTPException(422, f"Invalid scenario '{scenario}'. Valid: {sorted(VALID_SCENARIOS)}")
+    if scenario in {"pit_now", "stay_out"} and not driver:
+        raise HTTPException(400, f"scenario='{scenario}' requires driver parameter")
+    engine = _engine(session_id)
+    state = engine.state_at(at_ms)
+    try:
+        return what_if(state, session_id, scenario, driver)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/sessions/{session_id}/overtake")
