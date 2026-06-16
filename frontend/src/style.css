@@ -24,11 +24,16 @@ html, body, #root {
   overflow: hidden;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
   font: 15px/1.5 var(--body);
   overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* ── error screen ─────────────────────────────────────────────── */
@@ -211,12 +216,15 @@ body {
   letter-spacing: 0.18em;
 }
 
-/* ── page shell: 100vh grid ────────────────────────────────────── */
+/* ── page shell: 100dvh grid ────────────────────────────────────── */
 #root {
   display: grid;
   grid-template-rows: 52px auto auto 1fr auto;
-  height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
   overflow: hidden;
+  max-width: 2200px;
+  margin: 0 auto;
 }
 
 /* ── layout grid ──────────────────────────────────────────────── */
@@ -242,6 +250,119 @@ body {
   overflow: hidden;
   container-type: size;
   container-name: tower;
+}
+
+/* ── mobile tab bar ──────────────────────────────────────────────── */
+.mob-tabbar {
+  display: none;
+  background: #000;
+  border-bottom: 1px solid var(--hair);
+}
+.mob-tabbar-inner {
+  display: flex;
+  height: 44px;
+}
+.mob-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--dim);
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0;
+}
+.mob-tab.mob-tab-on {
+  color: var(--ink);
+  border-bottom-color: var(--red);
+}
+
+/* ── settings drawer ──────────────────────────────────────────────── */
+.settings-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--hair);
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 18px;
+  flex-shrink: 0;
+  padding: 0;
+}
+.settings-btn:hover { color: var(--ink); }
+
+.settings-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+}
+.settings-overlay.open {
+  display: block;
+}
+.settings-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #00000088;
+}
+.settings-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 85vw);
+  background: #111117;
+  border-left: 1px solid var(--hair);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.settings-drawer-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--hair);
+  font: 700 12px var(--cond);
+  letter-spacing: 0.28em;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+.settings-close {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.settings-close:hover { color: var(--ink); }
+.settings-group {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hair);
+}
+.settings-group-label {
+  font: 600 10px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
+.settings-group .tog-group {
+  margin-bottom: 8px;
+}
+.settings-group .tog {
+  padding: 8px 14px;
+  font-size: 12px;
 }
 .label {
   font: 600 12px var(--cond);
@@ -1067,22 +1188,247 @@ body {
     grid-template-columns: 380px 1fr 330px;
   }
 }
-@media (max-width: 1280px) {
+
+/* ── laptop 1024–1439px ─────────────────────────────────────────── */
+@media (max-width: 1439px) {
   .wrap {
-    grid-template-columns: 340px 1fr 290px;
+    grid-template-columns: clamp(280px, 22vw, 380px) 1fr clamp(240px, 20vw, 340px);
     padding: 0 12px;
   }
   .col-insights {
-    width: 290px;
+    width: auto;
   }
   .ins {
     padding: 10px 14px;
   }
   .lapbox .n {
-    font-size: 24px;
+    font-size: clamp(20px, 2vw, 28px);
   }
   .map {
     height: 48vh;
+  }
+  /* Compact secondary toggles on laptop — smaller padding */
+  .top-toggles .tog {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .top-toggles {
+    gap: 6px;
+  }
+}
+
+/* ── tablet 768–1023px ──────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  /* 2-zone: full-width map on top, timing+insights in 2 columns below */
+  .wrap {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    padding: 0;
+  }
+  /* Map column spans full width */
+  .col-center {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    border-right: none;
+  }
+  /* Map shorter on tablet */
+  .map {
+    height: 38vh;
+  }
+  /* Timing and insights side by side on row 2 */
+  .col-timing {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .col-insights {
+    grid-column: 2;
+    grid-row: 2;
+    width: auto;
+    border-left: 1px solid var(--hair);
+  }
+  /* Hide feed on tablet — timing+insights take row 2 */
+  .col-center .ev-scroll {
+    display: none;
+  }
+  /* Insights col auto width on tablet */
+  .col-insights {
+    width: auto !important;
+  }
+  /* Show settings button on tablet */
+  .settings-btn {
+    display: flex;
+  }
+  /* Hide secondary toggle groups from topbar on tablet */
+  .top-toggles .tog-group--secondary {
+    display: none;
+  }
+  .top-panels {
+    display: none;
+  }
+  /* Lapbox shrinks */
+  .lapbox .n {
+    font-size: 20px;
+  }
+  .lapbox .word, .lapbox .of {
+    font-size: 10px;
+  }
+}
+
+/* ── mobile <768px ──────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  #root {
+    /* On mobile use flex column so variable-count header strips work */
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+  /* .wrap takes remaining flex space */
+  .wrap {
+    flex: 1;
+    min-height: 0;
+  }
+  /* deck stays at bottom */
+  .deck {
+    flex-shrink: 0;
+  }
+
+  /* Single column — wrap becomes a simple block, only active tab shown */
+  .wrap {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  /* All columns hidden by default on mobile */
+  .col-timing,
+  .col-center,
+  .col-insights {
+    display: none;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: none;
+  }
+
+  /* Active tab shown via data-mob-tab on .wrap */
+  .wrap[data-mob-tab="TIMING"] .col-timing,
+  .wrap[data-mob-tab="MAP"] .col-center,
+  .wrap[data-mob-tab="FEED"] .col-center,
+  .wrap[data-mob-tab="INSIGHTS"] .col-insights {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* On FEED tab, hide map and show only feed */
+  .wrap[data-mob-tab="FEED"] .col-center .map {
+    display: none;
+  }
+  .wrap[data-mob-tab="FEED"] .col-center .ev-scroll {
+    display: flex !important;
+    flex: 1;
+  }
+
+  .map {
+    height: 55vw;
+    min-height: 200px;
+    flex-shrink: 0;
+  }
+
+  /* Show tab bar and settings btn on mobile */
+  .mob-tabbar {
+    display: flex;
+    flex-direction: column;
+  }
+  .settings-btn {
+    display: flex;
+  }
+
+  /* Hide secondary toggle groups on mobile */
+  .top-toggles .tog-group--secondary {
+    display: none;
+  }
+  .top-panels {
+    display: none;
+  }
+
+  /* Lapbox compact */
+  .lapbox {
+    padding-left: 8px;
+  }
+  .lapbox .n {
+    font-size: 18px;
+  }
+  .lapbox .word, .lapbox .of {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+  }
+
+  /* ident shorter */
+  .ident {
+    padding: 0 14px 0 12px;
+  }
+  .ident span {
+    font-size: 16px;
+  }
+
+  /* session label — shorter */
+  .sess {
+    padding: 0 10px;
+  }
+  .sess b, .sess-select {
+    font-size: 12px;
+  }
+  .sess i {
+    display: none;
+  }
+
+  /* Deck simplified on mobile — full-width touch targets */
+  .deck {
+    padding: 0 16px 8px;
+  }
+  .b {
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+  .deckrow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  /* speed buttons in a row */
+  .deckrow .sp {
+    font-size: 10px;
+  }
+
+  /* Insights col full-width scroll */
+  .col-insights {
+    width: 100%;
+  }
+
+  /* Feed tab: col-center with feed visible */
+  .col-center .ev-scroll {
+    display: flex;
+    flex: 1;
+  }
+}
+
+/* ── 4K ≥2560px ─────────────────────────────────────────────────── */
+@media (min-width: 2560px) {
+  #root {
+    max-width: 2200px;
+    /* already set on #root above, but reiterate for clarity */
+  }
+  .wrap {
+    grid-template-columns: clamp(380px, 20vw, 500px) 1fr clamp(360px, 18vw, 460px);
+  }
+  body {
+    font-size: clamp(15px, 0.8vw, 18px);
+  }
+  .ident span {
+    font-size: clamp(21px, 1.1vw, 26px);
   }
 }
 
