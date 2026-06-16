@@ -229,15 +229,22 @@ body {
 
 /* ── page shell: 100dvh grid ────────────────────────────────────── */
 #root {
-  display: grid;
-  /* Deck row (last) is always auto at bottom; wrap row is 1fr and cannot grow */
-  grid-template-rows: 52px auto auto minmax(0, 1fr) auto;
+  /* Flex column so the deck stays pinned to the bottom regardless of how many
+     header strips (status/feed-error/live-bar) are present. A fixed-row grid
+     mis-assigned rows when the child count changed and let content push the
+     deck — flex sizes each strip to content and only .wrap grows. */
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
   max-width: 2200px;
   margin: 0 auto;
+}
+.wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── layout grid ──────────────────────────────────────────────── */
