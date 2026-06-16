@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { getSimulatePit } from '../../api/client'
-import type { DriverState, PitSim, PitSimEvidence } from '../../api/types'
+import React, { useCallback, useState } from 'react'
+import { getSimulatePit, getWhatIf } from '../../api/client'
+import type { DriverState, PitSim, PitSimEvidence, WhatIf, WhatIfDiff } from '../../api/types'
 import { teamColor } from './teamColors'
 
 type Props = {
@@ -66,6 +66,34 @@ function PitSimCard({ ev }: { ev: PitSimEvidence }) {
   )
 }
 
+/** What-If result card */
+function WhatIfCard({ result, lang }: { result: WhatIf; lang?: string }) {
+  const summary = lang === 'ru' ? result.summary_text_ru : result.summary_text_en
+  const topMovers = result.diff.filter((d) => d.delta !== 0).slice(0, 5)
+
+  return (
+    <div className="what-if-card">
+      <div className="what-if-summary">{summary}</div>
+      {topMovers.length > 0 && (
+        <div className="what-if-diff">
+          {topMovers.map((d: WhatIfDiff) => (
+            <div key={d.driver} className="what-if-diff-row">
+              <span className="what-if-driver" style={{ color: teamColor(d.driver) }}>{d.driver}</span>
+              <span className="what-if-pos-from">P{d.baseline_pos}</span>
+              <span className="what-if-arrow">→</span>
+              <span className="what-if-pos-to">P{d.scenario_pos}</span>
+              <span className={`what-if-delta ${d.delta > 0 ? 'up' : 'down'}`}>
+                {d.delta > 0 ? `▲${d.delta}` : `▼${Math.abs(d.delta)}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="what-if-note">projection · approximate</div>
+    </div>
+  )
+}
+
 /** Single-driver card (non-H2H mode) */
 function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; driver: DriverState; sessionId: string | null; atMs: number }) {
   const color = teamColor(driverId)
@@ -75,6 +103,9 @@ function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; d
   const pitLap = !inPit && isPitLap(driver)
   const [pitSim, setPitSim] = useState<PitSim | null>(null)
   const [pitBusy, setPitBusy] = useState(false)
+  const [whatIf, setWhatIf] = useState<WhatIf | null>(null)
+  const [whatIfBusy, setWhatIfBusy] = useState(false)
+  const [whatIfScenario, setWhatIfScenario] = useState<string | null>(null)
 
   const handlePitNow = useCallback(() => {
     if (!sessionId) return
@@ -83,6 +114,16 @@ function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; d
       .then((res) => { setPitSim(res) })
       .catch(() => undefined)
       .finally(() => setPitBusy(false))
+  }, [sessionId, atMs, driverId])
+
+  const handleWhatIf = useCallback((scenario: string) => {
+    if (!sessionId) return
+    setWhatIfBusy(true)
+    setWhatIfScenario(scenario)
+    getWhatIf(sessionId, atMs, scenario, driverId)
+      .then((res) => { setWhatIf(res) })
+      .catch(() => undefined)
+      .finally(() => setWhatIfBusy(false))
   }, [sessionId, atMs, driverId])
 
   return (
@@ -131,6 +172,32 @@ function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; d
             {pitBusy ? '…' : 'PIT NOW'}
           </button>
           {pitSim && !pitSim.error && pitSim.evidence && <PitSimCard ev={pitSim.evidence} />}
+        </div>
+      )}
+      {sessionId && (
+        <div className="focus-whatif-section">
+          <div className="focus-whatif-label">WHAT IF</div>
+          <div className="focus-whatif-btns">
+            <button
+              className={`b whatif-btn${whatIfScenario === 'pit_now' ? ' active' : ''}`}
+              type="button"
+              onClick={() => handleWhatIf('pit_now')}
+              disabled={whatIfBusy}
+              title="Full race projection if driver pits right now"
+            >
+              {whatIfBusy && whatIfScenario === 'pit_now' ? '…' : 'PIT FINISH'}
+            </button>
+            <button
+              className={`b whatif-btn${whatIfScenario === 'stay_out' ? ' active' : ''}`}
+              type="button"
+              onClick={() => handleWhatIf('stay_out')}
+              disabled={whatIfBusy}
+              title="Full race projection if driver stays out on current tyres"
+            >
+              {whatIfBusy && whatIfScenario === 'stay_out' ? '…' : 'STAY OUT'}
+            </button>
+          </div>
+          {whatIf && !whatIfBusy && <WhatIfCard result={whatIf} />}
         </div>
       )}
     </div>

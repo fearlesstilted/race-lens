@@ -180,3 +180,23 @@ export type RaceMarker = {
 export type MarkersResponse = {
   markers: RaceMarker[]
 }
+
+// ── What-If counterfactual ────────────────────────────────────────────────────
+
+export type WhatIfDiff = {
+  driver: string
+  baseline_pos: number
+  scenario_pos: number
+  delta: number  // positive = gained positions
+}
+
+export type WhatIf = {
+  scenario: string
+  driver: string | null
+  baseline_order: string[]
+  scenario_order: string[]
+  diff: WhatIfDiff[]
+  summary_text_en: string
+  summary_text_ru: string
+  assumptions: string[]
+}

@@ -1219,6 +1219,71 @@ body {
   color: var(--dim);
 }
 
+/* ── What-If section ──────────────────────────────────────────── */
+.focus-whatif-section {
+  border-top: 1px solid var(--hair);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.focus-whatif-label {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.25em;
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+.focus-whatif-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.whatif-btn {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  background: none;
+  border: 1px solid #ffffff22;
+  color: var(--ink);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.whatif-btn:hover { border-color: #7c4dff; color: #b39ddb; }
+.whatif-btn.active { border-color: #7c4dff; color: #b39ddb; }
+.whatif-btn:disabled { opacity: 0.4; cursor: default; }
+.what-if-card {
+  padding: 6px 0;
+}
+.what-if-summary {
+  font: italic 700 14px var(--cond);
+  letter-spacing: 0.08em;
+  color: #b39ddb;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.what-if-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 5px;
+}
+.what-if-diff-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 11px var(--cond);
+  letter-spacing: 0.10em;
+}
+.what-if-driver { font-weight: 800; min-width: 32px; }
+.what-if-pos-from { color: var(--dim); }
+.what-if-arrow { color: var(--dim); }
+.what-if-pos-to { color: var(--ink); font-weight: 700; }
+.what-if-delta.up { color: #00c853; }
+.what-if-delta.down { color: #f44336; }
+.what-if-note {
+  font: 500 10px var(--body);
+  color: var(--dim);
+  opacity: 0.6;
+}
+
 /* ── Overtake % in insight cards ───────────────────────────────── */
 .ins-overtake {
   font: 700 11px var(--cond);

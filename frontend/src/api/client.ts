@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, WinProb, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -72,6 +72,12 @@ export const getWinProbSeries = (sessionId: string, untilMs: number, samples = 2
   json<WinProbSeriesPoint[]>(
     `/api/sessions/${encodeURIComponent(sessionId)}/win-prob-series?until_ms=${untilMs}&samples=${samples}`,
   )
+
+export const getWhatIf = (sessionId: string, atMs: number, scenario: string, driver?: string) => {
+  const params = new URLSearchParams({ at_ms: String(atMs), scenario })
+  if (driver) params.set('driver', driver)
+  return json<WhatIf>(`/api/sessions/${encodeURIComponent(sessionId)}/what-if?${params.toString()}`)
+}
 
 export const getMarkers = (sessionId: string, untilMs?: number) =>
   json<MarkersResponse>(
