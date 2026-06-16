@@ -208,6 +208,36 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
   )
 }
 
+// ── Center bottom segment tabs ────────────────────────────────────────────────
+
+type CenterTab = 'FEED' | 'FORECAST' | 'WIN%'
+
+type CenterTabsProps = {
+  activeTab: CenterTab
+  showForecast: boolean
+  showWinProb: boolean
+  onTab: (t: CenterTab) => void
+}
+
+function CenterTabs({ activeTab, showForecast, showWinProb, onTab }: CenterTabsProps) {
+  const tabs: CenterTab[] = ['FEED']
+  if (showForecast) tabs.push('FORECAST')
+  if (showWinProb) tabs.push('WIN%')
+  if (tabs.length <= 1) return null
+  return (
+    <div className="ctr-tabs">
+      {tabs.map((t) => (
+        <button
+          key={t}
+          type="button"
+          className={`ctr-tab${activeTab === t ? ' ctr-tab-on' : ''}`}
+          onClick={() => onTab(t)}
+        >{t}</button>
+      ))}
+    </div>
+  )
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 type AppMode = 'replay' | 'live'
@@ -232,6 +262,8 @@ function App() {
   const [projection, setProjection] = useState(false)
   // WIN % toggle — replay only
   const [winProb, setWinProb] = useState(false)
+  // Center bottom segment tab
+  const [centerTab, setCenterTab] = useState<CenterTab>('FEED')
 
   // Build DataSource from current mode
   const source = useMemo<DataSource | null>(() => {
@@ -384,6 +416,7 @@ function App() {
         onWinProb={setWinProb}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
+        sessionStatus={sessionStatus}
       />
 
       {mode === 'live' && !isLiveActive && (
@@ -467,12 +500,6 @@ function App() {
             projection={mode === 'replay' && projection}
             battles={replay.battles}
           />
-          {mode === 'replay' && projection && sessionId && (
-            <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
-          )}
-          {mode === 'replay' && winProb && sessionId && (
-            <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
-          )}
           {hasFocus ? (
             <>
               <FocusPanel
@@ -484,7 +511,23 @@ function App() {
               <RaceFeed items={replay.feed.slice(-4)} compact />
             </>
           ) : (
-            <RaceFeed items={replay.feed} />
+            <div className="ctr-bottom">
+              <CenterTabs
+                activeTab={centerTab}
+                showForecast={mode === 'replay' && projection}
+                showWinProb={mode === 'replay' && winProb}
+                onTab={setCenterTab}
+              />
+              <div className="ctr-pane">
+                {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
+                {centerTab === 'FORECAST' && mode === 'replay' && projection && sessionId && (
+                  <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+                )}
+                {centerTab === 'WIN%' && mode === 'replay' && winProb && sessionId && (
+                  <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
+                )}
+              </div>
+            </div>
           )}
         </div>
 

@@ -1299,6 +1299,10 @@ body {
   .col-center .ev-scroll {
     display: none;
   }
+  /* ctr-bottom and tabs: show on tablet, but collapse to minimal height */
+  .col-center .ctr-bottom {
+    display: none;
+  }
   /* Insights col auto width on tablet */
   .col-insights {
     width: auto !important;
@@ -1477,6 +1481,18 @@ body {
   .col-center .ev-scroll {
     display: flex;
     flex: 1;
+  }
+  /* ctr-bottom visible on mobile FEED tab */
+  .wrap[data-mob-tab="FEED"] .col-center .ctr-bottom {
+    display: flex;
+    flex: 1;
+  }
+  /* MAP tab: hide ctr-bottom (map only) */
+  .wrap[data-mob-tab="MAP"] .col-center .ctr-bottom {
+    display: none;
+  }
+  .col-center .ctr-bottom {
+    display: flex;
   }
 }
 
@@ -1708,6 +1724,68 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Center bottom: segmented tabs ─────────────────────────────── */
+.ctr-bottom {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ctr-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--hair);
+  background: #0c0c12;
+}
+.ctr-tab {
+  flex: 1;
+  height: 28px;
+  border: none;
+  border-right: 1px solid var(--hair);
+  background: transparent;
+  color: var(--dim);
+  font: 700 10px var(--cond);
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.ctr-tab:last-child { border-right: none; }
+.ctr-tab:hover { color: var(--fg); background: #16161e; }
+.ctr-tab.ctr-tab-on {
+  color: var(--fg);
+  background: #18181f;
+  border-bottom: 2px solid var(--amber);
+}
+.ctr-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* Remove top border from forecast/winprob when inside ctr-pane */
+.ctr-pane .forecast-strip { border-top: none; }
+.ctr-pane .win-prob-graph { border-top: none; }
+/* Feed inside ctr-pane fills its height */
+.ctr-pane .ev-scroll {
+  flex: 1;
+  overflow-y: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ctr-pane .ev-scroll:hover {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 transparent;
+}
+/* Override: hide the old col-center ev-scroll rules for ctr-pane */
+.col-center .ctr-bottom .ev-scroll {
+  flex: 1;
+  display: flex;
+}
+
 /* ── Win Probability Graph ──────────────────────────────────────── */
 .win-prob-graph {
   position: relative;
@@ -1885,6 +1963,17 @@ body {
 /* ── Driver of the Day panel ──────────────────────────────────── */
 .dotd-wrap {
   position: relative;
+}
+.dotd-gate-hint {
+  display: block;
+  font: 600 9px var(--cond);
+  letter-spacing: 0.15em;
+  color: var(--dim);
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-top: 3px;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 .dotd-panel {
   position: absolute;
