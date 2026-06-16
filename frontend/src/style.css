@@ -153,6 +153,59 @@ body {
   color: #fff;
 }
 
+/* ── LAYERS popover ───────────────────────────────────────────── */
+.layers-wrap {
+  position: relative;
+}
+.layers-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+.layers-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  min-width: 180px;
+  background: #111117;
+  border: 1px solid var(--hair);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px;
+}
+.layer-name {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.16em;
+  color: var(--ink);
+}
+.layer-toggle {
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.layer-toggle:hover {
+  border-color: var(--hair);
+}
+.layer-state {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+.layer-toggle.on .layer-state {
+  color: var(--red);
+}
+
 .lapbox {
   margin-left: auto;
   display: flex;
@@ -250,7 +303,7 @@ body {
 /* ── layout grid ──────────────────────────────────────────────── */
 .wrap {
   display: grid;
-  grid-template-columns: 400px 1fr 370px;
+  grid-template-columns: 380px 1fr 370px;
   gap: 0;
   padding: 0 24px;
   min-height: 0;
@@ -410,11 +463,11 @@ body {
 /* columns: POS | bar | DRV | TYR | AGE(opt) | LAST | trend | GAP | INT(opt) | PIT(opt) */
 .trow-hdr {
   display: grid;
-  grid-template-columns: 38px 6px 54px 28px 28px 104px 18px 68px 68px 34px;
+  grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 38px 22px;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   height: 28px;
-  padding: 0 var(--s5) 0 18px;
+  padding: 0 10px 0 14px;
   font: 600 10px var(--cond);
   letter-spacing: 0.22em;
   color: var(--dim);
@@ -422,30 +475,31 @@ body {
 }
 .trow {
   display: grid;
-  grid-template-columns: 38px 6px 54px 28px 28px 104px 18px 68px 68px 34px;
+  grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 38px 22px;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   height: clamp(36px, calc((var(--tower-body-h, 600px) - 64px) / var(--row-count, 20)), 46px);
-  padding: 0 var(--s5) 0 18px;
+  padding: 0 10px 0 14px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
 }
-/* Adaptive: hide INT (col 9) + PIT (col 10) below 1500px */
-@media (max-width: 1500px) {
+/* Adaptive by the COLUMN's own width (container query), not the window — the
+   tower is a sized container (container-name: tower). Drop the least-important
+   columns first as the column narrows, so nothing overflows / truncates. */
+@container tower (max-width: 360px) {
   .trow-hdr,
   .trow {
-    grid-template-columns: 38px 6px 54px 28px 28px 104px 18px 68px 0 0;
+    grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 0 0;
   }
   .col-int,
   .col-pit {
     display: none;
   }
 }
-/* Hide AGE (col 5) below 1150px — keep TYR/LAST/GAP/DRV/POS */
-@media (max-width: 1150px) {
+@container tower (max-width: 300px) {
   .trow-hdr,
   .trow {
-    grid-template-columns: 38px 6px 54px 28px 0 104px 18px 68px 0 0;
+    grid-template-columns: 24px 4px 40px 22px 0 66px 12px 44px 0 0;
   }
   .col-age {
     display: none;

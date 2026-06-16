@@ -1,4 +1,4 @@
-import React from 'react'
+import { useState } from 'react'
 import type { SessionSummary } from '../../api/types'
 import { sessionLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
@@ -29,8 +29,11 @@ type Props = {
   sessionStatus?: string
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus }: Props) {
+export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
+  const [layersOpen, setLayersOpen] = useState(false)
+  // LAYERS badge lights up when any optional layer is active.
+  const anyLayer = (mode === 'replay' && (projection || winProb)) || level === 'beginner'
   return (
     <div className="top">
       <div className="ident">
@@ -90,38 +93,58 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
             onClick={() => onLang('ru')}
           >RU</button>
         </div>
-        <div className="tog-group tog-group--secondary">
+
+        {/* LAYERS popover — collects the optional view layers so the bar stays clean. */}
+        <div className="tog-group tog-group--secondary layers-wrap">
           <button
             type="button"
-            className={`tog${level === 'beginner' ? ' tog-on' : ''}`}
-            onClick={() => onLevel('beginner')}
-          >ROOKIE</button>
-          <button
-            type="button"
-            className={`tog${level === 'pro' ? ' tog-on' : ''}`}
-            onClick={() => onLevel('pro')}
-          >PRO</button>
+            className={`tog${anyLayer ? ' tog-on' : ''}`}
+            aria-expanded={layersOpen}
+            onClick={() => setLayersOpen((o) => !o)}
+          >LAYERS ▾</button>
+          {layersOpen && (
+            <>
+              <div className="layers-backdrop" onClick={() => setLayersOpen(false)} />
+              <div className="layers-pop" role="menu">
+                <div className="layer-row">
+                  <span className="layer-name">DETAIL</span>
+                  <div className="tog-group">
+                    <button
+                      type="button"
+                      className={`tog${level === 'beginner' ? ' tog-on' : ''}`}
+                      onClick={() => onLevel('beginner')}
+                    >ROOKIE</button>
+                    <button
+                      type="button"
+                      className={`tog${level === 'pro' ? ' tog-on' : ''}`}
+                      onClick={() => onLevel('pro')}
+                    >PRO</button>
+                  </div>
+                </div>
+                {mode === 'replay' && (
+                  <>
+                    <button
+                      type="button"
+                      className={`layer-row layer-toggle${projection ? ' on' : ''}`}
+                      onClick={() => onProjection(!projection)}
+                    >
+                      <span className="layer-name">PROJECTION</span>
+                      <span className="layer-state">{projection ? 'ON' : 'OFF'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`layer-row layer-toggle${winProb ? ' on' : ''}`}
+                      onClick={() => onWinProb(!winProb)}
+                    >
+                      <span className="layer-name">WIN %</span>
+                      <span className="layer-state">{winProb ? 'ON' : 'OFF'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
-        {/* PROJECTION toggle — replay only, secondary */}
-        {mode === 'replay' && (
-          <div className="tog-group tog-group--secondary">
-            <button
-              type="button"
-              className={`tog${projection ? ' tog-on' : ''}`}
-              onClick={() => onProjection(!projection)}
-            >PROJECTION</button>
-          </div>
-        )}
-        {/* WIN % toggle — replay only, secondary */}
-        {mode === 'replay' && (
-          <div className="tog-group tog-group--secondary">
-            <button
-              type="button"
-              className={`tog${winProb ? ' tog-on' : ''}`}
-              onClick={() => onWinProb(!winProb)}
-            >WIN %</button>
-          </div>
-        )}
       </div>
 
       {/* HIGHLIGHTS and DOTD panels — replay only, hidden on mobile/tablet */}
