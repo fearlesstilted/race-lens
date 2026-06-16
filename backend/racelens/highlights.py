@@ -19,6 +19,17 @@ _KIND_BONUS = {
 # Dedup window: same kind within this many ms is considered "same moment"
 _DEDUP_WINDOW_MS = 30_000
 
+# Max occurrences of a single kind in the final top_n selection
+# These caps enforce diversity: no kind should monopolise the reel.
+_KIND_CAP = {
+    "LEAD_CHANGE": 3,
+    "CRASH": 3,
+    "INCIDENT": 3,
+    "FASTEST_LAP": 2,
+}
+# Default cap for unconstrained kinds (no limit unless specified above)
+_KIND_CAP_DEFAULT = 999
+
 
 def highlights(
     events: list[Event],
@@ -31,8 +42,9 @@ def highlights(
     1. Get all significant events (full race).
     2. Score each: _SEV_SCORE[severity] + _KIND_BONUS.get(kind, 0).
     3. Dedup: drop events of same kind within _DEDUP_WINDOW_MS of a higher-scored sibling.
-    4. Take top_n by score, sort chronologically by at_ms.
-    5. Return list of {at_ms, lap, kind, title_en, title_ru, drivers}.
+    4. Diversity cap: limit any single kind to _KIND_CAP occurrences.
+    5. Take top_n by score, sort chronologically by at_ms.
+    6. Return list of {at_ms, lap, kind, title_en, title_ru, drivers}.
     """
     all_events = significant_events(events, until_ms=None, state_engine=state_engine)
     if not all_events:
@@ -48,7 +60,9 @@ def highlights(
     scored.sort(key=lambda x: (-x[0], x[1]["at_ms"]))
 
     # Dedup: greedy — accept highest-scored; skip same-kind within window
+    # Also enforce per-kind cap for diversity
     accepted: list[tuple[int, dict[str, Any]]] = []
+    kind_counts: dict[str, int] = {}
     for score, ev in scored:
         kind = ev["kind"]
         at_ms = ev["at_ms"]
@@ -56,8 +70,13 @@ def highlights(
             acc_ev["kind"] == kind and abs(acc_ev["at_ms"] - at_ms) < _DEDUP_WINDOW_MS
             for _, acc_ev in accepted
         )
-        if not too_close:
-            accepted.append((score, ev))
+        if too_close:
+            continue
+        cap = _KIND_CAP.get(kind, _KIND_CAP_DEFAULT)
+        if kind_counts.get(kind, 0) >= cap:
+            continue
+        accepted.append((score, ev))
+        kind_counts[kind] = kind_counts.get(kind, 0) + 1
         if len(accepted) >= top_n:
             break
 

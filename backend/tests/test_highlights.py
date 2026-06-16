@@ -63,3 +63,24 @@ def test_highlights_miami_contains_major_events() -> None:
     kinds = {h["kind"] for h in result}
     # At minimum, should have some high-drama events (not just fastest laps)
     assert kinds - {"FASTEST_LAP"}, f"Expected non-FL events, got: {kinds}"
+
+
+def test_highlights_lead_change_cap() -> None:
+    """LEAD_CHANGE must not dominate — at most 3 in the top-8."""
+    for session in ["spain_2024_race", "miami_2026_race"]:
+        events = _load(session)
+        eng = ReplayEngine(events)
+        result = highlights(events, eng, top_n=8)
+        lc_count = sum(1 for h in result if h["kind"] == "LEAD_CHANGE")
+        assert lc_count <= 3, f"{session}: too many LEAD_CHANGE ({lc_count}), expected ≤3"
+
+
+def test_highlights_miami_diverse_kinds() -> None:
+    """Miami highlights must contain at least 2 distinct non-LEAD_CHANGE event kinds."""
+    events = _load("miami_2026_race")
+    eng = ReplayEngine(events)
+    result = highlights(events, eng, top_n=8)
+    non_lc_kinds = {h["kind"] for h in result if h["kind"] != "LEAD_CHANGE"}
+    assert len(non_lc_kinds) >= 2, (
+        f"Expected ≥2 distinct non-LEAD_CHANGE kinds, got: {non_lc_kinds}"
+    )
