@@ -36,11 +36,11 @@ function advanceGhostFrac(frac: number, ghostSec: number, lapMs: number): number
 
 // Pit lane overlay — fixed position in bottom-left of SVG coordinate space
 // These are SVG units, sized relative to typical 600x400 viewbox
-const PIT_BOX_X = 16
-const PIT_BOX_Y_TOP = 340
-const PIT_BOX_HEIGHT = 38
-const PIT_BOX_CAR_Y = PIT_BOX_Y_TOP + 22
-const PIT_CAR_SPACING = 20
+const PIT_BOX_X = 10
+const PIT_BOX_Y_TOP = 320
+const PIT_BOX_HEIGHT = 60
+const PIT_BOX_CAR_Y = PIT_BOX_Y_TOP + 38
+const PIT_CAR_SPACING = 26
 
 function statusWatermark(status: string): { text: string; color: string } | null {
   if (status === 'red_flag') return { text: 'RED FLAG', color: '#cc0000' }
@@ -215,26 +215,41 @@ export const TrackMap = React.memo(function TrackMap({
           <g>
             {/* Background rect */}
             <rect
-              x={PIT_BOX_X - 4}
+              x={PIT_BOX_X - 6}
               y={PIT_BOX_Y_TOP}
-              width={Math.max(56, pitDrivers.length * PIT_CAR_SPACING + 16)}
+              width={Math.max(80, pitDrivers.length * PIT_CAR_SPACING + 20)}
               height={PIT_BOX_HEIGHT}
-              fill="#0c0c0f"
-              stroke="#f2a90044"
-              strokeWidth={0.8}
+              fill="#0c0c0fcc"
+              stroke="#f2a90066"
+              strokeWidth={1}
+              rx={2}
             />
             {/* PIT LANE label */}
             <text
               x={PIT_BOX_X}
-              y={PIT_BOX_Y_TOP + 9}
-              fill="#f2a90088"
-              fontSize={6}
+              y={PIT_BOX_Y_TOP + 13}
+              fill="#f2a900bb"
+              fontSize={11}
               fontFamily="'Barlow Condensed', sans-serif"
               fontWeight={700}
-              letterSpacing="0.2em"
+              letterSpacing="0.18em"
             >
               PIT LANE
             </text>
+            {/* Count badge */}
+            {pitDrivers.length > 0 && (
+              <text
+                x={PIT_BOX_X}
+                y={PIT_BOX_Y_TOP + 26}
+                fill="#f2a90077"
+                fontSize={8}
+                fontFamily="'Barlow Condensed', sans-serif"
+                fontWeight={600}
+                letterSpacing="0.08em"
+              >
+                {pitDrivers.length} IN PITS
+              </text>
+            )}
           </g>
         )}
 
@@ -365,16 +380,16 @@ export const TrackMap = React.memo(function TrackMap({
         {/* Pit lane cars — in the pit pocket */}
         {pitDrivers.map((driverId, i) => {
           const color = teamColor(driverId)
-          const cx = PIT_BOX_X + 4 + i * PIT_CAR_SPACING
+          const cx = PIT_BOX_X + 7 + i * PIT_CAR_SPACING
           return (
             <g key={driverId} transform={`translate(${cx},${PIT_BOX_CAR_Y})`}>
-              <circle r={5} fill={color} opacity={0.85} />
+              <circle r={7} fill={color} opacity={0.9} />
               <text
                 x={0}
-                y={-9}
+                y={-11}
                 textAnchor="middle"
-                fill="#f2a900"
-                fontSize={5.5}
+                fill="#ffffff"
+                fontSize={8}
                 fontFamily="'Barlow Condensed', sans-serif"
                 fontWeight={700}
                 letterSpacing="0.04em"
