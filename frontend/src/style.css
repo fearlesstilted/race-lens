@@ -230,9 +230,11 @@ body {
 /* ── page shell: 100dvh grid ────────────────────────────────────── */
 #root {
   display: grid;
-  grid-template-rows: 52px auto auto 1fr auto;
+  /* Deck row (last) is always auto at bottom; wrap row is 1fr and cannot grow */
+  grid-template-rows: 52px auto auto minmax(0, 1fr) auto;
   min-height: 100dvh;
   height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   max-width: 2200px;
   margin: 0 auto;
@@ -782,9 +784,13 @@ body {
 
 /* ── deck: replay controls ─────────────────────────────────────── */
 /* Target total height ~72px: phase(4) + rail(30) + deckrow(38) */
+/* Lock deck to bottom — never pushed by content above */
 .deck {
   padding: 0 var(--s6) var(--s2);
   border-top: 1px solid var(--hair);
+  flex-shrink: 0;
+  /* Prevent any ancestor's min-height from pushing this down */
+  align-self: end;
 }
 /* Phase strip: 4px, flush above rail */
 .phase {
@@ -1575,39 +1581,48 @@ body {
 /* ── Forecast strip ─────────────────────────────────────────────── */
 .forecast-strip {
   border-top: 1px solid var(--hair);
-  padding: var(--s1) var(--s3) var(--s2);
+  padding: var(--s3) var(--s4) var(--s4);
   background: #0e0e14;
+  flex: 1;
+  overflow-y: auto;
 }
 .forecast-label {
-  /* unified section label — same as .label but inline */
-  font: 700 10px var(--cond);
-  letter-spacing: 0.3em;
+  font: 700 11px var(--cond);
+  letter-spacing: 0.34em;
   color: var(--dim);
-  margin-bottom: var(--s1);
+  height: var(--col-label-h);
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--s2);
 }
 .forecast-rows {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2) var(--s5);
 }
 .forecast-row {
   display: flex;
   align-items: baseline;
-  gap: var(--s1);
-  font: 600 12px var(--cond);
+  gap: var(--s2);
+  font: 600 15px var(--cond);
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
+  padding: var(--s1) 0;
 }
 .forecast-pos {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+  min-width: 24px;
 }
 .forecast-id {
   color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 .forecast-delta {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
