@@ -64,13 +64,17 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus }: Prop
       <button
         type="button"
         className={`tog${open ? ' tog-on' : ''}`}
-        onClick={() => isFinished ? setOpen((v) => !v) : undefined}
+        onClick={() => { if (isFinished) setOpen((v) => !v) }}
         disabled={!isFinished}
         title={isFinished ? 'Driver of the Day — algorithmic pick' : dotdLabel}
         style={!isFinished ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+        aria-disabled={!isFinished}
       >
         DOTD
       </button>
+      {!isFinished && (
+        <span className="dotd-gate-hint">{dotdLabel}</span>
+      )}
 
       {open && (
         <div className="dotd-panel">

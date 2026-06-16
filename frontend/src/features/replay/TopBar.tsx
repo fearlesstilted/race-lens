@@ -26,9 +26,10 @@ type Props = {
   onWinProb: (on: boolean) => void
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
+  sessionStatus?: string
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   return (
     <div className="top">
@@ -127,7 +128,7 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
       {mode === 'replay' && sessionId && onSeek && (
         <div className="top-panels">
           <HighlightsPanel sessionId={sessionId} lang={lang} onSeek={onSeek} />
-          <DriverOfDayPanel sessionId={sessionId} lang={lang} />
+          <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} />
         </div>
       )}
 
