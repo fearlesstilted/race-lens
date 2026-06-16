@@ -25,9 +25,10 @@ type Props = {
   onProjection: (on: boolean) => void
   onWinProb: (on: boolean) => void
   onSeek?: (ms: number) => void
+  onSettingsOpen?: () => void
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   return (
     <div className="top">
@@ -62,7 +63,7 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
       )}
 
       <div className="top-toggles">
-        {/* Mode toggle */}
+        {/* Mode toggle — always visible */}
         <div className="tog-group">
           <button
             type="button"
@@ -75,8 +76,8 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
             onClick={() => onModeChange('live')}
           >LIVE</button>
         </div>
-        {/* Lang toggle */}
-        <div className="tog-group">
+        {/* Lang toggle — secondary (hidden on tablet/mobile) */}
+        <div className="tog-group tog-group--secondary">
           <button
             type="button"
             className={`tog${lang === 'en' ? ' tog-on' : ''}`}
@@ -88,7 +89,7 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
             onClick={() => onLang('ru')}
           >RU</button>
         </div>
-        <div className="tog-group">
+        <div className="tog-group tog-group--secondary">
           <button
             type="button"
             className={`tog${level === 'beginner' ? ' tog-on' : ''}`}
@@ -100,9 +101,9 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
             onClick={() => onLevel('pro')}
           >PRO</button>
         </div>
-        {/* PROJECTION toggle — replay only */}
+        {/* PROJECTION toggle — replay only, secondary */}
         {mode === 'replay' && (
-          <div className="tog-group">
+          <div className="tog-group tog-group--secondary">
             <button
               type="button"
               className={`tog${projection ? ' tog-on' : ''}`}
@@ -110,9 +111,9 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
             >PROJECTION</button>
           </div>
         )}
-        {/* WIN % toggle — replay only */}
+        {/* WIN % toggle — replay only, secondary */}
         {mode === 'replay' && (
-          <div className="tog-group">
+          <div className="tog-group tog-group--secondary">
             <button
               type="button"
               className={`tog${winProb ? ' tog-on' : ''}`}
@@ -122,13 +123,22 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
         )}
       </div>
 
-      {/* HIGHLIGHTS and DOTD panels — replay only */}
+      {/* HIGHLIGHTS and DOTD panels — replay only, hidden on mobile/tablet */}
       {mode === 'replay' && sessionId && onSeek && (
         <div className="top-panels">
           <HighlightsPanel sessionId={sessionId} lang={lang} onSeek={onSeek} />
           <DriverOfDayPanel sessionId={sessionId} lang={lang} />
         </div>
       )}
+
+      {/* Settings button — visible on tablet/mobile only (CSS controls display) */}
+      <button
+        type="button"
+        className="settings-btn"
+        onClick={onSettingsOpen}
+        title="Settings"
+        aria-label="Open settings"
+      >&#9881;</button>
 
       <div className="lapbox">
         <span className="word">LAP</span>
