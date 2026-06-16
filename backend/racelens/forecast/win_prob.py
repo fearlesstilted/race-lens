@@ -4,32 +4,30 @@ Transparent, deterministic, no ML.
 
 Model
 -----
-For each non-retired driver we compute a *projected gap to the virtual finish*
-using project_order (laps_ahead = laps remaining until end of race).
+For each non-retired driver we use the CURRENT gap to the leader (gap_s from
+state) as the signal.  Uncertainty grows with laps remaining:
 
-The uncertainty in that projection grows with the square-root of laps remaining
-(stochastic noise accumulates):
+    sigma_s = K * sqrt(max(laps_remaining, 1))   K = 2.0 s
 
-    sigma = BASE_UNCERTAINTY_S_PER_LAP * sqrt(laps_ahead)
-    BASE_UNCERTAINTY_S_PER_LAP = 1.5  (s)
+A Gaussian kernel converts current gaps into raw scores:
 
-A Gaussian kernel converts projected gaps into raw scores:
-
-    P_raw_i = exp(-(gap_i / sigma)^2 / 2)
+    P_raw_i = exp(-(gap_i / sigma_s)^2 / 2)
 
 Scores are normalised to sum = 1.  The race leader (gap=0) always gets the
-maximum; as laps_ahead → 0, sigma → 0 → leader probability → 1.
+maximum.  As laps_remaining → 0, sigma → 0 → leader probability → 1.
 Retired drivers receive P = 0 and are excluded from normalisation.
+
+This produces a smooth, reactive curve: early in the race multiple drivers
+share probability; late the leader converges toward ~95-100%.  Pit stops and
+lead changes cause visible dips/spikes.
 """
 from __future__ import annotations
 
 import math
 from typing import Any
 
-from racelens.forecast.projection import project_order
-
-BASE_UNCERTAINTY_S_PER_LAP: float = 1.5
-DEFAULT_LAPS_AHEAD: int = 20
+K_UNCERTAINTY: float = 2.0  # seconds per sqrt(lap)
+DEFAULT_LAPS_REMAINING: int = 25
 
 
 def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) -> dict:
@@ -43,7 +41,7 @@ def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) 
         Session identifier (unused in the model, included for API symmetry).
     laps_ahead:
         Override for remaining laps.  If None, computed as
-        total_laps - current_lap when total_laps is known, else DEFAULT_LAPS_AHEAD.
+        total_laps - current_lap when total_laps is known, else DEFAULT_LAPS_REMAINING.
 
     Returns
     -------
@@ -63,29 +61,32 @@ def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) 
 
     if laps_ahead is None:
         if total_laps:
-            laps_ahead = max(1, total_laps - current_lap)
+            laps_remaining = max(1, total_laps - current_lap)
         else:
-            laps_ahead = DEFAULT_LAPS_AHEAD
+            laps_remaining = DEFAULT_LAPS_REMAINING
+    else:
+        laps_remaining = max(1, laps_ahead)
 
-    # Project order over the remaining distance
-    projection = project_order(state, laps_ahead=laps_ahead)
-    projected: dict[str, dict] = projection.get("projected", {})
-    order: list[str] = projection.get("projected_order", [])
-
-    # Collect retired drivers (already removed from projection)
     drivers_dict: dict[str, Any] = (
         state["drivers"] if isinstance(state, dict) else {}
     )
+    classification: list[str] = (
+        state["classification"] if isinstance(state, dict) else list(drivers_dict.keys())
+    )
+
     retired: set[str] = {
         d for d, info in drivers_dict.items() if info.get("retired")
     }
 
-    sigma: float = BASE_UNCERTAINTY_S_PER_LAP * math.sqrt(max(1, laps_ahead))
+    sigma_s: float = K_UNCERTAINTY * math.sqrt(max(1, laps_remaining))
 
     raw: dict[str, float] = {}
-    for driver_id in order:
-        gap_s: float = projected[driver_id]["projected_gap_s"]
-        raw[driver_id] = math.exp(-((gap_s / sigma) ** 2) / 2.0)
+    for driver_id in classification:
+        info = drivers_dict.get(driver_id, {})
+        if info.get("retired"):
+            continue
+        gap_s: float = float(info.get("gap_s") or 0.0)
+        raw[driver_id] = math.exp(-((gap_s / sigma_s) ** 2) / 2.0)
 
     total = sum(raw.values())
     win_prob: dict[str, float] = {}
@@ -93,23 +94,29 @@ def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) 
         for d, r in raw.items():
             win_prob[d] = round(r / total, 3)
     else:
-        # Edge case: nobody has data — spread equally
-        n = len(order)
-        for d in order:
+        n = len(raw)
+        for d in raw:
             win_prob[d] = round(1.0 / n, 3) if n else 0.0
 
     # Retired drivers get explicit 0
     for d in retired:
         win_prob[d] = 0.0
 
-    # Leader = first in projected order (lowest projected gap)
-    leader: str | None = order[0] if order else None
+    # Leader = driver with gap_s == 0 (position 1), or first in classification
+    leader: str | None = None
+    for driver_id in classification:
+        info = drivers_dict.get(driver_id, {})
+        if not info.get("retired") and (info.get("gap_s") or 0.0) == 0.0:
+            leader = driver_id
+            break
+    if leader is None and classification:
+        leader = classification[0]
 
     top = sorted(win_prob.items(), key=lambda x: x[1], reverse=True)[:6]
 
     return {
         "at_ms": at_ms,
-        "laps_remaining": laps_ahead,
+        "laps_remaining": laps_remaining,
         "win_prob": win_prob,
         "leader": leader,
         "top": [{"driver": d, "prob": p} for d, p in top],
