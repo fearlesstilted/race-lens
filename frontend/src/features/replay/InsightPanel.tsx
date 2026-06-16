@@ -192,8 +192,17 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
     return m
   }, [commentary])
 
-  const isFocused = (ins: Insight) =>
-    selectedIds.length > 0 && ins.driver_ids.some((id) => selectedIds.includes(id))
+  // Follow-mode: 1 selected → insight must involve that driver as subject;
+  // 2 selected → insight must involve BOTH (head-to-head pair only)
+  const isFocused = (ins: Insight) => {
+    if (selectedIds.length === 0) return false
+    if (selectedIds.length === 1) {
+      // "follow" mode: driver must be the primary subject (first id) or sole id
+      return ins.driver_ids.includes(selectedIds[0])
+    }
+    // 2 selected: only highlight if insight involves BOTH selected drivers
+    return selectedIds.every((id) => ins.driver_ids.includes(id))
+  }
 
   // Collect all SC_PIT_WINDOW driver IDs (deduplicated) for grouped card
   const scPitDrivers = useMemo(() => {
