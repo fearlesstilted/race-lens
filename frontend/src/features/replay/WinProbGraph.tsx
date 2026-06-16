@@ -1,0 +1,154 @@
+/**
+ * WinProbGraph — broadcast-style win-probability chart.
+ *
+ * Shows the history of win probability for the top-5 drivers from session
+ * start up to `atMs` (spoiler-free).  Lines are drawn as SVG polylines;
+ * no chart library required.
+ *
+ * Data source: GET /api/sessions/{id}/win-prob-series?until_ms=&samples=20
+ */
+import React, { useEffect, useRef, useState } from 'react'
+import { getWinProbSeries } from '../../api/client'
+import type { WinProbSeriesPoint } from '../../api/types'
+import { teamColor } from './teamColors'
+
+type Props = {
+  sessionId: string
+  atMs: number
+}
+
+const W = 480
+const H = 140
+const PAD = { top: 10, right: 52, bottom: 18, left: 34 }
+const INNER_W = W - PAD.left - PAD.right
+const INNER_H = H - PAD.top - PAD.bottom
+const SAMPLES = 20
+const Y_TICKS = [0, 25, 50, 75, 100]
+
+function scaleX(idx: number, total: number): number {
+  if (total <= 1) return PAD.left
+  return PAD.left + (idx / (total - 1)) * INNER_W
+}
+
+function scaleY(prob: number): number {
+  // prob 0–1 → y from bottom
+  return PAD.top + INNER_H - prob * INNER_H
+}
+
+export function WinProbGraph({ sessionId, atMs }: Props) {
+  const [series, setSeries] = useState<WinProbSeriesPoint[]>([])
+  const [drivers, setDrivers] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const prevAtMs = useRef<number>(-1)
+
+  useEffect(() => {
+    if (atMs === prevAtMs.current) return
+    prevAtMs.current = atMs
+    if (atMs === 0) return
+
+    let cancelled = false
+    setLoading(true)
+    getWinProbSeries(sessionId, atMs, SAMPLES)
+      .then((pts) => {
+        if (cancelled) return
+        setSeries(pts)
+
+        // Determine top-5 drivers by maximum prob at any point in series
+        const maxProb: Record<string, number> = {}
+        for (const pt of pts) {
+          for (const [d, p] of Object.entries(pt.probs)) {
+            if ((maxProb[d] ?? 0) < p) maxProb[d] = p
+          }
+        }
+        const top5 = Object.entries(maxProb)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([d]) => d)
+        setDrivers(top5)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [sessionId, atMs])
+
+  const n = series.length
+
+  return (
+    <div className="win-prob-graph">
+      <div className="win-prob-label">WIN %</div>
+      {loading && <div className="win-prob-loading">…</div>}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="win-prob-svg"
+        aria-label="Win probability over time"
+      >
+        {/* Hairline grid */}
+        {Y_TICKS.map((t) => {
+          const y = scaleY(t / 100)
+          return (
+            <g key={t}>
+              <line
+                x1={PAD.left}
+                y1={y}
+                x2={PAD.left + INNER_W}
+                y2={y}
+                stroke="#ffffff14"
+                strokeWidth={1}
+              />
+              <text
+                x={PAD.left - 4}
+                y={y + 3.5}
+                textAnchor="end"
+                className="win-prob-axis"
+              >
+                {t}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Driver lines */}
+        {n >= 2 && drivers.map((d) => {
+          const pts = series
+            .map((pt, i) => {
+              const p = pt.probs[d] ?? 0
+              return `${scaleX(i, n).toFixed(1)},${scaleY(p).toFixed(1)}`
+            })
+            .join(' ')
+          return (
+            <polyline
+              key={d}
+              points={pts}
+              fill="none"
+              stroke={teamColor(d)}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+              opacity={0.9}
+            />
+          )
+        })}
+
+        {/* Right-side driver labels at final point */}
+        {n >= 1 && drivers.map((d) => {
+          const lastProb = series[n - 1]?.probs[d] ?? 0
+          const y = scaleY(lastProb)
+          return (
+            <text
+              key={`lbl-${d}`}
+              x={PAD.left + INNER_W + 4}
+              y={y + 3.5}
+              fill={teamColor(d)}
+              className="win-prob-driver"
+            >
+              {d}
+            </text>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}

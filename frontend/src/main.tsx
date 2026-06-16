@@ -6,6 +6,7 @@ import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { ForecastStrip } from './features/replay/ForecastStrip'
+import { WinProbGraph } from './features/replay/WinProbGraph'
 import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
 import { RaceFeed } from './features/replay/RaceFeed'
@@ -140,6 +141,8 @@ function App() {
 
   // PROJECTION toggle — replay only, persisted in sessionStorage
   const [projection, setProjection] = useState(false)
+  // WIN % toggle — replay only
+  const [winProb, setWinProb] = useState(false)
 
   // Build DataSource from current mode
   const source = useMemo<DataSource | null>(() => {
@@ -265,11 +268,13 @@ function App() {
         level={replay.level}
         mode={mode}
         projection={projection}
+        winProb={winProb}
         onModeChange={handleModeSwitch}
         onSessionChange={handleSessionChange}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onProjection={setProjection}
+        onWinProb={setWinProb}
       />
 
       {mode === 'live' && !isLiveActive && (
@@ -340,6 +345,9 @@ function App() {
           />
           {mode === 'replay' && projection && sessionId && (
             <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+          )}
+          {mode === 'replay' && winProb && sessionId && (
+            <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
           )}
           {hasFocus ? (
             <>

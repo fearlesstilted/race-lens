@@ -134,6 +134,23 @@ export type Overtake = {
   error?: string
 }
 
+// ── Win probability ───────────────────────────────────────────────────────────
+
+export type WinProbEntry = { driver: string; prob: number }
+
+export type WinProb = {
+  at_ms: number
+  laps_remaining: number
+  win_prob: Record<string, number>
+  leader: string | null
+  top: WinProbEntry[]
+}
+
+export type WinProbSeriesPoint = {
+  at_ms: number
+  probs: Record<string, number>
+}
+
 // ── Race markers ──────────────────────────────────────────────────────────────
 
 export type MarkerKind =

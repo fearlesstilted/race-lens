@@ -15,14 +15,16 @@ type Props = {
   level: Level
   mode: AppMode
   projection: boolean
+  winProb: boolean
   onModeChange: (mode: AppMode) => void
   onSessionChange: (id: string) => void
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
+  onWinProb: (on: boolean) => void
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, onModeChange, onSessionChange, onLang, onLevel, onProjection }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   return (
     <div className="top">
@@ -103,6 +105,16 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
               className={`tog${projection ? ' tog-on' : ''}`}
               onClick={() => onProjection(!projection)}
             >PROJECTION</button>
+          </div>
+        )}
+        {/* WIN % toggle — replay only */}
+        {mode === 'replay' && (
+          <div className="tog-group">
+            <button
+              type="button"
+              className={`tog${winProb ? ' tog-on' : ''}`}
+              onClick={() => onWinProb(!winProb)}
+            >WIN %</button>
           </div>
         )}
       </div>

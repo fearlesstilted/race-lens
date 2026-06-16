@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline } from './types'
+import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -61,6 +61,16 @@ export const getSimulatePit = (sessionId: string, atMs: number, driver: string) 
 export const getOvertake = (sessionId: string, atMs: number, ahead: string, behind: string) =>
   json<Overtake>(
     `/api/sessions/${encodeURIComponent(sessionId)}/overtake?at_ms=${atMs}&ahead=${encodeURIComponent(ahead)}&behind=${encodeURIComponent(behind)}`,
+  )
+
+export const getWinProb = (sessionId: string, atMs: number) =>
+  json<WinProb>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/win-prob?at_ms=${atMs}`,
+  )
+
+export const getWinProbSeries = (sessionId: string, untilMs: number, samples = 20) =>
+  json<WinProbSeriesPoint[]>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/win-prob-series?until_ms=${untilMs}&samples=${samples}`,
   )
 
 export const getMarkers = (sessionId: string, untilMs?: number) =>

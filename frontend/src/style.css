@@ -1226,3 +1226,37 @@ body {
   color: #00c853;
   margin-top: 4px;
 }
+
+/* ── Win Probability Graph ──────────────────────────────────────── */
+.win-prob-graph {
+  position: relative;
+  background: var(--bg);
+  border-top: 1px solid var(--hair);
+  padding: 6px 0 4px 0;
+}
+.win-prob-label {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  padding: 0 0 2px 34px;
+}
+.win-prob-loading {
+  position: absolute;
+  top: 8px;
+  right: 60px;
+  font: 600 11px var(--cond);
+  color: var(--dim);
+}
+.win-prob-svg {
+  display: block;
+  width: 100%;
+  height: 140px;
+}
+.win-prob-axis {
+  font: 600 9px var(--cond);
+  fill: #ffffff44;
+}
+.win-prob-driver {
+  font: 700 9px var(--cond);
+  letter-spacing: 0.06em;
+}
