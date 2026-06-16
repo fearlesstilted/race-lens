@@ -8,11 +8,12 @@ type Lang = 'en' | 'ru'
 type Props = {
   sessionId: string
   lang?: Lang
+  sessionStatus?: string
 }
 
 const DOTD_VOTE_KEY = (sessionId: string) => `racelens_dotd_vote_${sessionId}`
 
-export function DriverOfDayPanel({ sessionId, lang = 'en' }: Props) {
+export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus }: Props) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<DotdResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -55,14 +56,18 @@ export function DriverOfDayPanel({ sessionId, lang = 'en' }: Props) {
   }
 
   const maxScore = data?.candidates[0]?.score ?? 1
+  const isFinished = sessionStatus === 'finished'
+  const dotdLabel = lang === 'ru' ? 'доступно после финиша' : 'available at the chequered flag'
 
   return (
     <div className="dotd-wrap">
       <button
         type="button"
         className={`tog${open ? ' tog-on' : ''}`}
-        onClick={() => setOpen((v) => !v)}
-        title="Driver of the Day — algorithmic pick"
+        onClick={() => isFinished ? setOpen((v) => !v) : undefined}
+        disabled={!isFinished}
+        title={isFinished ? 'Driver of the Day — algorithmic pick' : dotdLabel}
+        style={!isFinished ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
       >
         DOTD
       </button>

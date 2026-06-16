@@ -144,9 +144,10 @@ type DrawerProps = {
   sessionId?: string | null
   onSeek?: (ms: number) => void
   drawerLang?: 'en' | 'ru'
+  sessionStatus?: string
 }
 
-function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang }: DrawerProps) {
+function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang, sessionStatus }: DrawerProps) {
   return (
     <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="settings-backdrop" onClick={onClose} />
@@ -198,7 +199,7 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
             <div className="settings-group-label">HIGHLIGHTS &amp; DOTD</div>
             <div className="drawer-panels-inner">
               <HighlightsPanel sessionId={sessionId} lang={drawerLang} onSeek={(ms) => { onSeek(ms); onClose() }} />
-              <DriverOfDayPanel sessionId={sessionId} lang={drawerLang} />
+              <DriverOfDayPanel sessionId={sessionId} lang={drawerLang} sessionStatus={sessionStatus} />
             </div>
           </div>
         )}
@@ -362,6 +363,7 @@ function App() {
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         drawerLang={replay.lang}
+        sessionStatus={sessionStatus}
       />
       <TopBar
         session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
