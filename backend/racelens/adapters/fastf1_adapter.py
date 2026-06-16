@@ -56,11 +56,7 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
               total_laps=int(total_laps) if total_laps else None)
     )
 
-    # Sector-line crossings: each lap yields up to 3 timing points (S1/S2/S3),
-    # giving ~3× per-lap resolution instead of one update at the start/finish
-    # line. Each crossing carries the session time the driver passed that sector
-    # marker, which we use to derive intra-lap positions, gaps, and intervals.
-    crossings: list[tuple[int, int, int, str]] = []  # (t_ms, lap_no, sector, driver)
+    by_lap: dict[int, list[tuple[int, int, str]]] = {}  # lap → [(position, t_end, driver)]
     for _, lap in ses.laps.iterlaps():
         drv = str(lap["Driver"])
         lap_no = int(lap["LapNumber"])
@@ -72,12 +68,13 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
             event(sid, "LapCompleted", t_end, drv, lap=lap_no, source=src,
                   lap_time_ms=_ms(lap["LapTime"]))
         )
-
-        # Collect sector-line crossings (sector 3 == lap completion / S-F line).
-        for sec, col in ((1, "Sector1SessionTime"), (2, "Sector2SessionTime"), (3, "Sector3SessionTime")):
-            t_sec = _ms(lap[col]) if col in lap.index else None
-            if t_sec is not None:
-                crossings.append((t_sec, lap_no, sec, drv))
+        if not pd.isna(lap["Position"]):
+            pos = int(lap["Position"])
+            events.append(
+                event(sid, "PositionChanged", t_end, drv, lap=lap_no, source=src,
+                      position=pos)
+            )
+            by_lap.setdefault(lap_no, []).append((pos, t_end, drv))
 
         t_pit_in = _ms(lap["PitInTime"])
         if t_pit_in is not None:
@@ -92,49 +89,20 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
                           age_laps=int(lap["TyreLife"]) if not pd.isna(lap["TyreLife"]) else 0)
                 )
 
-    # ── Gaps / intervals at each sector marker ────────────────────────────────
-    # Group crossings by (lap, sector): cars crossing the same marker on the same
-    # lap are directly comparable. gap = t - leader_t, interval = t - car_ahead_t.
-    # Exact for cars on the lead lap, coarse for lapped cars (same as before, but
-    # now refreshed 3× per lap).
-    by_point: dict[tuple[int, int], list[tuple[int, str]]] = {}
-    for t, lap_no, sec, drv in crossings:
-        by_point.setdefault((lap_no, sec), []).append((t, drv))
-    for (lap_no, sec), rows in by_point.items():
+    # Timing-screen gaps/intervals, derived from line-crossing times on the
+    # same lap number. Approximation: exact for cars on the lead lap, coarse
+    # for lapped cars — good enough for MVP strategy insights.
+    for lap_no, rows in by_lap.items():
         rows.sort()
-        leader_t = rows[0][0]
+        leader_t = rows[0][1]
         prev_t = leader_t
-        for i, (t, drv) in enumerate(rows):
-            if i > 0:
+        for pos, t, drv in rows:
+            if pos > 1:
                 events.append(event(sid, "GapUpdated", t, drv, lap=lap_no, source=src,
                                     gap_s=round((t - leader_t) / 1000, 3)))
                 events.append(event(sid, "IntervalUpdated", t, drv, lap=lap_no, source=src,
                                     interval_s=round((t - prev_t) / 1000, 3)))
             prev_t = t
-
-    # ── Running track positions at sector resolution ─────────────────────────
-    # Replay all crossings in time order; a driver's progress = (lap, sector).
-    # Whoever is furthest along (more laps, then more sectors, then reached it
-    # earliest) ranks ahead. Emit PositionChanged only when a driver's rank
-    # actually changes, so the table flips near where the pass happened on track
-    # — not a lap later at the start/finish line.
-    progress: dict[str, tuple[int, int, int]] = {}  # drv → (lap, sector, t reached)
-    # Seed with the starting grid (lap 0, sector 0) so all cars are ranked from
-    # the start; grid position is the tiebreaker until real crossings advance them.
-    if ses.results is not None:
-        for _, row in ses.results.iterrows():
-            grid = row.get("GridPosition")
-            if not pd.isna(grid) and grid > 0:
-                progress[str(row["Abbreviation"])] = (0, 0, int(grid))
-    last_pos: dict[str, int] = {}
-    for t, lap_no, sec, drv in sorted(crossings):
-        progress[drv] = (lap_no, sec, t)
-        order = sorted(progress, key=lambda d: (-progress[d][0], -progress[d][1], progress[d][2]))
-        for pos, d in enumerate(order, start=1):
-            if last_pos.get(d) != pos:
-                last_pos[d] = pos
-                events.append(event(sid, "PositionChanged", t, d, lap=progress[d][0],
-                                    source=src, position=pos))
 
     # Starting tyres: first stint per driver has no preceding PitOut
     for drv in ses.laps["Driver"].unique():
