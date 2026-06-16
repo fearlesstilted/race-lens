@@ -190,9 +190,13 @@ export const TimingTower = React.memo(function TimingTower({
         const trend = paceTrend(row)
         const hasFastestLap = row.id === fastestLapHolder
 
+        // Prefer the backend's exact gap/interval (replay always has it). Only fall
+        // back to the telemetry-derived estimate when the backend value is missing
+        // (live mode) — the dead-reckoning estimate is noisy and can be internally
+        // inconsistent (e.g. P4 showing a smaller gap than P3 after a restart).
         const liveEst = liveGaps?.get(row.id)
-        const displayInterval = liveEst?.fromTelemetry ? liveEst.interval_s : row.interval_s
-        const displayGap = liveEst?.fromTelemetry ? liveEst.gap_s : row.gap_s
+        const displayInterval = row.interval_s ?? (liveEst?.fromTelemetry ? liveEst.interval_s : null)
+        const displayGap = row.gap_s ?? (liveEst?.fromTelemetry ? liveEst.gap_s : null)
 
         const intDisplay = isRetired
           ? <span className="gap dim">OUT</span>
