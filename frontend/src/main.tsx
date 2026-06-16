@@ -123,12 +123,83 @@ function LiveForm({ onStarted, onStopped, isLiveActive, liveStatus: statusData }
   )
 }
 
+// ── Settings Drawer ───────────────────────────────────────────────────────────
+
+type DrawerProps = {
+  open: boolean
+  onClose: () => void
+  lang: string
+  level: string
+  mode: string
+  projection: boolean
+  winProb: boolean
+  onLang: (l: 'en' | 'ru') => void
+  onLevel: (l: 'beginner' | 'pro') => void
+  onModeChange: (m: 'replay' | 'live') => void
+  onProjection: (v: boolean) => void
+  onWinProb: (v: boolean) => void
+}
+
+function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb }: DrawerProps) {
+  return (
+    <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
+      <div className="settings-backdrop" onClick={onClose} />
+      <div className="settings-drawer" role="dialog" aria-label="Settings">
+        <div className="settings-drawer-hdr">
+          <span>SETTINGS</span>
+          <button type="button" className="settings-close" onClick={onClose} aria-label="Close">&#215;</button>
+        </div>
+
+        <div className="settings-group">
+          <div className="settings-group-label">MODE</div>
+          <div className="tog-group">
+            <button type="button" className={`tog${mode === 'replay' ? ' tog-on' : ''}`} onClick={() => { onModeChange('replay'); onClose() }}>REPLAY</button>
+            <button type="button" className={`tog${mode === 'live' ? ' tog-on' : ''}`} onClick={() => { onModeChange('live'); onClose() }}>LIVE</button>
+          </div>
+        </div>
+
+        <div className="settings-group">
+          <div className="settings-group-label">LANGUAGE</div>
+          <div className="tog-group">
+            <button type="button" className={`tog${lang === 'en' ? ' tog-on' : ''}`} onClick={() => onLang('en')}>EN</button>
+            <button type="button" className={`tog${lang === 'ru' ? ' tog-on' : ''}`} onClick={() => onLang('ru')}>RU</button>
+          </div>
+        </div>
+
+        <div className="settings-group">
+          <div className="settings-group-label">LEVEL</div>
+          <div className="tog-group">
+            <button type="button" className={`tog${level === 'beginner' ? ' tog-on' : ''}`} onClick={() => onLevel('beginner')}>ROOKIE</button>
+            <button type="button" className={`tog${level === 'pro' ? ' tog-on' : ''}`} onClick={() => onLevel('pro')}>PRO</button>
+          </div>
+        </div>
+
+        {mode === 'replay' && (
+          <div className="settings-group">
+            <div className="settings-group-label">OVERLAYS</div>
+            <div className="tog-group" style={{ marginBottom: 8 }}>
+              <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PROJECTION</button>
+            </div>
+            <div className="tog-group">
+              <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>WIN %</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 type AppMode = 'replay' | 'live'
+type MobTab = 'TIMING' | 'MAP' | 'INSIGHTS' | 'FEED'
+const MOB_TABS: MobTab[] = ['TIMING', 'MAP', 'INSIGHTS', 'FEED']
 
 function App() {
   const [mode, setMode] = useState<AppMode>('replay')
+  const [mobTab, setMobTab] = useState<MobTab>('MAP')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
@@ -258,6 +329,20 @@ function App() {
 
   return (
     <>
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        lang={replay.lang}
+        level={replay.level}
+        mode={mode}
+        projection={projection}
+        winProb={winProb}
+        onLang={replay.setLang}
+        onLevel={replay.setLevel}
+        onModeChange={handleModeSwitch}
+        onProjection={setProjection}
+        onWinProb={setWinProb}
+      />
       <TopBar
         session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
         sessionId={mode === 'replay' ? sessionId : null}
@@ -276,6 +361,7 @@ function App() {
         onProjection={setProjection}
         onWinProb={setWinProb}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
+        onSettingsOpen={() => setSettingsOpen(true)}
       />
 
       {mode === 'live' && !isLiveActive && (
@@ -320,7 +406,21 @@ function App() {
         <div className="feed-error">{replay.feedError}</div>
       )}
 
-      <div className="wrap">
+      {/* Mobile tab bar — CSS shows only on <768px */}
+      <div className="mob-tabbar">
+        <div className="mob-tabbar-inner">
+          {MOB_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
+              onClick={() => setMobTab(tab)}
+            >{tab}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="wrap" data-mob-tab={mobTab}>
         <TimingTower
           rows={rows}
           battles={replay.battles}
