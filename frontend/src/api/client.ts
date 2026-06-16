@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, FeedItem, FeedResponse, Forecast, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, WhatIf, WinProb, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -83,6 +83,14 @@ export const getMarkers = (sessionId: string, untilMs?: number) =>
   json<MarkersResponse>(
     `/api/sessions/${encodeURIComponent(sessionId)}/markers${untilMs !== undefined ? `?until_ms=${untilMs}` : ''}`,
   )
+
+export const getHighlights = (sessionId: string, topN = 8) =>
+  json<HighlightsResponse>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/highlights?top_n=${topN}`,
+  )
+
+export const getDriverOfDay = (sessionId: string) =>
+  json<DotdResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/driver-of-day`)
 
 // ── Live endpoints ────────────────────────────────────────────────────────────
 

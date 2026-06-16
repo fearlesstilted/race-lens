@@ -2,6 +2,8 @@ import React from 'react'
 import type { SessionSummary } from '../../api/types'
 import { sessionLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
+import { HighlightsPanel } from './HighlightsPanel'
+import { DriverOfDayPanel } from './DriverOfDayPanel'
 
 type AppMode = 'replay' | 'live'
 
@@ -22,9 +24,10 @@ type Props = {
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
   onWinProb: (on: boolean) => void
+  onSeek?: (ms: number) => void
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   return (
     <div className="top">
@@ -118,6 +121,14 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
           </div>
         )}
       </div>
+
+      {/* HIGHLIGHTS and DOTD panels — replay only */}
+      {mode === 'replay' && sessionId && onSeek && (
+        <div className="top-panels">
+          <HighlightsPanel sessionId={sessionId} lang={lang} onSeek={onSeek} />
+          <DriverOfDayPanel sessionId={sessionId} lang={lang} />
+        </div>
+      )}
 
       <div className="lapbox">
         <span className="word">LAP</span>

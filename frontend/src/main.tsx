@@ -275,6 +275,7 @@ function App() {
         onLevel={replay.setLevel}
         onProjection={setProjection}
         onWinProb={setWinProb}
+        onSeek={mode === 'replay' ? replay.scrub : undefined}
       />
 
       {mode === 'live' && !isLiveActive && (

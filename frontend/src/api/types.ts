@@ -181,6 +181,37 @@ export type MarkersResponse = {
   markers: RaceMarker[]
 }
 
+// ── Highlights ────────────────────────────────────────────────────────────────
+
+export type Highlight = {
+  at_ms: number
+  lap: number | null
+  kind: MarkerKind
+  title_en: string
+  title_ru: string
+  drivers: string[]
+}
+
+export type HighlightsResponse = {
+  highlights: Highlight[]
+}
+
+// ── Driver of the Day ─────────────────────────────────────────────────────────
+
+export type DotdCandidate = {
+  driver: string
+  score: number
+  positions_gained: number
+  had_fastest_lap: boolean
+  note_en: string
+  note_ru: string
+}
+
+export type DotdResponse = {
+  candidates: DotdCandidate[]
+  computed_pick: string | null
+}
+
 // ── What-If counterfactual ────────────────────────────────────────────────────
 
 export type WhatIfDiff = {

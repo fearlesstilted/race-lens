@@ -1,0 +1,160 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { getHighlights } from '../../api/client'
+import type { Highlight } from '../../api/types'
+import { formatRaceTime } from '../../lib/format'
+
+type Lang = 'en' | 'ru'
+
+type Props = {
+  sessionId: string
+  lang?: Lang
+  onSeek: (ms: number) => void
+}
+
+const KIND_ICON: Record<string, string> = {
+  RED_FLAG: '🚩',
+  SAFETY_CAR: '🟡',
+  VSC: '🟡',
+  GREEN: '🟢',
+  CRASH: '💥',
+  INCIDENT: '⚠',
+  PENALTY: '⬛',
+  LEAD_CHANGE: '⬆',
+  PODIUM_CHANGE: '↕',
+  FASTEST_LAP: '🟣',
+}
+
+const KIND_COLOR: Record<string, string> = {
+  RED_FLAG: '#cc2222',
+  SAFETY_CAR: '#f2a900',
+  VSC: '#f2a900',
+  GREEN: '#22cc44',
+  CRASH: '#cc2222',
+  INCIDENT: '#cc2222',
+  PENALTY: '#f2a900',
+  LEAD_CHANGE: '#ffffff',
+  PODIUM_CHANGE: '#aaaacc',
+  FASTEST_LAP: '#b388ff',
+}
+
+export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {
+  const [open, setOpen] = useState(false)
+  const [highlights, setHighlights] = useState<Highlight[]>([])
+  const [loading, setLoading] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const playRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playIdxRef = useRef(0)
+
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    getHighlights(sessionId, 8)
+      .then((r) => setHighlights(r.highlights))
+      .catch(() => setHighlights([]))
+      .finally(() => setLoading(false))
+  }, [open, sessionId])
+
+  // Stop playback when closed or session changes
+  useEffect(() => {
+    stopPlay()
+    setHighlights([])
+  }, [sessionId])
+
+  const stopPlay = useCallback(() => {
+    if (playRef.current) clearTimeout(playRef.current)
+    playRef.current = null
+    setPlaying(false)
+    playIdxRef.current = 0
+  }, [])
+
+  const startPlay = useCallback(() => {
+    if (highlights.length === 0) return
+    setPlaying(true)
+    playIdxRef.current = 0
+
+    const step = (idx: number) => {
+      if (idx >= highlights.length) {
+        setPlaying(false)
+        return
+      }
+      onSeek(highlights[idx].at_ms)
+      playIdxRef.current = idx
+      playRef.current = setTimeout(() => step(idx + 1), 4000)
+    }
+    step(0)
+  }, [highlights, onSeek])
+
+  useEffect(() => {
+    return () => { if (playRef.current) clearTimeout(playRef.current) }
+  }, [])
+
+  const toggle = () => setOpen((v) => !v)
+
+  return (
+    <div className="hl-wrap">
+      <button
+        type="button"
+        className={`tog${open ? ' tog-on' : ''}`}
+        onClick={toggle}
+        title="Highlight reel — race in 60 seconds"
+      >
+        HIGHLIGHTS
+      </button>
+
+      {open && (
+        <div className="hl-panel">
+          <div className="hl-header">
+            <span className="hl-title">RACE IN 60 SECONDS</span>
+            {!playing ? (
+              <button
+                type="button"
+                className="b primary hl-play-btn"
+                disabled={loading || highlights.length === 0}
+                onClick={startPlay}
+              >
+                PLAY HIGHLIGHTS
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="b danger hl-play-btn"
+                onClick={stopPlay}
+              >
+                STOP
+              </button>
+            )}
+          </div>
+
+          {loading && <div className="hl-empty">Loading…</div>}
+
+          {!loading && highlights.length === 0 && (
+            <div className="hl-empty">No highlights available</div>
+          )}
+
+          <div className="hl-list">
+            {highlights.map((h, i) => {
+              const color = KIND_COLOR[h.kind] ?? '#888899'
+              const icon = KIND_ICON[h.kind] ?? '·'
+              const title = lang === 'ru' ? h.title_ru : h.title_en
+              const isActive = playing && playIdxRef.current === i
+              return (
+                <button
+                  key={`${h.at_ms}-${h.kind}`}
+                  type="button"
+                  className={`hl-item${isActive ? ' hl-item-active' : ''}`}
+                  onClick={() => onSeek(h.at_ms)}
+                  title={`Seek to ${formatRaceTime(h.at_ms)}`}
+                >
+                  <span className="hl-icon" style={{ color }}>{icon}</span>
+                  <span className="hl-time">{formatRaceTime(h.at_ms)}</span>
+                  {h.lap != null && <span className="hl-lap">L{h.lap}</span>}
+                  <span className="hl-text">{title}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
