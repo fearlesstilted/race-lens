@@ -4,6 +4,8 @@ import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
+import { HighlightsPanel } from './features/replay/HighlightsPanel'
+import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { ForecastStrip } from './features/replay/ForecastStrip'
 import { WinProbGraph } from './features/replay/WinProbGraph'
@@ -138,9 +140,13 @@ type DrawerProps = {
   onModeChange: (m: 'replay' | 'live') => void
   onProjection: (v: boolean) => void
   onWinProb: (v: boolean) => void
+  // mobile-only: HIGHLIGHTS and DOTD panel triggers
+  sessionId?: string | null
+  onSeek?: (ms: number) => void
+  drawerLang?: 'en' | 'ru'
 }
 
-function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb }: DrawerProps) {
+function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang }: DrawerProps) {
   return (
     <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="settings-backdrop" onClick={onClose} />
@@ -182,6 +188,17 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
             </div>
             <div className="tog-group">
               <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>WIN %</button>
+            </div>
+          </div>
+        )}
+
+        {/* HIGHLIGHTS and DOTD — shown in drawer on mobile/tablet (<1024px) */}
+        {mode === 'replay' && sessionId && onSeek && (
+          <div className="settings-group drawer-panels-group">
+            <div className="settings-group-label">HIGHLIGHTS &amp; DOTD</div>
+            <div className="drawer-panels-inner">
+              <HighlightsPanel sessionId={sessionId} lang={drawerLang} onSeek={(ms) => { onSeek(ms); onClose() }} />
+              <DriverOfDayPanel sessionId={sessionId} lang={drawerLang} />
             </div>
           </div>
         )}
@@ -342,6 +359,9 @@ function App() {
         onModeChange={handleModeSwitch}
         onProjection={setProjection}
         onWinProb={setWinProb}
+        sessionId={mode === 'replay' ? sessionId : null}
+        onSeek={mode === 'replay' ? replay.scrub : undefined}
+        drawerLang={replay.lang}
       />
       <TopBar
         session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
