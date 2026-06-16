@@ -6,7 +6,8 @@ venv/
 .pytest_cache/
 .ruff_cache/
 fastf1_cache/
-backend/fixtures/*.jsonl
+# Event fixtures (~1MB each) ARE committed so CI + fresh clones run golden tests.
+# Heavy derived data stays out: raw telemetry (~40MB) and resampled positions (~4MB).
 backend/fixtures/*.positions_raw.jsonl
 backend/fixtures/*.positions.json
 rust/target/
