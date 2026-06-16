@@ -24,6 +24,8 @@ const INNER_W = W - PAD.left - PAD.right
 const INNER_H = H - PAD.top - PAD.bottom
 const SAMPLES = 20
 const Y_TICKS = [0, 25, 50, 75, 100]
+// ponytail: throttle the (heavy) series fetch — atMs ticks every frame during play.
+const THROTTLE_MS = 1500
 
 function scaleX(idx: number, total: number): number {
   if (total <= 1) return PAD.left
@@ -39,39 +41,46 @@ export function WinProbGraph({ sessionId, atMs }: Props) {
   const [series, setSeries] = useState<WinProbSeriesPoint[]>([])
   const [drivers, setDrivers] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
-  const prevAtMs = useRef<number>(-1)
+  const lastFetch = useRef(0)
 
   useEffect(() => {
-    if (atMs === prevAtMs.current) return
-    prevAtMs.current = atMs
     if (atMs === 0) return
-
     let cancelled = false
-    setLoading(true)
-    getWinProbSeries(sessionId, atMs, SAMPLES)
-      .then((pts) => {
-        if (cancelled) return
-        setSeries(pts)
 
-        // Determine top-5 drivers by maximum prob at any point in series
-        const maxProb: Record<string, number> = {}
-        for (const pt of pts) {
-          for (const [d, p] of Object.entries(pt.probs)) {
-            if ((maxProb[d] ?? 0) < p) maxProb[d] = p
+    const run = () => {
+      lastFetch.current = Date.now()
+      setLoading(true)
+      getWinProbSeries(sessionId, atMs, SAMPLES)
+        .then((pts) => {
+          if (cancelled) return
+          setSeries(pts)
+
+          // Determine top-5 drivers by maximum prob at any point in series
+          const maxProb: Record<string, number> = {}
+          for (const pt of pts) {
+            for (const [d, p] of Object.entries(pt.probs)) {
+              if ((maxProb[d] ?? 0) < p) maxProb[d] = p
+            }
           }
-        }
-        const top5 = Object.entries(maxProb)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([d]) => d)
-        setDrivers(top5)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false)
-      })
+          const top5 = Object.entries(maxProb)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([d]) => d)
+          setDrivers(top5)
+          setLoading(false)
+        })
+        .catch(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }
 
-    return () => { cancelled = true }
+    const elapsed = Date.now() - lastFetch.current
+    if (elapsed >= THROTTLE_MS) {
+      run()
+      return () => { cancelled = true }
+    }
+    const t = setTimeout(run, THROTTLE_MS - elapsed)
+    return () => { cancelled = true; clearTimeout(t) }
   }, [sessionId, atMs])
 
   const n = series.length

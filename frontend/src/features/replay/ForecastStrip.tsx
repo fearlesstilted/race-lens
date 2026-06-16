@@ -11,7 +11,10 @@ type Props = {
   atMs: number
 }
 
-const DEBOUNCE_MS = 300
+// ponytail: throttle, not debounce — during play atMs ticks continuously and a
+// debounce would never fire until pause (the old bug). Throttle fires on the
+// leading edge then at most every THROTTLE_MS, with a trailing fetch on stop.
+const THROTTLE_MS = 1500
 const TOP_N = 8
 
 function deltaMark(delta: number): { text: string; cls: string } {
@@ -22,18 +25,20 @@ function deltaMark(delta: number): { text: string; cls: string } {
 
 export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs }: Props) {
   const [forecast, setForecast] = useState<Forecast | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastFetch = useRef(0)
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      getForecast(sessionId, atMs, 10)
-        .then(setForecast)
-        .catch(() => undefined)
-    }, DEBOUNCE_MS)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+    const run = () => {
+      lastFetch.current = Date.now()
+      getForecast(sessionId, atMs, 10).then(setForecast).catch(() => undefined)
     }
+    const elapsed = Date.now() - lastFetch.current
+    if (elapsed >= THROTTLE_MS) {
+      run()
+      return
+    }
+    const t = setTimeout(run, THROTTLE_MS - elapsed)
+    return () => clearTimeout(t)
   }, [sessionId, atMs])
 
   if (!forecast) return null
