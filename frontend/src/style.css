@@ -2207,3 +2207,25 @@ body {
   border-top: 1px solid var(--hair);
   flex-shrink: 0;
 }
+
+/* ── Motion design ──────────────────────────────────────────────── */
+/* Broadcast-style polish: cards present, panes crossfade, states ease.
+   All gated behind prefers-reduced-motion so it never fights accessibility. */
+@media (prefers-reduced-motion: no-preference) {
+  .tog, .b, .layer-toggle, .mob-tab, .ctr-tab, .seg button, .settings-btn {
+    transition: background-color .15s ease, color .15s ease,
+                border-color .15s ease, box-shadow .15s ease, opacity .15s ease;
+  }
+  /* Card / panel entrance: fade + slide-up, like a TV lower-third. */
+  .ins, .focus-card, .h2h-half, .pit-sim-card, .what-if-card {
+    animation: rl-rise .28s ease-out both;
+  }
+  /* Center tab content crossfades when you switch FEED / FORECAST / WIN%. */
+  .ctr-pane > * { animation: rl-fade .22s ease-out both; }
+  .forecast-row { animation: rl-fade .2s ease-out both; }
+  /* Fastest-lap dot quietly pulses. */
+  .fl-dot { animation: rl-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes rl-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes rl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
