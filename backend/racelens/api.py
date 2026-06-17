@@ -447,3 +447,19 @@ def timeline(session_id: str) -> dict:
         "events_total": len(eng.events),
         "lap_marks": lap_marks,
     }
+
+
+@app.get("/api/sessions/{session_id}/stints")
+def stints(session_id: str) -> dict:
+    """Per-driver tyre stint timeline (compound + lap range) for the strategy view."""
+    from racelens.tyre_stints import stint_timeline
+
+    eng = _engine(session_id)
+    end_ms = eng.events[-1].session_time_ms if eng.events else 0
+    final = eng.state_at(end_ms)
+    total_laps = final.get("total_laps") or final.get("lap") or 0
+    return {
+        "session_id": session_id,
+        "total_laps": total_laps,
+        "stints": stint_timeline(eng.events, total_laps),
+    }
