@@ -44,6 +44,15 @@ def main() -> None:
     p_posraw.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
     p_posraw.add_argument("-o", "--out", required=True, help="output .jsonl path")
 
+    p_mini = sub.add_parser(
+        "mini-sectors",
+        help="compute near-continuous gap events from RelativeDistance telemetry",
+    )
+    p_mini.add_argument("year", type=int)
+    p_mini.add_argument("gp", help='Grand Prix name, e.g. "Monaco"')
+    p_mini.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
+    p_mini.add_argument("session_id", help="fixture session id, e.g. monaco_2024_race")
+
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
@@ -215,6 +224,31 @@ def main() -> None:
                     count += 1
 
         print(f"{count} rows → {out}", file=sys.stderr)
+
+    elif args.cmd == "mini-sectors":
+        import os
+        from racelens.events.models import dump_jsonl, load_jsonl
+        from racelens.positions.mini_sectors import compute_gap_events
+
+        fixtures_dir = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
+        fixture_path = fixtures_dir / f"{args.session_id}.jsonl"
+        existing = load_jsonl(fixture_path.read_text(encoding="utf-8"))
+        before = len(existing)
+
+        # Drop existing per-lap gap/interval events; keep everything else
+        kept = [e for e in existing if e.type not in {"GapUpdated", "IntervalUpdated"}]
+        dropped = before - len(kept)
+
+        new_events = compute_gap_events(args.year, args.gp, args.session, args.session_id)
+        combined = kept + new_events
+        combined.sort(key=lambda e: (e.session_time_ms, e.event_id))
+
+        fixture_path.write_text(dump_jsonl(combined), encoding="utf-8")
+        after = len(combined)
+        print(
+            f"before={before} dropped_gap={dropped} new_gap={len(new_events)} after={after} → {fixture_path}",
+            file=sys.stderr,
+        )
 
     elif args.cmd == "state":
         from racelens.events.models import load_jsonl
