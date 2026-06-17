@@ -231,3 +231,17 @@ export type WhatIf = {
   summary_text_ru: string
   assumptions: string[]
 }
+
+// ── Tyre strategy ─────────────────────────────────────────────────────────────
+export type Stint = {
+  compound: string
+  start_lap: number
+  end_lap: number
+  laps: number
+}
+
+export type StintsResponse = {
+  session_id: string
+  total_laps: number
+  stints: Record<string, Stint[]>
+}

@@ -2229,3 +2229,52 @@ body {
 @keyframes rl-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes rl-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* ── Tyre strategy timeline ─────────────────────────────────────── */
+.stints {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 12px 8px;
+}
+.stints-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 2px 6px;
+  font: italic 800 11px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+}
+.stints-laps { font-style: normal; font-weight: 600; letter-spacing: 0.14em; }
+.stints-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.stint-row {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.stint-drv { font: italic 800 13px var(--cond); letter-spacing: 0.04em; }
+.stint-bar { display: flex; height: 16px; width: 100%; border: 1px solid var(--hair); }
+.stint-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  overflow: hidden;
+  border-right: 1px solid #00000099;
+}
+.stint-seg:last-child { border-right: none; }
+.stint-seg-lbl {
+  font: 700 9px var(--cond);
+  color: #000000bb;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}

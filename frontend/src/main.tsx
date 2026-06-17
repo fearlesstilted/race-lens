@@ -8,6 +8,7 @@ import { HighlightsPanel } from './features/replay/HighlightsPanel'
 import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { ForecastStrip } from './features/replay/ForecastStrip'
+import { StintTimeline } from './features/replay/StintTimeline'
 import { WinProbGraph } from './features/replay/WinProbGraph'
 import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
@@ -210,17 +211,19 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
 
 // ── Center bottom segment tabs ────────────────────────────────────────────────
 
-type CenterTab = 'FEED' | 'FORECAST' | 'WIN%'
+type CenterTab = 'FEED' | 'FORECAST' | 'WIN%' | 'STRATEGY'
 
 type CenterTabsProps = {
   activeTab: CenterTab
   showForecast: boolean
   showWinProb: boolean
+  showStrategy: boolean
   onTab: (t: CenterTab) => void
 }
 
-function CenterTabs({ activeTab, showForecast, showWinProb, onTab }: CenterTabsProps) {
+function CenterTabs({ activeTab, showForecast, showWinProb, showStrategy, onTab }: CenterTabsProps) {
   const tabs: CenterTab[] = ['FEED']
+  if (showStrategy) tabs.push('STRATEGY')
   if (showForecast) tabs.push('FORECAST')
   if (showWinProb) tabs.push('WIN%')
   if (tabs.length <= 1) return null
@@ -507,10 +510,14 @@ function App() {
               activeTab={centerTab}
               showForecast={mode === 'replay' && projection}
               showWinProb={mode === 'replay' && winProb}
+              showStrategy={mode === 'replay' && !!sessionId}
               onTab={setCenterTab}
             />
             <div className="ctr-pane">
               {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
+              {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
+                <StintTimeline sessionId={sessionId} order={state?.classification} />
+              )}
               {centerTab === 'FORECAST' && mode === 'replay' && projection && sessionId && (
                 <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
               )}

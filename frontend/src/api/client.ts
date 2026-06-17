@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, WhatIf, WinProb, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -140,3 +140,6 @@ export const getLiveSessions = (year: number, country?: string): Promise<LiveSes
   if (country) params.set('country', country)
   return json<LiveSessionInfo[]>(`/api/live/sessions?${params.toString()}`)
 }
+
+export const getStints = (sessionId: string) =>
+  json<StintsResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/stints`)
