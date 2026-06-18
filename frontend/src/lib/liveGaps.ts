@@ -14,6 +14,8 @@ export type PositionsData = {
   tick_ms: number
   viewbox: [number, number]
   drivers: Record<string, ([number, number] | null)[]>
+  /** Per-tick cumulative track progress (laps + arc fraction) for tower ordering. */
+  progress?: Record<string, (number | null)[]>
 }
 
 export type DriverLike = {
@@ -240,4 +242,51 @@ export function computeLiveGaps(
   }
 
   return result
+}
+
+/**
+ * Track-progress ordering for the timing tower so its order tracks the map
+ * instead of the once-per-lap official classification.
+ *
+ * Uses the per-tick `progress` array baked into positions.json
+ * (laps_completed + FastF1 RelativeDistance — a real arc-distance signal, not a
+ * pace estimate). The leader is simply max(progress); lapped cars fall behind
+ * naturally. Returns the classification unchanged when progress is absent
+ * (live mode, or fixtures generated before the track-progress step).
+ */
+export function trackOrder(
+  posData: PositionsData | null,
+  atMs: number,
+  classification: string[],
+  drivers: Record<string, { retired?: boolean }>,
+): string[] {
+  const prog = posData?.progress
+  if (!prog || classification.length === 0) return classification
+
+  const tick = Math.floor((atMs - posData.start_ms) / posData.tick_ms)
+  const valueAt = (id: string): number | null => {
+    const arr = prog[id]
+    if (!arr || tick < 0 || tick >= arr.length) return null
+    return arr[tick]
+  }
+
+  const active: string[] = []
+  const retired: string[] = []
+  for (const id of classification) {
+    if (drivers[id]?.retired) retired.push(id)
+    else active.push(id)
+  }
+
+  const idx = new Map(classification.map((id, i) => [id, i]))
+  active.sort((a, b) => {
+    const pa = valueAt(a)
+    const pb = valueAt(b)
+    if (pa === null && pb === null) return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
+    if (pa === null) return 1
+    if (pb === null) return -1
+    if (pb !== pa) return pb - pa
+    return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
+  })
+
+  return [...active, ...retired]
 }

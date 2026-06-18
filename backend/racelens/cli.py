@@ -53,6 +53,15 @@ def main() -> None:
     p_mini.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
     p_mini.add_argument("session_id", help="fixture session id, e.g. monaco_2024_race")
 
+    p_prog = sub.add_parser(
+        "track-progress",
+        help="write per-tick track progress into positions.json for tower ordering",
+    )
+    p_prog.add_argument("year", type=int)
+    p_prog.add_argument("gp", help='Grand Prix name, e.g. "Monaco"')
+    p_prog.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
+    p_prog.add_argument("session_id", help="fixture session id, e.g. monaco_2024_race")
+
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
@@ -249,6 +258,18 @@ def main() -> None:
             f"before={before} dropped_gap={dropped} new_gap={len(new_events)} after={after} → {fixture_path}",
             file=sys.stderr,
         )
+
+    elif args.cmd == "track-progress":
+        import os
+        from racelens.positions.track_progress import compute_progress
+
+        fixtures_dir = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
+        pos_path = fixtures_dir / f"{args.session_id}.positions.json"
+        pos = json.loads(pos_path.read_text(encoding="utf-8"))
+        pos["progress"] = compute_progress(args.year, args.gp, args.session, args.session_id)
+        pos_path.write_text(json.dumps(pos), encoding="utf-8")
+        covered = sum(1 for arr in pos["progress"].values() if any(v is not None for v in arr))
+        print(f"track-progress: {covered}/{len(pos['progress'])} drivers → {pos_path}", file=sys.stderr)
 
     elif args.cmd == "state":
         from racelens.events.models import load_jsonl

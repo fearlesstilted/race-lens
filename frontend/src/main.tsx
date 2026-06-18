@@ -4,6 +4,7 @@ import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
+import { trackOrder } from './lib/liveGaps'
 import { HighlightsPanel } from './features/replay/HighlightsPanel'
 import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
 import { LiveLobby } from './features/replay/LiveLobby'
@@ -349,14 +350,23 @@ function App() {
   const state = replay.state
   const timeline = replay.timeline
 
-  const rows = useMemo(
-    () =>
-      state?.classification.map((driverId) => ({
-        id: driverId,
-        ...state.drivers[driverId],
-      })) ?? [],
-    [state],
-  )
+  const effectivePositionsData = mode === 'live' ? null : replay.positionsData
+
+  // Order the timing tower by real track progress (positions.json `progress`)
+  // so it tracks the map continuously, not just at the once-per-lap S/F line.
+  // Renumber POS to the track-order rank; leader is progress-max so it stays
+  // correct. Falls back to official classification when progress is absent.
+  const rows = useMemo(() => {
+    if (!state) return []
+    const order = trackOrder(effectivePositionsData, replay.atMs, state.classification, state.drivers)
+    let rank = 0
+    return order.map((driverId) => {
+      const d = state.drivers[driverId]
+      const isRetired = d.retired === true
+      if (!isRetired) rank += 1
+      return { id: driverId, ...d, position: isRetired ? d.position : rank }
+    })
+  }, [state, effectivePositionsData, replay.atMs])
 
   const sessionStatus = state?.session_status ?? 'started'
 
@@ -376,9 +386,6 @@ function App() {
 
   // Build liveLabel for deck clock from current state lap
   const liveLabel = state ? `LAP ${state.lap}` : null
-
-  // In live mode, positionsData is always null → TrackMap uses dead-reckoning schematic
-  const effectivePositionsData = mode === 'live' ? null : replay.positionsData
 
   return (
     <>
