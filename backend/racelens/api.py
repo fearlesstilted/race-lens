@@ -61,6 +61,25 @@ def _engine(session_id: str) -> ReplayEngine:
     return ReplayEngine(load_jsonl(path.read_text(encoding="utf-8")))
 
 
+def _race_end_ms(eng: ReplayEngine) -> int:
+    """End of on-track action = chequered flag (or last lap), NOT the last event.
+
+    Post-race steward messages run minutes past the finish and have no telemetry,
+    so using them would leave a dead zone of frozen cars at the end of the
+    scrubber. Cap the replay timeline/stream at the finish instead.
+    """
+    finished = [
+        e.session_time_ms for e in eng.events
+        if e.type == "SessionStatusChanged" and e.payload.get("status") == "finished"
+    ]
+    if finished:
+        return max(finished)
+    laps = [e.session_time_ms for e in eng.events if e.type == "LapCompleted"]
+    if laps:
+        return max(laps)
+    return eng.events[-1].session_time_ms if eng.events else 0
+
+
 @app.get("/api/sessions")
 def list_sessions() -> list[dict]:
     out = []
@@ -109,7 +128,7 @@ async def stream(
     if speed <= 0 or tick_ms <= 0:
         raise HTTPException(422, "speed and tick_ms must be positive")
     eng = _engine(session_id)
-    end_ms = eng.events[-1].session_time_ms if eng.events else 0
+    end_ms = _race_end_ms(eng)
 
     async def gen():
         t = from_ms
@@ -443,7 +462,7 @@ def timeline(session_id: str) -> dict:
     return {
         "session_id": session_id,
         "start_ms": eng.events[0].session_time_ms if eng.events else 0,
-        "end_ms": eng.events[-1].session_time_ms if eng.events else 0,
+        "end_ms": _race_end_ms(eng),
         "events_total": len(eng.events),
         "lap_marks": lap_marks,
     }
