@@ -164,6 +164,7 @@ export type MarkerKind =
   | 'LEAD_CHANGE'
   | 'PODIUM_CHANGE'
   | 'FASTEST_LAP'
+  | 'OFF_TRACK'
 
 export type MarkerSeverity = 'critical' | 'high' | 'medium' | 'low'
 

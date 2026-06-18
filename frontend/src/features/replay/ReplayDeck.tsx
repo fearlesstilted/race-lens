@@ -120,6 +120,7 @@ function markerStyle(kind: RaceMarker['kind']): MarkerStyle {
     case 'VSC':         return { color: '#f2a900', shape: 'line',     zIndex: 4 }
     case 'CRASH':
     case 'INCIDENT':    return { color: '#cc2222', shape: 'triangle', zIndex: 3 }
+    case 'OFF_TRACK':   return { color: '#ff6a00', shape: 'triangle', zIndex: 3 }
     case 'PENALTY':     return { color: '#f2a900', shape: 'dot',      zIndex: 3 }
     case 'LEAD_CHANGE': return { color: '#ffffff', shape: 'chevron',  zIndex: 2 }
     case 'FASTEST_LAP': return { color: '#b388ff', shape: 'dot',      zIndex: 2 }

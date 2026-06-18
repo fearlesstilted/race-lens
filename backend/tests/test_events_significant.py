@@ -20,6 +20,7 @@ from racelens.events_significant import (
     KIND_GREEN,
     KIND_INCIDENT,
     KIND_LEAD_CHANGE,
+    KIND_OFF_TRACK,
     KIND_PENALTY,
     KIND_PODIUM_CHANGE,
     KIND_SAFETY_CAR,
@@ -309,3 +310,35 @@ def test_spain_determinism():
     r1 = significant_events(events)
     r2 = significant_events(events)
     assert r1 == r2
+
+
+# ── OFF_TRACK detection ─────────────────────────────────────────────────────────
+
+def _offtrack_events(drivers: list[str], spin_lap: int, spin_drivers: list[str]) -> list[Event]:
+    """10-lap race; listed spin_drivers run +20s on spin_lap, everyone else steady."""
+    e = [event(SID, "SessionStarted", 0, total_laps=10)]
+    for pos, drv in enumerate(drivers, start=1):
+        e.append(event(SID, "PositionChanged", 0, drv, position=pos))
+    for lap in range(1, 11):
+        for i, drv in enumerate(drivers):
+            t = lap * 90_000 + i * 500
+            ms = 110_000 if (lap == spin_lap and drv in spin_drivers) else 90_000
+            e.append(event(SID, "LapCompleted", t, drv, lap=lap, lap_time_ms=ms))
+    return e
+
+
+def test_offtrack_single_driver_detected():
+    markers = significant_events(_offtrack_events(["VER", "NOR"], spin_lap=7, spin_drivers=["VER"]))
+    off = [m for m in markers if m["kind"] == KIND_OFF_TRACK]
+    assert len(off) == 1
+    assert off[0]["driver_ids"] == ["VER"]
+    assert off[0]["lap"] == 7
+    assert off[0]["severity"] == SEV_HIGH
+
+
+def test_offtrack_fieldwide_filtered_as_safety_car():
+    # 4 of 4 drivers slow on the same lap → track-wide (SC/yellow), not an off.
+    drivers = ["VER", "NOR", "LEC", "HAM"]
+    markers = significant_events(_offtrack_events(drivers, spin_lap=7, spin_drivers=drivers))
+    off = [m for m in markers if m["kind"] == KIND_OFF_TRACK]
+    assert off == []

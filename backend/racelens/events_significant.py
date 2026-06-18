@@ -30,6 +30,15 @@ KIND_RETIREMENT = "RETIREMENT"
 KIND_LEAD_CHANGE = "LEAD_CHANGE"
 KIND_PODIUM_CHANGE = "PODIUM_CHANGE"
 KIND_FASTEST_LAP = "FASTEST_LAP"
+KIND_OFF_TRACK = "OFF_TRACK"
+
+# A lap this much slower than the driver's own recent pace (and not a pit lap or
+# under neutralisation) signals an off / spin / big time loss — the dramatic
+# moment a driver loses places. Tuned to FastF1 lap data (a spin ≈ +10-20s).
+_OFF_TRACK_FACTOR = 1.15
+_OFF_TRACK_MIN_DELTA_MS = 5_000
+# More than this many drivers slow on the same lap = track-wide (SC/yellow), not an off.
+_OFF_TRACK_MAX_PER_LAP = 2
 
 # Severity levels
 SEV_CRITICAL = "critical"
@@ -140,6 +149,13 @@ def _podium_change_texts(top3: list[str]) -> tuple[str, str]:
     return f"Podium change: {joined}", f"Смена тройки: {joined}"
 
 
+def _off_track_texts(driver: str, delta_s: float) -> tuple[str, str]:
+    return (
+        f"{driver} off / lost {delta_s:.0f}s",
+        f"{driver} вылет / потеря {delta_s:.0f}с",
+    )
+
+
 def _fastest_lap_texts(driver: str, lap_ms: int) -> tuple[str, str]:
     total_s, ms_part = divmod(lap_ms, 1000)
     minutes, secs = divmod(total_s, 60)
@@ -188,6 +204,14 @@ def significant_events(
     prev_leader: str | None = None
     prev_top3: frozenset[str] = frozenset()
     best_race_lap_ms: int | None = None  # absolute fastest lap in race so far
+
+    # Laps where a driver was in/out of the pits — excluded from off-track detection
+    # (an in/out lap is legitimately slow).
+    pit_laps: set[tuple[str, int]] = {
+        (e.driver_id, e.lap)
+        for e in visible_sorted
+        if e.type in ("PitIn", "PitOut") and e.driver_id and e.lap is not None
+    }
 
     # Pre-collect classification checkpoints: times where we should sample state.
     # Use all LapCompleted times (de-duped, sorted) for efficiency.
@@ -263,6 +287,46 @@ def significant_events(
 
         prev_leader = new_leader
         prev_top3 = new_top3
+
+    # ── OFF_TRACK — a lap far slower than the driver's own recent pace ─────────
+    # (spin / off / big time loss). An individual off hits one or two drivers;
+    # a Safety Car / yellow slows the whole field, so we only flag laps where at
+    # most _OFF_TRACK_MAX_PER_LAP drivers are slow. Pit laps excluded.
+    recent_laps: dict[str, list[int]] = {}
+    candidates: list[tuple[int, int, str, float]] = []  # (at_ms, lap, drv, delta_s)
+    for e in visible_sorted:
+        if e.type != "LapCompleted":
+            continue
+        drv = e.driver_id
+        lap_ms = e.payload.get("lap_time_ms")
+        if not drv or lap_ms is None:
+            continue
+        hist = recent_laps.setdefault(drv, [])
+        if len(hist) >= 3 and e.lap is not None and (drv, e.lap) not in pit_laps:
+            window = sorted(hist[-5:])
+            med = window[len(window) // 2]
+            if lap_ms > med * _OFF_TRACK_FACTOR and lap_ms - med >= _OFF_TRACK_MIN_DELTA_MS:
+                candidates.append((e.session_time_ms, e.lap, drv, (lap_ms - med) / 1000))
+        hist.append(lap_ms)
+
+    slow_per_lap: dict[int, int] = {}
+    for _, lap, _, _ in candidates:
+        slow_per_lap[lap] = slow_per_lap.get(lap, 0) + 1
+    for at_ms_c, lap, drv, delta_s in candidates:
+        if slow_per_lap[lap] > _OFF_TRACK_MAX_PER_LAP:
+            continue  # field-wide slowdown → Safety Car / yellow, not an individual off
+        text_en, text_ru = _off_track_texts(drv, delta_s)
+        _add_marker(
+            markers, seen_ids,
+            at_ms=at_ms_c,
+            lap=lap,
+            kind=KIND_OFF_TRACK,
+            severity=SEV_HIGH,
+            driver_ids=[drv],
+            text_en=text_en,
+            text_ru=text_ru,
+            dedup_key=f"off:{at_ms_c}:{drv}",
+        )
 
     # ── Session status events (flags and restarts) ────────────────────────────
     prev_status: str | None = None
