@@ -431,6 +431,12 @@ def significant_events(
     # behind the leader, but this doesn't produce a precise at_ms. Skipping
     # for now; can be added when the engine emits a RetiredFlag event.
 
+    # Backfill lap for markers built from race-control messages (which carry no
+    # lap number) so the UI never shows "Lap null".
+    for m in markers:
+        if m["lap"] is None:
+            m["lap"] = state_engine.state_at(m["at_ms"]).get("lap")
+
     # ── Sort by at_ms, stable ─────────────────────────────────────────────────
     markers.sort(key=lambda m: (m["at_ms"], m["kind"]))
     return markers

@@ -286,7 +286,10 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
           )
           const ms = markerStyle(primary.kind)
           const tipText = cluster.items
-            .map((m) => `${lang === 'ru' ? m.text_ru : m.text_en} · Lap ${m.lap}`)
+            .map((m) => {
+              const label = lang === 'ru' ? m.text_ru : m.text_en
+              return m.lap != null ? `${label} · Lap ${m.lap}` : label
+            })
             .join('\n')
           const handleMarkerClick = (e: React.MouseEvent) => {
             e.stopPropagation()
