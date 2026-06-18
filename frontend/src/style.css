@@ -758,6 +758,7 @@ body {
 .ev-tag-pit   { background: #f2a90033; color: var(--amber); }
 .ev-tag-fastest { background: #b388ff22; color: #b388ff; }
 .ev-tag-info  { background: #ffffff11; color: var(--dim); }
+.ev-tag-finish { background: #ffffff1c; color: #fff; }
 
 /* new-event flash */
 @keyframes ev-flash {

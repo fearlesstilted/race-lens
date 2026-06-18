@@ -50,13 +50,14 @@ def test_feed_session_finished():
 
 def test_feed_fastest_lap_lec():
     """LEC's lap 3 is 77_000 ms — should be absolute fastest in the race."""
+    # Final lap (3 of 3): line crossings become finish placings, winner first.
     feed = render_feed(mini_race(), until_ms=300_000)
-    fl_items = [i for i in feed if i["kind"] == "LapCompleted"]
-    # There should be a fastest lap entry for LEC (77_000)
-    lec_fl = [i for i in fl_items if i["driver_id"] == "LEC"]
-    assert len(lec_fl) >= 1
-    assert "LEC" in lec_fl[0]["text"]
-    assert "1:17" in lec_fl[0]["text"] or "77" in lec_fl[0]["text"]
+    fin = [i for i in feed if i["tag"] == "FINISH"]
+    assert fin, "expected finish items on the final lap"
+    by_time = sorted(fin, key=lambda x: x["at_ms"])
+    assert "VER" in by_time[0]["text"] and "win" in by_time[0]["text"].lower()
+    lec = [i for i in fin if i["driver_id"] == "LEC"]
+    assert lec and "P3" in lec[0]["text"]
 
 
 def test_feed_fastest_lap_before_lec_lap3():
@@ -83,7 +84,7 @@ def test_feed_no_position_changed_or_gap_noise():
 
 def test_feed_tag_all_items_have_tag():
     feed = render_feed(mini_race(), until_ms=300_000)
-    valid_tags = {"PIT", "FLAG", "FASTEST", "INFO"}
+    valid_tags = {"PIT", "FLAG", "FASTEST", "FINISH", "INFO"}
     for item in feed:
         assert "tag" in item, f"Missing tag on item: {item}"
         assert item["tag"] in valid_tags, f"Unknown tag {item['tag']!r} on item: {item}"
@@ -98,7 +99,8 @@ def test_feed_tag_pit_items():
 def test_feed_tag_fastest_lap():
     feed = render_feed(mini_race(), until_ms=300_000)
     fl_items = [i for i in feed if i["kind"] == "LapCompleted"]
-    assert all(i["tag"] == "FASTEST" for i in fl_items), "LapCompleted must have tag=FASTEST"
+    # LapCompleted is FASTEST mid-race, FINISH on the final lap.
+    assert all(i["tag"] in ("FASTEST", "FINISH") for i in fl_items)
 
 
 def test_feed_tag_session_status_flag():

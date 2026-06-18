@@ -9,12 +9,13 @@ function fmtSessionTime(ms: number): string {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-type Tag = 'PIT' | 'FLAG' | 'FASTEST' | 'INFO'
+type Tag = 'PIT' | 'FLAG' | 'FASTEST' | 'FINISH' | 'INFO'
 
 const TAG_LABELS: Record<Tag, string> = {
   FLAG: 'FLAG',
   PIT: 'PIT',
   FASTEST: 'FAST',
+  FINISH: 'FIN',
   INFO: 'INFO',
 }
 

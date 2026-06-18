@@ -76,6 +76,13 @@ def render_feed(
 
     # Track absolute fastest lap for fastest-lap feed items
     best_ms: int | None = None
+    # Race distance (from SessionStarted) so we can flag finish-line crossings on
+    # the final lap regardless of until_ms; and count finishers for placings.
+    race_total_laps: int | None = next(
+        (e.payload.get("total_laps") for e in visible_sorted if e.type == "SessionStarted"),
+        None,
+    )
+    finish_count = 0
     # Track previous session status to detect "Race resumed"
     prev_status: str | None = None
     # Track which status transitions already produced a feed item (avoid duplicates with RCM)
@@ -91,7 +98,20 @@ def render_feed(
 
         elif e.type == "LapCompleted":
             lap_ms = e.payload.get("lap_time_ms")
-            if lap_ms is not None and (best_ms is None or lap_ms < best_ms):
+            # Finish: crossing the line on the final lap. Winner first, then placings.
+            if race_total_laps and e.lap == race_total_laps:
+                finish_count += 1
+                drv = e.driver_id or "?"
+                if finish_count == 1:
+                    text = f"{drv} забирает победу!" if lang == "ru" else f"{drv} takes the win!"
+                else:
+                    text = (
+                        f"{drv} финиширует P{finish_count}"
+                        if lang == "ru"
+                        else f"{drv} finishes P{finish_count}"
+                    )
+                driver_id = e.driver_id
+            elif lap_ms is not None and (best_ms is None or lap_ms < best_ms):
                 best_ms = lap_ms
                 drv = e.driver_id or "?"
                 text = f"Fastest lap: {drv} {_fmt_ms(lap_ms)}"
@@ -171,7 +191,7 @@ def render_feed(
         elif e.type in ("SessionStarted", "SessionStatusChanged", "RaceControlMessage"):
             tag = "FLAG"
         elif e.type == "LapCompleted":
-            tag = "FASTEST"
+            tag = "FINISH" if (race_total_laps and e.lap == race_total_laps) else "FASTEST"
         else:
             tag = "INFO"
 
