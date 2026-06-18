@@ -1413,7 +1413,7 @@ body {
   .top-toggles .tog-group--secondary {
     display: none;
   }
-  .top-panels {
+  .top .top-panels {
     display: none;
   }
   /* Lapbox shrinks */
@@ -1424,7 +1424,7 @@ body {
     font-size: 10px;
   }
   /* Show HIGHLIGHTS+DOTD section in settings drawer on tablet */
-  .drawer-panels-group {
+  .settings-group.drawer-panels-group {
     display: block;
   }
   /* Insight text wrapping on 1024–1366px */
@@ -1509,16 +1509,34 @@ body {
   .settings-btn {
     display: flex;
   }
+  /* Top bar must never overflow: session truncates, gear + lap stay pinned. */
+  .sess {
+    flex: 1;
+    min-width: 0;
+  }
+  .sess b,
+  .sess-select {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .top-toggles,
+  .settings-btn,
+  .lapbox {
+    flex-shrink: 0;
+  }
 
   /* Hide secondary toggle groups on mobile */
   .top-toggles .tog-group--secondary {
     display: none;
   }
-  .top-panels {
+  .top .top-panels {
     display: none;
   }
   /* Show HIGHLIGHTS+DOTD section in settings drawer on mobile */
-  .drawer-panels-group {
+  .settings-group.drawer-panels-group {
     display: block;
   }
 
