@@ -277,13 +277,17 @@ export function trackOrder(
     else active.push(id)
   }
 
+  // Safety: progress only orders cars that are ALL still circulating. The moment
+  // any active car lacks progress (finished — telemetry stops past the line; a
+  // data gap; pit transient) fall back to the official order. Without this, a
+  // finished leader (null progress) would sink to the bottom and a car still on
+  // track would float to "P1" — the last-lap chaos bug.
+  if (active.some((id) => valueAt(id) === null)) return classification
+
   const idx = new Map(classification.map((id, i) => [id, i]))
   active.sort((a, b) => {
-    const pa = valueAt(a)
-    const pb = valueAt(b)
-    if (pa === null && pb === null) return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
-    if (pa === null) return 1
-    if (pb === null) return -1
+    const pa = valueAt(a) as number
+    const pb = valueAt(b) as number
     if (pb !== pa) return pb - pa
     return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
   })
