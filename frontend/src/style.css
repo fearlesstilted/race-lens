@@ -970,7 +970,14 @@ body {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
+  transition: border-color .15s ease, color .15s ease,
+              background-color .15s ease, transform .08s ease;
 }
+.b:hover:not(:disabled) {
+  border-color: var(--rb-yellow);
+  background: #ffc5000f;
+}
+.b:active:not(:disabled) { transform: translateY(1px); }
 .b:disabled {
   opacity: 0.4;
   cursor: default;
@@ -980,10 +987,14 @@ body {
   color: #000;
   border-color: var(--ink);
 }
+.b.primary:hover:not(:disabled) { background: #fff; border-color: #fff; }
 .b.on {
   border-color: var(--red);
-  color: var(--red);
+  color: #fff;
+  background: #e8002d1a;
+  box-shadow: inset 0 -2px 0 var(--red);
 }
+.b.on:hover:not(:disabled) { border-color: var(--red); background: #e8002d2a; }
 .clock {
   margin-left: auto;
   font: italic 700 18px var(--cond);
@@ -1047,19 +1058,21 @@ body {
 }
 
 /* position change highlights */
+/* Overtake flash — bright enough to read in a GIF: a coloured wash that fades
+   out, plus a left edge bar (green = gained, red = lost). */
 @keyframes pos-up-fade {
-  0%   { background-color: rgba(57, 181, 74, 0.06); }
-  100% { background-color: transparent; }
+  0%   { background-color: rgba(57, 196, 99, 0.28); box-shadow: inset 3px 0 0 var(--green); }
+  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
 }
 @keyframes pos-down-fade {
-  0%   { background-color: rgba(232, 0, 45, 0.06); }
-  100% { background-color: transparent; }
+  0%   { background-color: rgba(232, 0, 45, 0.26); box-shadow: inset 3px 0 0 var(--red); }
+  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
 }
 .trow-pos-up {
-  animation: pos-up-fade 2s ease-out forwards;
+  animation: pos-up-fade 1.8s ease-out forwards;
 }
 .trow-pos-down {
-  animation: pos-down-fade 2s ease-out forwards;
+  animation: pos-down-fade 1.8s ease-out forwards;
 }
 
 /* selected driver row */
@@ -1802,9 +1815,10 @@ body {
   color: var(--ink);
   padding: 4px 10px;
   cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background-color .15s ease;
 }
-.whatif-btn:hover { border-color: #7c4dff; color: #b39ddb; }
-.whatif-btn.active { border-color: #7c4dff; color: #b39ddb; }
+.whatif-btn:hover { border-color: var(--rb-yellow); color: var(--rb-yellow); }
+.whatif-btn.active { border-color: var(--red); color: #fff; background: #e8002d22; }
 .whatif-btn:disabled { opacity: 0.4; cursor: default; }
 .what-if-card {
   padding: 6px 0;

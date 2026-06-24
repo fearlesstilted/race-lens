@@ -121,8 +121,9 @@ export const TimingTower = React.memo(function TimingTower({
         el.style.transform = `translateY(${delta}px)`
         // Force reflow
         void el.offsetTop
-        // Release: animate to natural position
-        el.style.transition = 'transform 500ms ease'
+        // Release: animate to natural position. Broadcast-snappy easing —
+        // a quick settle reads cleanly even in a short GIF loop.
+        el.style.transition = 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)'
         el.style.transform = ''
       }
     }
