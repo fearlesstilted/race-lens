@@ -195,9 +195,11 @@ def render_feed(
         else:
             tag = "INFO"
 
+        # Lights-out opens lap 1; SessionStarted carries no lap of its own.
+        item_lap = 1 if e.type == "SessionStarted" else e.lap
         items.append({
             "at_ms": e.session_time_ms,
-            "lap": e.lap,
+            "lap": item_lap,
             "kind": e.type,
             "tag": tag,
             "text": text,
