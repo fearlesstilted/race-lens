@@ -110,33 +110,72 @@ export const TimingTower = React.memo(function TimingTower({
   // After paint: detect moves, run FLIP, detect position changes
   useLayoutEffect(() => {
     const prev = prevTopsRef.current
+    // Honour reduced-motion: skip transform animation entirely if the user requested it.
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     for (const [id, el] of rowRefs.current) {
       const oldTop = prev.get(id)
       const newTop = el.offsetTop
       if (oldTop !== undefined && oldTop !== newTop) {
         const delta = oldTop - newTop
-        // Apply inverted transform (no transition)
-        el.style.transition = 'none'
-        el.style.transform = `translateY(${delta}px)`
-        // Force reflow
-        void el.offsetTop
-        // Release: animate to natural position. Broadcast-snappy easing —
-        // a quick settle reads cleanly even in a short GIF loop.
-        el.style.transition = 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)'
-        el.style.transform = ''
+        if (reducedMotion) {
+          // No motion — just snap to final position (no transform trickery).
+          el.style.transform = ''
+          el.style.transition = 'none'
+          el.style.zIndex = ''
+        } else {
+          // Lift above neighbours during travel so rows glide over, not through.
+          el.style.zIndex = '10'
+          // Apply inverted transform (no transition) — the FLIP "First" step.
+          el.style.transition = 'none'
+          el.style.transform = `translateY(${delta}px)`
+          // Force reflow to commit the starting transform before we release.
+          void el.offsetTop
+          // Release with broadcast-grade easing: fast start, silky settle.
+          // 310ms is short enough to feel snappy at 60fps but long enough to
+          // read clearly in a GIF/screen-record.
+          el.style.transition = 'transform 310ms cubic-bezier(0.2, 1, 0.3, 1), z-index 0s 310ms'
+          el.style.transform = ''
+          // Drop z-index back after travel completes.
+          const clearZ = setTimeout(() => {
+            el.style.zIndex = ''
+            el.style.transition = ''
+          }, 320)
+          // Track so we don't leak timers (overwrite if another swap fires sooner).
+          ;(el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> })._zTimer && clearTimeout(
+            (el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> })._zTimer!
+          )
+          ;(el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> })._zTimer = clearZ
+        }
       }
     }
 
-    // Detect position changes for highlight
+    // Detect position changes for highlight + position-number flash
     const newChanges = new Map<string, 'up' | 'down'>()
     for (const row of rows) {
       if (row.position === null) continue
-      const prev = prevPositionRef.current.get(row.id)
-      if (prev !== undefined && prev !== row.position) {
-        const dir = row.position < prev ? 'up' : 'down'
+      const prevPos = prevPositionRef.current.get(row.id)
+      if (prevPos !== undefined && prevPos !== row.position) {
+        const dir = row.position < prevPos ? 'up' : 'down'
         newChanges.set(row.id, dir)
-        // Clear after 2s
+
+        // Flash the position number badge via Web Animations API.
+        if (!reducedMotion) {
+          const el = rowRefs.current.get(row.id)
+          const posEl = el?.querySelector<HTMLElement>('.pos')
+          if (posEl) {
+            posEl.animate(
+              [
+                { transform: 'skewX(-8deg) scale(1)',    opacity: 1   },
+                { transform: 'skewX(-8deg) scale(1.22)', opacity: 1   },
+                { transform: 'skewX(-8deg) scale(1)',    opacity: 0.9 },
+              ],
+              { duration: 280, easing: 'ease-out', fill: 'none' },
+            )
+          }
+        }
+
+        // Clear accent bar after 2.2s
         const existing = highlightTimers.current.get(row.id)
         if (existing) clearTimeout(existing)
         const t = setTimeout(() => {
@@ -146,7 +185,7 @@ export const TimingTower = React.memo(function TimingTower({
             return next
           })
           highlightTimers.current.delete(row.id)
-        }, 2000)
+        }, 2200)
         highlightTimers.current.set(row.id, t)
       }
       prevPositionRef.current.set(row.id, row.position)

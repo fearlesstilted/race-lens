@@ -14,6 +14,7 @@
   --soft: #ff2d2d;
   --med: #ffd900;
   --hard: #ececec;
+  --green: #39c463;
   --cond: 'Barlow Condensed', sans-serif;
   --body: 'Inter', -apple-system, sans-serif;
 
@@ -516,7 +517,15 @@ body {
   border-top: 0;
 }
 .trow.lead {
-  background: linear-gradient(90deg, #1b264f99, #e8002d12 45%, transparent 78%);
+  /* Navy base wash, subtle red breath at mid-row, clean edge.
+     The RB-yellow hairline is the focal anchor — keep it 2px, crisp. */
+  background: linear-gradient(
+    90deg,
+    #1b264fcc 0%,
+    #1b264f88 30%,
+    #e8002d0d 55%,
+    transparent 82%
+  );
   box-shadow: inset 2px 0 0 var(--rb-yellow);
 }
 /* pit tag inside code cell */
@@ -1057,22 +1066,60 @@ body {
   vertical-align: middle;
 }
 
-/* position change highlights */
-/* Overtake flash — bright enough to read in a GIF: a coloured wash that fades
-   out, plus a left edge bar (green = gained, red = lost). */
-@keyframes pos-up-fade {
-  0%   { background-color: rgba(57, 196, 99, 0.28); box-shadow: inset 3px 0 0 var(--green); }
-  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
+/* ── Position-change accent bar ─────────────────────────────────
+   Broadcast approach: a sharp left-edge bar that blooms in fast then
+   recedes slowly. The row background stays clean — only the bar reads.
+   The ::before pseudo is repurposed here (battle-tick uses it when
+   both classes are absent, so no conflict on simultaneous states). */
+
+@keyframes pos-bar-up {
+  /* bar: materialise at full opacity, then fade out by 2.2s */
+  0%   { opacity: 1;   transform: scaleY(1); }
+  60%  { opacity: 0.9; transform: scaleY(1); }
+  100% { opacity: 0;   transform: scaleY(0.6); }
 }
-@keyframes pos-down-fade {
-  0%   { background-color: rgba(232, 0, 45, 0.26); box-shadow: inset 3px 0 0 var(--red); }
-  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
+@keyframes pos-bar-down {
+  0%   { opacity: 1;   transform: scaleY(1); }
+  60%  { opacity: 0.9; transform: scaleY(1); }
+  100% { opacity: 0;   transform: scaleY(0.6); }
 }
-.trow-pos-up {
-  animation: pos-up-fade 1.8s ease-out forwards;
-}
+
+.trow-pos-up,
 .trow-pos-down {
-  animation: pos-down-fade 1.8s ease-out forwards;
+  position: relative;
+  /* The row itself stays visually clean — no background tint. */
+}
+
+/* left-edge bar via ::after so it doesn't conflict with ::before (battle-tick) */
+.trow-pos-up::after,
+.trow-pos-down::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 3px;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.trow-pos-up::after {
+  background: var(--green);
+  animation: pos-bar-up 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.trow-pos-down::after {
+  background: var(--red);
+  animation: pos-bar-down 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Reduced-motion: no bar animation at all */
+@media (prefers-reduced-motion: reduce) {
+  .trow-pos-up::after,
+  .trow-pos-down::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* selected driver row */
@@ -2239,6 +2286,57 @@ body {
   color: #444455;
   border-top: 1px solid var(--hair);
   flex-shrink: 0;
+}
+
+/* ── Timeline markers ───────────────────────────────────────────── */
+/* All marker shapes are SVG-rendered in ReplayDeck.tsx.
+   These classes provide hover lift, pulse for severe events,
+   and consistent sizing tokens. */
+
+/* Sizing tokens used by inline SVG shapes */
+:root {
+  --mk-tri-w: 9px;   /* triangle base width */
+  --mk-tri-h: 8px;   /* triangle height (approx equilateral) */
+  --mk-dot-r: 5px;   /* dot diameter */
+  --mk-line-h: 16px; /* flag-line height */
+  --mk-line-w: 2px;
+}
+
+.rail-marker {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  transition: transform 0.12s ease-out, opacity 0.12s ease-out;
+}
+.rail-marker:hover {
+  /* Subtle lift — the marker pops ~2px above the rail line */
+  transform: translateX(-50%) translateY(-2px);
+  opacity: 1 !important;
+}
+/* CRASH / INCIDENT / OFF_TRACK: gentle pulse so the eye finds them */
+@keyframes mk-pulse {
+  0%, 100% { opacity: 0.92; }
+  50%       { opacity: 0.45; }
+}
+.rail-marker-severe {
+  animation: mk-pulse 1.8s ease-in-out infinite;
+}
+.rail-marker-severe:hover {
+  animation: none;
+  opacity: 1 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-marker-severe {
+    animation: none;
+  }
+  .rail-marker:hover {
+    transform: translateX(-50%);
+  }
 }
 
 /* ── Motion design ──────────────────────────────────────────────── */

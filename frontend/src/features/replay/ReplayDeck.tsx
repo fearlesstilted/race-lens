@@ -285,6 +285,10 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
             markerStyle(m.kind).zIndex > markerStyle(best.kind).zIndex ? m : best,
           )
           const ms = markerStyle(primary.kind)
+          const isSevere =
+            primary.kind === 'CRASH' ||
+            primary.kind === 'INCIDENT' ||
+            primary.kind === 'OFF_TRACK'
           const tipText = cluster.items
             .map((m) => {
               const label = lang === 'ru' ? m.text_ru : m.text_en
@@ -295,65 +299,78 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
             e.stopPropagation()
             if (canScrub) onScrub(primary.at_ms)
           }
+          const markerCls = [
+            'rail-marker',
+            isSevere ? 'rail-marker-severe' : '',
+          ].filter(Boolean).join(' ')
+
           return (
             <div
               key={`m-${cluster.pct.toFixed(3)}`}
               title={tipText}
               onClick={handleMarkerClick}
+              className={markerCls}
               style={{
-                position: 'absolute',
                 left: `${cluster.pct}%`,
-                top: 0,
-                transform: 'translateX(-50%)',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 zIndex: ms.zIndex,
                 cursor: canScrub ? 'pointer' : 'default',
-                pointerEvents: 'auto',
               }}
             >
               {ms.shape === 'line' && (
-                <span style={{
-                  display: 'block',
-                  width: '2px',
-                  height: '14px',
-                  background: ms.color,
-                  borderRadius: '1px',
-                  opacity: 0.85,
-                }} />
+                /* Flag line: crisp 2px vertical bar, full rail height */
+                <svg
+                  width="2"
+                  height="16"
+                  viewBox="0 0 2 16"
+                  style={{ display: 'block', opacity: 0.88 }}
+                  aria-hidden="true"
+                >
+                  <rect x="0" y="0" width="2" height="16" fill={ms.color} />
+                </svg>
               )}
               {ms.shape === 'triangle' && (
-                <span style={{
-                  display: 'block',
-                  width: 0,
-                  height: 0,
-                  borderLeft: '4px solid transparent',
-                  borderRight: '4px solid transparent',
-                  borderBottom: `7px solid ${ms.color}`,
-                  opacity: 0.9,
-                }} />
+                /* Proper equilateral-ish triangle pointing up.
+                   Base 9px, height 8px — optically balanced at this scale. */
+                <svg
+                  width="9"
+                  height="8"
+                  viewBox="0 0 9 8"
+                  style={{ display: 'block', overflow: 'visible' }}
+                  aria-hidden="true"
+                >
+                  <polygon points="4.5,0 9,8 0,8" fill={ms.color} />
+                </svg>
               )}
               {ms.shape === 'dot' && (
-                <span style={{
-                  display: 'block',
-                  width: '5px',
-                  height: '5px',
-                  borderRadius: '50%',
-                  background: ms.color,
-                  opacity: 0.9,
-                }} />
+                /* Filled circle — clean at 5px diameter */
+                <svg
+                  width="5"
+                  height="5"
+                  viewBox="0 0 5 5"
+                  style={{ display: 'block' }}
+                  aria-hidden="true"
+                >
+                  <circle cx="2.5" cy="2.5" r="2.5" fill={ms.color} />
+                </svg>
               )}
               {ms.shape === 'chevron' && (
-                <span style={{
-                  display: 'block',
-                  color: ms.color,
-                  fontSize: '9px',
-                  lineHeight: 1,
-                  opacity: 0.85,
-                  fontWeight: 700,
-                }}>‹</span>
+                /* Right-pointing chevron: a real SVG path, not a character */
+                <svg
+                  width="7"
+                  height="10"
+                  viewBox="0 0 7 10"
+                  style={{ display: 'block', opacity: 0.9 }}
+                  aria-hidden="true"
+                >
+                  <polyline
+                    points="1,1 6,5 1,9"
+                    fill="none"
+                    stroke={ms.color}
+                    strokeWidth="1.8"
+                    strokeLinecap="square"
+                    strokeLinejoin="miter"
+                  />
+                </svg>
               )}
             </div>
           )
