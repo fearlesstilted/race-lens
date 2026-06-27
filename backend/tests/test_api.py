@@ -131,10 +131,8 @@ def test_timeline(client):
 
 def test_download_replay_writes_fixture_and_returns_shape(tmp_path, monkeypatch):
     """POST /api/replays/download writes fixture + returns {session_id, events, path}."""
-    import urllib.error
     from unittest.mock import patch
     import racelens.api as api
-    import racelens.adapters.openf1_adapter as _mod
 
     # Use tmp_path as fixture dir so the write is isolated
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
@@ -151,7 +149,7 @@ def test_download_replay_writes_fixture_and_returns_shape(tmp_path, monkeypatch)
     c = TestClient(api.app)
 
     with (
-        patch.object(_mod, "find_session", mock_find_session),
+        patch("racelens.api.find_session",mock_find_session),
         patch("racelens.api.ingest_openf1", mock_ingest),
     ):
         r = c.post(
@@ -178,7 +176,6 @@ def test_download_replay_writes_fixture_and_returns_shape(tmp_path, monkeypatch)
 
 def test_download_replay_404_on_unknown_session(tmp_path, monkeypatch):
     """POST /api/replays/download with unknown session returns 404."""
-    import racelens.adapters.openf1_adapter as _mod
     from unittest.mock import patch
     import racelens.api as api
 
@@ -190,7 +187,7 @@ def test_download_replay_404_on_unknown_session(tmp_path, monkeypatch):
     def mock_find_fail(year, country, session_name="Race"):
         raise ValueError("No OpenF1 session found for year=2024, location='Atlantis'")
 
-    with patch.object(_mod, "find_session", mock_find_fail):
+    with patch("racelens.api.find_session",mock_find_fail):
         r = c.post(
             "/api/replays/download",
             params={"year": 2024, "country": "Atlantis", "session": "Race"},
@@ -205,7 +202,6 @@ def test_download_replay_502_on_openf1_error(tmp_path, monkeypatch):
     import urllib.error
     from unittest.mock import patch
     import racelens.api as api
-    import racelens.adapters.openf1_adapter as _mod
 
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
     api._engine.cache_clear()
@@ -219,7 +215,7 @@ def test_download_replay_502_on_openf1_error(tmp_path, monkeypatch):
         raise urllib.error.URLError("simulated network error")
 
     with (
-        patch.object(_mod, "find_session", mock_find_session),
+        patch("racelens.api.find_session",mock_find_session),
         patch("racelens.api.ingest_openf1", mock_ingest_fail),
     ):
         r = c.post(
