@@ -9,9 +9,18 @@ Usage::
 
     session_key = find_session(2024, "Monaco")
     events = ingest_openf1(session_key)
+
+Incremental usage (for live polling — reduces per-poll API load)::
+
+    from racelens.adapters.openf1_adapter import OpenF1IncrementalIngester
+
+    ingester = OpenF1IncrementalIngester(session_key)
+    events = ingester.fetch()   # first call: full fetch
+    events = ingester.fetch()   # subsequent: only new rows since last fetch
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 import urllib.error
@@ -22,7 +31,6 @@ from typing import Any
 
 from racelens.adapters._common import message_to_status
 from racelens.events.models import Event, event
-import contextlib
 
 _BASE = "https://api.openf1.org/v1"
 _TIMEOUT = 30
@@ -141,12 +149,26 @@ def _flag_to_status(flag: str) -> str | None:
     return _FLAG_MAP.get(flag.upper())
 
 
-# ── Main ingestion ────────────────────────────────────────────────────────────
+# ── Shared row→Event transform ────────────────────────────────────────────────
+# This is the single source of truth. ingest_openf1() and
+# OpenF1IncrementalIngester both call it with their accumulated row sets.
 
-def ingest_openf1(session_key: int) -> list[Event]:
-    """Fetch all relevant endpoints for *session_key* and return normalized Events.
+def _rows_to_events(
+    session_key: int,
+    driver_rows: list[dict],
+    session_rows: list[dict],
+    lap_rows: list[dict],
+    pos_rows: list[dict],
+    pit_rows: list[dict],
+    stint_rows: list[dict],
+    interval_rows: list[dict],
+    rc_rows: list[dict],
+) -> list[Event]:
+    """Convert raw OpenF1 row sets into a sorted Event list.
 
-    The session_id is derived deterministically so event_ids match across re-runs.
+    All eight raw row lists are consumed in one pass.  The result is
+    deterministic: identical accumulated inputs always produce identical outputs.
+    This function has no side effects and does not call the network.
     """
     src = "openf1"
     events: list[Event] = []
@@ -161,7 +183,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
         return e
 
     # ── Drivers ──────────────────────────────────────────────────────────────
-    driver_rows = _get("/drivers", {"session_key": session_key}) or []
     driver_map: dict[int, str] = {}
     for row in driver_rows:
         dn = row.get("driver_number")
@@ -170,7 +191,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
             driver_map[int(dn)] = str(acronym)
 
     # ── Session metadata → derive session_id ─────────────────────────────────
-    session_rows = _get("/sessions", {"session_key": session_key}) or []
     if session_rows:
         s = session_rows[0]
         year = s.get("year", "unknown")
@@ -185,8 +205,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
     events.append(mk(sid, "SessionStarted", 0))
 
     # ── Laps → LapCompleted, compute t0 (rebase anchor) ─────────────────────
-    lap_rows = _get("/laps", {"session_key": session_key}) or []
-
     # t0: earliest date_start of lap 1 across all drivers (POSIX seconds)
     t0_posix: float | None = None
     for row in lap_rows:
@@ -232,7 +250,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
                          lap_time_ms=lap_time_ms))
 
     # ── Position → PositionChanged (real changes only) ───────────────────────
-    pos_rows = _get("/position", {"session_key": session_key}) or []
     last_pos: dict[str, int] = {}  # driver → last seen position
     for row in pos_rows:
         dn = row.get("driver_number")
@@ -250,7 +267,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
             events.append(mk(sid, "PositionChanged", t_ms, drv, position=pos))
 
     # ── Pits → PitIn / PitOut ────────────────────────────────────────────────
-    pit_rows = _get("/pit", {"session_key": session_key}) or []
     for row in pit_rows:
         dn = row.get("driver_number")
         drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
@@ -270,7 +286,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
                 pass
 
     # ── Stints → TyreStintUpdated ─────────────────────────────────────────────
-    stint_rows = _get("/stints", {"session_key": session_key}) or []
     for row in stint_rows:
         dn = row.get("driver_number")
         drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
@@ -305,7 +320,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
                          age_laps=int(tyre_age) if tyre_age is not None else 0))
 
     # ── Intervals → GapUpdated / IntervalUpdated (sampled ≤ 1 per driver / 30 s) ──
-    interval_rows = _get("/intervals", {"session_key": session_key}) or []
     last_interval_t: dict[str, int] = {}  # driver → last emitted session_time_ms
     # Track the last valid row seen per driver so we can emit a final sample.
     last_interval_row: dict[str, tuple[int, Any, Any]] = {}  # driver → (t_ms, gap, interval)
@@ -361,7 +375,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
                 events.append(mk(sid, "IntervalUpdated", t_ms, drv, interval_s=round(interval, 3)))
 
     # ── Race control → RaceControlMessage + SessionStatusChanged ─────────────
-    rc_rows = _get("/race_control", {"session_key": session_key}) or []
     for row in rc_rows:
         date = _parse_iso(row.get("date"))
         if date is None:
@@ -392,3 +405,156 @@ def ingest_openf1(session_key: int) -> list[Event]:
     # ingest_seq is already assigned in creation order (arrival order)
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events
+
+
+# ── Main ingestion (full fetch — unchanged public API) ────────────────────────
+
+def ingest_openf1(session_key: int) -> list[Event]:
+    """Fetch all relevant endpoints for *session_key* and return normalized Events.
+
+    The session_id is derived deterministically so event_ids match across re-runs.
+    This always fetches the complete session data (no incremental state).
+    For live polling use OpenF1IncrementalIngester instead.
+    """
+    driver_rows = _get("/drivers", {"session_key": session_key}) or []
+    session_rows = _get("/sessions", {"session_key": session_key}) or []
+    lap_rows = _get("/laps", {"session_key": session_key}) or []
+    pos_rows = _get("/position", {"session_key": session_key}) or []
+    pit_rows = _get("/pit", {"session_key": session_key}) or []
+    stint_rows = _get("/stints", {"session_key": session_key}) or []
+    interval_rows = _get("/intervals", {"session_key": session_key}) or []
+    rc_rows = _get("/race_control", {"session_key": session_key}) or []
+
+    return _rows_to_events(
+        session_key,
+        driver_rows,
+        session_rows,
+        lap_rows,
+        pos_rows,
+        pit_rows,
+        stint_rows,
+        interval_rows,
+        rc_rows,
+    )
+
+
+# ── Incremental ingester for live polling ─────────────────────────────────────
+
+# Time-series endpoints that support the date>= filter for incremental fetching.
+# Static endpoints (/drivers, /sessions) only need fetching once.
+_TIMESERIES_ENDPOINTS = ("/laps", "/position", "/pit", "/stints", "/intervals", "/race_control")
+
+# The date field name per endpoint (the field used for date>= filtering AND for
+# tracking the latest row we've seen).
+_DATE_FIELD: dict[str, str] = {
+    "/laps": "date_start",
+    "/position": "date",
+    "/pit": "date",
+    "/stints": "date_start",   # stints don't always have date_start; see note below
+    "/intervals": "date",
+    "/race_control": "date",
+}
+
+
+def _latest_date(rows: list[dict], date_field: str) -> str | None:
+    """Return the lexicographically latest ISO date string seen in *rows*."""
+    latest: str | None = None
+    for row in rows:
+        d = row.get(date_field)
+        if d and isinstance(d, str):
+            if latest is None or d > latest:
+                latest = d
+    return latest
+
+
+class OpenF1IncrementalIngester:
+    """Stateful ingester that only fetches new rows on each call after the first.
+
+    Design:
+    - First call: full fetch (equivalent to ingest_openf1).
+    - Subsequent calls: for each time-series endpoint, only request rows with
+      ``date>`` the latest date seen so far; static endpoints (/drivers,
+      /sessions) are fetched once and reused.
+    - Raw rows are accumulated across polls.  Each call re-runs the full
+      _rows_to_events() transform over ALL accumulated rows so the replay
+      engine always gets a complete, deterministic event list.
+
+    The ``fetch()`` return value is byte-for-byte identical to what
+    ``ingest_openf1()`` would return given the same accumulated rows.
+    """
+
+    def __init__(self, session_key: int) -> None:
+        self._session_key = session_key
+        self._initialized = False
+
+        # Accumulated raw rows per endpoint
+        self._driver_rows: list[dict] = []
+        self._session_rows: list[dict] = []
+        self._lap_rows: list[dict] = []
+        self._pos_rows: list[dict] = []
+        self._pit_rows: list[dict] = []
+        self._stint_rows: list[dict] = []
+        self._interval_rows: list[dict] = []
+        self._rc_rows: list[dict] = []
+
+        # Latest date seen per time-series endpoint (for date>= filter)
+        self._latest: dict[str, str | None] = {ep: None for ep in _TIMESERIES_ENDPOINTS}
+
+    def _update_latest(self, endpoint: str, new_rows: list[dict]) -> None:
+        """Update the latest-date bookmark for *endpoint* from *new_rows*."""
+        date_field = _DATE_FIELD.get(endpoint)
+        if date_field is None:
+            return
+        latest = _latest_date(new_rows, date_field)
+        if latest is not None:
+            prev = self._latest.get(endpoint)
+            if prev is None or latest > prev:
+                self._latest[endpoint] = latest
+
+    def _fetch_timeseries(self, endpoint: str) -> list[dict]:
+        """Fetch rows for a time-series endpoint, using date> filter after first call."""
+        params: dict[str, Any] = {"session_key": self._session_key}
+        prev_latest = self._latest.get(endpoint)
+        if self._initialized and prev_latest is not None:
+            # OpenF1 accepts "date>=" as a literal param key name.
+            # Use strictly-greater-than to avoid re-fetching the last row.
+            params["date>"] = prev_latest
+        return _get(endpoint, params) or []
+
+    def fetch(self) -> list[Event]:
+        """Fetch (incrementally after first call) and return the full event list.
+
+        Returns the same result as ingest_openf1() for the same total data set.
+        """
+        if not self._initialized:
+            # First call: full fetch for all endpoints including static ones
+            self._driver_rows = _get("/drivers", {"session_key": self._session_key}) or []
+            self._session_rows = _get("/sessions", {"session_key": self._session_key}) or []
+        # Always re-fetch time-series endpoints (full on first call, incremental thereafter)
+        for endpoint, store_attr in (
+            ("/laps", "_lap_rows"),
+            ("/position", "_pos_rows"),
+            ("/pit", "_pit_rows"),
+            ("/stints", "_stint_rows"),
+            ("/intervals", "_interval_rows"),
+            ("/race_control", "_rc_rows"),
+        ):
+            new_rows = self._fetch_timeseries(endpoint)
+            if new_rows:
+                # Append new rows; update bookmark
+                getattr(self, store_attr).extend(new_rows)
+                self._update_latest(endpoint, new_rows)
+
+        self._initialized = True
+
+        return _rows_to_events(
+            self._session_key,
+            self._driver_rows,
+            self._session_rows,
+            self._lap_rows,
+            self._pos_rows,
+            self._pit_rows,
+            self._stint_rows,
+            self._interval_rows,
+            self._rc_rows,
+        )

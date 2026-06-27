@@ -17,7 +17,11 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from racelens.adapters.openf1_adapter import find_session, ingest_openf1
+from racelens.adapters.openf1_adapter import (
+    OpenF1IncrementalIngester,
+    find_session,
+    ingest_openf1,
+)
 from racelens.commentary.feed import render_feed
 from racelens.events_significant import significant_events
 from racelens.commentary.renderer import render_all
@@ -176,10 +180,8 @@ async def live_start(
         except ValueError as exc:
             raise HTTPException(404, str(exc)) from exc
 
-        def fetch() -> list:
-            return ingest_openf1(session_key)
-
-        _live = LiveRunner(fetch, poll_interval_s=poll_s)
+        ingester = OpenF1IncrementalIngester(session_key)
+        _live = LiveRunner(ingester.fetch, poll_interval_s=poll_s)
         await _live.start()
     return {"session_key": session_key, "poll_interval_s": poll_s, "status": "started"}
 
@@ -236,6 +238,52 @@ def live_stop() -> dict:
     _live.stop()
     _live = None
     return final_status
+
+
+@app.post("/api/replays/download")
+def download_replay(
+    year: int = Query(...),
+    country: str = Query(...),
+    session: str = Query(default="Race"),
+) -> dict:
+    """Download a session from OpenF1 and save it as a replay fixture.
+
+    Fetches the full session, writes it to
+    ``fixtures/<country>_<year>_<session>.jsonl`` (lowercased, spaces → _),
+    and returns ``{session_id, events, path}``.
+
+    Errors:
+    - 404: session not found in OpenF1 (find_session raised ValueError).
+    - 502: OpenF1 unavailable (network or HTTP error).
+    """
+    import re
+    import urllib.error
+
+    from racelens.events.models import dump_jsonl
+
+    try:
+        session_key = find_session(year, country, session)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    try:
+        events = ingest_openf1(session_key)
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+        raise HTTPException(502, f"OpenF1 unavailable: {exc}") from exc
+
+    # Build slug: lowercase, normalise non-alphanumeric runs to underscore
+    def _slug(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+
+    slug = f"{_slug(country)}_{year}_{_slug(session)}"
+    out_path = FIXTURES_DIR / f"{slug}.jsonl"
+    FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(dump_jsonl(events), encoding="utf-8")
+
+    # Invalidate the engine cache so the new fixture is immediately available
+    _engine.cache_clear()
+
+    return {"session_id": slug, "events": len(events), "path": str(out_path)}
 
 
 @app.get("/api/live/sessions")

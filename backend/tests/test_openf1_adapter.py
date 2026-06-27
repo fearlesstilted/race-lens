@@ -315,3 +315,99 @@ def test_find_session_404_via_api():
     assert r.status_code == 404
     assert "Available countries" in r.json()["detail"]
     assert api._live is None
+
+
+# ── Incremental ingester tests ────────────────────────────────────────────────
+
+def test_incremental_ingester_two_batches():
+    """Second batch only requests date> filter; final events equal full-fetch events.
+
+    Setup:
+    - Batch 1: laps 1 only (3 drivers), positions/pits/intervals/rc from T0 only.
+    - Batch 2: laps 2 only (3 drivers), remaining rows after T0.
+    The mock simulates the real API: on the second call it returns only the new rows
+    (as OpenF1 would after filtering by date>).  The incremental ingester must:
+    1. Include a date> param on the second /laps (and other time-series) call.
+    2. Not re-fetch /drivers or /sessions.
+    3. Produce the same events as a full ingest over all rows combined.
+    """
+    # Split _LAPS into two batches by lap_number
+    batch1_laps = [r for r in _LAPS if r["lap_number"] == 1]
+    batch2_laps = [r for r in _LAPS if r["lap_number"] == 2]
+
+    # For the other time-series endpoints we pretend batch 1 returns nothing new
+    # and batch 2 returns everything (simulates that they all arrived between polls).
+    # This is the simplest correct split for the test.
+    batch1_data: dict[str, list] = {
+        "/sessions": _SESSIONS,
+        "/drivers": _DRIVERS,
+        "/laps": batch1_laps,
+        "/position": [],
+        "/pit": [],
+        "/stints": [],
+        "/intervals": [],
+        "/race_control": [],
+    }
+    batch2_data: dict[str, list] = {
+        # static endpoints should NOT be called again; if they are, return empty
+        "/sessions": [],
+        "/drivers": [],
+        "/laps": batch2_laps,
+        "/position": _POSITIONS,
+        "/pit": _PITS,
+        "/stints": _STINTS,
+        "/intervals": _INTERVALS,
+        "/race_control": _RACE_CONTROL,
+    }
+
+    call_log: list[tuple[str, dict]] = []
+    call_counts: dict[str, int] = {}
+
+    def mock_get(path, params=None):
+        params = dict(params) if params else {}
+        call_log.append((path, params))
+        n = call_counts.get(path, 0)
+        call_counts[path] = n + 1
+        data = batch1_data if n == 0 else batch2_data
+        return list(data.get(path, []))
+
+    ingester = _mod.OpenF1IncrementalIngester(_SESSION_KEY)
+
+    with patch.object(_mod, "_get", mock_get):
+        call_log.clear()
+        call_counts.clear()
+        ingester.fetch()  # batch 1
+
+        call_log.clear()
+        events_incremental = ingester.fetch()  # batch 2
+
+    # After batch 2, the /laps call must have included a date> filter
+    laps_calls_batch2 = [(path, params) for path, params in call_log if path == "/laps"]
+    assert laps_calls_batch2, "Expected at least one /laps call in batch 2"
+    _, laps_params = laps_calls_batch2[0]
+    assert "date>" in laps_params, (
+        f"Second /laps fetch must include date> filter; got params={laps_params}"
+    )
+
+    # Static endpoints (/drivers, /sessions) must NOT be fetched again in batch 2
+    static_paths_batch2 = [path for path, _ in call_log if path in ("/drivers", "/sessions")]
+    assert static_paths_batch2 == [], (
+        f"Static endpoints must not be re-fetched after first call; got {static_paths_batch2}"
+    )
+
+    # Final accumulated events should match a full ingest over all rows combined.
+    # Build a reference by calling the full ingest with all rows in one shot.
+    full_events = _ingest()
+    assert len(events_incremental) == len(full_events), (
+        f"Incremental ingester produced {len(events_incremental)} events, "
+        f"full ingest produced {len(full_events)}"
+    )
+
+    # Event IDs must be identical (deterministic transform)
+    full_ids = {e.event_id for e in full_events}
+    incr_ids = {e.event_id for e in events_incremental}
+    assert full_ids == incr_ids, (
+        f"Event IDs differ between full ingest and incremental ingester.\n"
+        f"Only in full: {full_ids - incr_ids}\n"
+        f"Only in incremental: {incr_ids - full_ids}"
+    )

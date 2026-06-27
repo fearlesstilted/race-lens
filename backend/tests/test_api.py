@@ -125,3 +125,107 @@ def test_timeline(client):
     assert t["start_ms"] == 0
     assert t["end_ms"] == 250_000
     assert t["lap_marks"]["1"] == 80_000  # first lap-1 completion
+
+
+# ── Replay download endpoint ───────────────────────────────────────────────────
+
+def test_download_replay_writes_fixture_and_returns_shape(tmp_path, monkeypatch):
+    """POST /api/replays/download writes fixture + returns {session_id, events, path}."""
+    import urllib.error
+    from unittest.mock import patch
+    import racelens.api as api
+    import racelens.adapters.openf1_adapter as _mod
+
+    # Use tmp_path as fixture dir so the write is isolated
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine.cache_clear()
+
+    fake_events = mini_race()
+
+    def mock_find_session(year, country, session_name="Race"):
+        return 9999
+
+    def mock_ingest(session_key):
+        return fake_events
+
+    c = TestClient(api.app)
+
+    with (
+        patch.object(_mod, "find_session", mock_find_session),
+        patch("racelens.api.ingest_openf1", mock_ingest),
+    ):
+        r = c.post(
+            "/api/replays/download",
+            params={"year": 2024, "country": "Monaco", "session": "Race"},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # Response shape
+    assert "session_id" in body
+    assert "events" in body
+    assert "path" in body
+    assert body["events"] == len(fake_events)
+    assert body["session_id"] == "monaco_2024_race"
+
+    # Fixture file must have been written
+    written = tmp_path / "monaco_2024_race.jsonl"
+    assert written.is_file(), f"Expected fixture file at {written}"
+    lines = [l for l in written.read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert len(lines) == len(fake_events)
+
+
+def test_download_replay_404_on_unknown_session(tmp_path, monkeypatch):
+    """POST /api/replays/download with unknown session returns 404."""
+    import racelens.adapters.openf1_adapter as _mod
+    from unittest.mock import patch
+    import racelens.api as api
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine.cache_clear()
+
+    c = TestClient(api.app)
+
+    def mock_find_fail(year, country, session_name="Race"):
+        raise ValueError("No OpenF1 session found for year=2024, location='Atlantis'")
+
+    with patch.object(_mod, "find_session", mock_find_fail):
+        r = c.post(
+            "/api/replays/download",
+            params={"year": 2024, "country": "Atlantis", "session": "Race"},
+        )
+
+    assert r.status_code == 404
+    assert "No OpenF1 session" in r.json()["detail"]
+
+
+def test_download_replay_502_on_openf1_error(tmp_path, monkeypatch):
+    """POST /api/replays/download returns 502 when OpenF1 is unreachable."""
+    import urllib.error
+    from unittest.mock import patch
+    import racelens.api as api
+    import racelens.adapters.openf1_adapter as _mod
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine.cache_clear()
+
+    c = TestClient(api.app)
+
+    def mock_find_session(year, country, session_name="Race"):
+        return 9999
+
+    def mock_ingest_fail(session_key):
+        raise urllib.error.URLError("simulated network error")
+
+    with (
+        patch.object(_mod, "find_session", mock_find_session),
+        patch("racelens.api.ingest_openf1", mock_ingest_fail),
+    ):
+        r = c.post(
+            "/api/replays/download",
+            params={"year": 2024, "country": "Monaco", "session": "Race"},
+        )
+
+    assert r.status_code == 502
+    assert "unavailable" in r.json()["detail"].lower()
