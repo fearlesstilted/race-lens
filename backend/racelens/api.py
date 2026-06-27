@@ -79,6 +79,10 @@ def _race_end_ms(eng: ReplayEngine) -> int:
         return max(laps)
     return eng.events[-1].session_time_ms if eng.events else 0
 
+@app.get("/api/ping")
+def ping():
+    return {"status": "ok"} #keepalive ping for render demo page 
+
 
 @app.get("/api/sessions")
 def list_sessions() -> list[dict]:
@@ -155,7 +159,7 @@ async def live_start(
     year: int = Query(...),
     country: str = Query(...),
     session: str = Query(default="Race"),
-    poll_s: float = Query(default=2.0, gt=0),
+    poll_s: float = Query(default=12.0, gt=0),
 ) -> dict:
     """Find the OpenF1 session and start polling.
 
@@ -270,12 +274,21 @@ def live_sessions(
     result = []
     for row in rows:
         date_start = str(row.get("date_start") or "")
+        # OpenF1 date_start can arrive WITHOUT a timezone (it's track-local wall
+        # time). Glue on gmt_offset (e.g. "02:00:00" → "+02:00") so the frontend
+        # parses the correct instant instead of assuming UTC (the 16:00→18:00 bug).
+        gmt = str(row.get("gmt_offset") or "")
+        if date_start and "+" not in date_start and not date_start.endswith("Z") and gmt:
+            hh_mm = gmt[:5] if len(gmt) >= 5 else gmt  # "02:00:00" → "02:00"
+            sign = "+" if not hh_mm.startswith("-") else ""
+            date_start = f"{date_start}{sign}{hh_mm}"
         ts = _parse_iso(date_start) if date_start else None
         result.append({
             "session_name": str(row.get("session_name") or ""),
             "session_key": int(row["session_key"]),
             "session_type": str(row.get("session_type") or ""),
             "date_start": date_start,
+            "gmt_offset": gmt,
             "started": ts is not None and now_ts >= ts,
         })
 

@@ -26,13 +26,18 @@ import contextlib
 
 _BASE = "https://api.openf1.org/v1"
 _TIMEOUT = 30
-_MAX_RETRIES = 1
+_MAX_RETRIES = 4
+# OpenF1's free tier rate-limits (429) and occasionally 502/503/504s under load —
+# all transient. Retry those with exponential backoff; other 4xx are real errors.
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_BACKOFF_BASE_S = 1.5
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
 def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
-    """GET JSON from OpenF1 with one retry on network error."""
+    """GET JSON from OpenF1 with exponential-backoff retries on rate-limit /
+    transient server errors (429, 502, 503, 504) and network errors."""
     url = _BASE + path
     if params:
         url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
@@ -43,13 +48,22 @@ def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
             with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return data if isinstance(data, list) else []
-        except urllib.error.HTTPError:
-            # HTTP-level errors (4xx/5xx) are not transient — don't retry.
+        except urllib.error.HTTPError as exc:
+            # Honour Retry-After if present, else exponential backoff. Only retry
+            # transient statuses; real 4xx (404 etc.) raise immediately.
+            if exc.code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                try:
+                    wait = float(retry_after) if retry_after else _BACKOFF_BASE_S * (2 ** attempt)
+                except ValueError:
+                    wait = _BACKOFF_BASE_S * (2 ** attempt)
+                time.sleep(min(wait, 20))
+                continue
             raise
         except (urllib.error.URLError, OSError):
-            # Network-level errors may be transient — retry once.
+            # Network-level errors may be transient — back off and retry.
             if attempt < _MAX_RETRIES:
-                time.sleep(1)
+                time.sleep(_BACKOFF_BASE_S * (2 ** attempt))
                 continue
             raise
     return []

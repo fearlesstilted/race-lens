@@ -284,11 +284,17 @@ export function trackOrder(
   // track would float to "P1" — the last-lap chaos bug.
   if (active.some((id) => valueAt(id) === null)) return classification
 
+  // Anti-jitter: quantise progress into ~0.27s-of-track buckets (1 lap ≈ 90s →
+  // 0.003 lap). Cars within the same bucket keep the official order, so a bunched
+  // grid at the start / formation / nose-to-tail running doesn't strobe — rows
+  // only swap when track positions differ by a real margin. Quantising (not an
+  // epsilon compare) keeps the ordering transitive, so sort stays consistent.
+  const EPS = 0.003
   const idx = new Map(classification.map((id, i) => [id, i]))
+  const bucket = (id: string) => Math.round((valueAt(id) as number) / EPS)
   active.sort((a, b) => {
-    const pa = valueAt(a) as number
-    const pb = valueAt(b) as number
-    if (pb !== pa) return pb - pa
+    const d = bucket(b) - bucket(a)
+    if (d !== 0) return d
     return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
   })
 
