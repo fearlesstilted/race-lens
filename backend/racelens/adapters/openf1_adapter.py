@@ -35,9 +35,11 @@ from racelens.events.models import Event, event
 _BASE = "https://api.openf1.org/v1"
 _TIMEOUT = 30
 _MAX_RETRIES = 4
-# OpenF1's free tier rate-limits (429) and occasionally 502/503/504s under load —
-# all transient. Retry those with exponential backoff; other 4xx are real errors.
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+# OpenF1's free tier limits to 3 req/s and 30 req/min. When exceeded it throttles
+# with 429 — and, when sustained, with 401 (it has NO real auth, so a 401 here can
+# only mean "you're throttled, back off"). It also 502/503/504s under load. All
+# transient → retry with exponential backoff; other 4xx (404) are real errors.
+_RETRYABLE_STATUS = {401, 429, 500, 502, 503, 504}
 _BACKOFF_BASE_S = 1.5
 
 
