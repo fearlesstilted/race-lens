@@ -265,6 +265,9 @@ def download_replay(
         session_key = find_session(year, country, session)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+        # find_session also hits OpenF1, so it can throttle/network-fail too.
+        raise HTTPException(502, f"OpenF1 unavailable: {exc}") from exc
 
     try:
         events = ingest_openf1(session_key)
