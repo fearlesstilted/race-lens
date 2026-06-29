@@ -57,12 +57,25 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Race Lens", version="0.1.0", lifespan=lifespan)
 
 
+# Formation-lap lead. Race events are shifted forward by this so the formation
+# lap occupies display time [0, LIGHTS_OUT_MS) and lights-out = LIGHTS_OUT_MS.
+# Keeps the whole timeline non-negative. Must match PRE_START_MS (cli) and
+# LEAD_MS (rust race-core) so the map telemetry and events line up at lights-out.
+LIGHTS_OUT_MS = 180_000
+
+
 @lru_cache(maxsize=8)
 def _engine(session_id: str) -> ReplayEngine:
     path = FIXTURES_DIR / f"{session_id}.jsonl"
     if not path.is_file():
         raise HTTPException(404, f"session '{session_id}' not found")
-    return ReplayEngine(load_jsonl(path.read_text(encoding="utf-8")))
+    events = load_jsonl(path.read_text(encoding="utf-8"))
+    # Only sessions with formation-lap telemetry (a positions.json) get the lead
+    # shift; others keep lights-out at 0 (no empty pre-roll).
+    if (FIXTURES_DIR / f"{session_id}.positions.json").is_file():
+        for e in events:
+            e.session_time_ms += LIGHTS_OUT_MS
+    return ReplayEngine(events)
 
 
 def _race_end_ms(eng: ReplayEngine) -> int:
@@ -114,16 +127,16 @@ def insights(session_id: str, at_ms: int = Query()) -> dict:
 
 
 @app.get("/api/sessions/{session_id}/battles")
-def battles(session_id: str, at_ms: int = Query(ge=0)) -> dict:
+def battles(session_id: str, at_ms: int = Query()) -> dict:
     """On-track battles at a timestamp: pairs of neighbouring drivers in a real fight."""
-    state = _engine(session_id).state_at(at_ms)
+    state = _engine(session_id).state_at(max(0, at_ms))
     return {"at_ms": at_ms, "battles": detect_battles(state)}
 
 
 @app.get("/api/sessions/{session_id}/commentary")
-def commentary(session_id: str, at_ms: int = Query(ge=0), lang: str = "en", level: str = "pro") -> dict:
+def commentary(session_id: str, at_ms: int = Query(), lang: str = "en", level: str = "pro") -> dict:
     """Active insights rendered as text. lang: en|ru, level: beginner|pro."""
-    state = _engine(session_id).state_at(at_ms)
+    state = _engine(session_id).state_at(max(0, at_ms))
     return {"at_ms": at_ms, "items": render_all(detect_all(state), lang, level)}
 
 
@@ -355,11 +368,11 @@ def live_sessions(
 @app.get("/api/sessions/{session_id}/win-prob")
 def win_prob(
     session_id: str,
-    at_ms: int = Query(ge=0),
+    at_ms: int = Query(),
 ):
     """Win probability for every driver at a given timestamp."""
     engine = _engine(session_id)
-    state = engine.state_at(at_ms)
+    state = engine.state_at(max(0, at_ms))
     return win_probability(state, session_id)
 
 
@@ -476,19 +489,19 @@ def positions(session_id: str) -> dict:
 @app.get("/api/sessions/{session_id}/feed")
 def feed(
     session_id: str,
-    until_ms: int = Query(ge=0),
+    until_ms: int = Query(),
     lang: str = "en",
     limit: int = 30,
 ) -> list:
     """Event feed for the frontend: spoiler-free, newest-first human-readable items."""
     eng = _engine(session_id)
-    return render_feed(eng.events, until_ms, lang=lang, limit=limit)
+    return render_feed(eng.events, max(0, until_ms), lang=lang, limit=limit)
 
 
 @app.get("/api/sessions/{session_id}/markers")
 def markers(
     session_id: str,
-    until_ms: Optional[int] = Query(default=None, ge=0),
+    until_ms: Optional[int] = Query(default=None),
 ) -> dict:
     """Significant race events for timeline markers and highlight summaries.
 
@@ -496,7 +509,8 @@ def markers(
     Without until_ms the full race is returned.
     """
     eng = _engine(session_id)
-    return {"markers": significant_events(eng.events, until_ms=until_ms, state_engine=eng)}
+    clamped = max(0, until_ms) if until_ms is not None else None
+    return {"markers": significant_events(eng.events, until_ms=clamped, state_engine=eng)}
 
 
 @app.get("/api/sessions/{session_id}/highlights")
@@ -529,11 +543,14 @@ def timeline(session_id: str) -> dict:
         if e.type == "LapCompleted" and e.lap and e.lap not in lap_marks:
             lap_marks[e.lap] = e.session_time_ms
     start_ms = eng.events[0].session_time_ms if eng.events else 0
-    # The formation lap lives in telemetry (negative time), not events. Pull the
-    # pre-start origin from positions.json so the scrubber covers it.
-    # ponytail: reuses the already-served positions.json; no extra state to track.
+    # The formation lap lives only in telemetry. When a positions.json exists the
+    # events are lead-shifted (see _engine), so lights-out = LIGHTS_OUT_MS and the
+    # scrubber starts at the formation origin from positions.json. Without it there
+    # is no formation: lights-out stays at 0.
     pos_path = FIXTURES_DIR / f"{session_id}.positions.json"
+    lights_out_ms = 0
     if pos_path.is_file():
+        lights_out_ms = LIGHTS_OUT_MS
         try:
             pos_start = int(json.loads(pos_path.read_text(encoding="utf-8")).get("start_ms", 0))
             start_ms = min(start_ms, pos_start)
@@ -543,6 +560,7 @@ def timeline(session_id: str) -> dict:
         "session_id": session_id,
         "start_ms": start_ms,
         "end_ms": _race_end_ms(eng),
+        "lights_out_ms": lights_out_ms,
         "events_total": len(eng.events),
         "lap_marks": lap_marks,
     }

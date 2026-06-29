@@ -6,6 +6,11 @@
 /// resamples to uniform tick grid, normalises to SVG viewbox coordinates
 /// using track.json extent/padding, writes compact positions.json.
 
+// Formation-lap lead (ms). Frames are shifted so display time = physical + LEAD,
+// i.e. the formation lap occupies [0, LEAD) and lights-out = LEAD. Keeps the
+// timeline non-negative. Must match LIGHTS_OUT_MS (api) and PRE_START_MS (cli).
+const LEAD_MS: i64 = 180_000;
+
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -222,7 +227,7 @@ fn main() {
 
     let result = json!({
         "session_id": track.session_id,
-        "start_ms": grid_start,
+        "start_ms": grid_start + LEAD_MS,
         "tick_ms": tick_ms,
         "viewbox": track.viewbox,
         "drivers": drivers_out,

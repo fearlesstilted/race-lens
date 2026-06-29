@@ -200,8 +200,12 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
     })
   }, [])
 
-  const sessionTime = formatRaceTime(atMs)
-  const totalTime = formatRaceTime(endMs)
+  // Clock is race-relative: 0:00 at lights-out. During the formation lap
+  // (before lights-out) show a label instead of a time.
+  const lightsOutMs = timeline?.lights_out_ms ?? 0
+  const inFormation = atMs < lightsOutMs
+  const sessionTime = inFormation ? 'FORMATION LAP' : formatRaceTime(atMs - lightsOutMs)
+  const totalTime = formatRaceTime(Math.max(0, endMs - lightsOutMs))
 
   const visiblePhases = useMemo(() => {
     if (!spoilerFree) return phases.map((seg, i) => ({ ...seg, key: i, neutral: false }))
@@ -405,7 +409,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
             </div>
             <span className="clock">
               <small>SESSION</small>
-              {spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
+              {inFormation || spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
             </span>
           </>
         ) : (

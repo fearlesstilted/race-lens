@@ -28,7 +28,10 @@ def compute_progress(year: int, gp: str, session: str, session_id: str) -> dict[
     tick_ms = int(pos["tick_ms"])
     drivers = pos["drivers"]
     n = max((len(v) for v in drivers.values()), default=0)
-    grid = np.array([start_ms + i * tick_ms for i in range(n)], dtype=float)
+    # positions.json start_ms is DISPLAY time (lights-out = LIGHTS_OUT_MS); telemetry
+    # below is PHYSICAL (lights-out = 0). Shift the grid back so interpolation lines up.
+    LIGHTS_OUT_MS = 180_000  # must match api.LIGHTS_OUT_MS / rust LEAD_MS
+    grid = np.array([start_ms + i * tick_ms - LIGHTS_OUT_MS for i in range(n)], dtype=float)
 
     session_map = {
         "R": "Race", "Q": "Qualifying",

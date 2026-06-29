@@ -6,6 +6,8 @@ export type Timeline = {
   session_id: string
   start_ms: number
   end_ms: number
+  /** Display time of lights-out. Formation lap occupies [start_ms, lights_out_ms). */
+  lights_out_ms: number
   events_total: number
   lap_marks: Record<string, number>
 }

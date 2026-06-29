@@ -358,11 +358,8 @@ function App() {
   // correct. Falls back to official classification when progress is absent.
   const rows = useMemo(() => {
     if (!state) return []
-    // Formation lap: keep the timing tower empty while the cars run the formation
-    // lap. The grid only appears once they line up — the last GRID_FORM_MS before
-    // lights-out. ponytail: time gate, not real on-grid detection.
-    const GRID_FORM_MS = 10_000
-    if (replay.atMs < -GRID_FORM_MS) return []
+    // During the formation lap there are no events yet, so state.classification is
+    // empty and the tower is naturally empty — the grid appears at lights-out.
     const order = trackOrder(effectivePositionsData, replay.atMs, state.classification, state.drivers)
     let rank = 0
     return order.map((driverId) => {

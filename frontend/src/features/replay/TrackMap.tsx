@@ -139,6 +139,13 @@ export const TrackMap = React.memo(function TrackMap({
 
   const pitDrivers = classification.filter(id => drivers[id]?.in_pit)
 
+  // Cars to draw: union of state classification and telemetry drivers, so the
+  // formation lap (before any timing events exist) still shows cars from the
+  // position telemetry.
+  const carIds = positionsData
+    ? Array.from(new Set<string>([...classification, ...Object.keys(positionsData.drivers)]))
+    : classification
+
   return (
     <div className="map">
       <svg viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="xMidYMid meet" fill="none" style={{ width: '100%', height: '100%' }}>
@@ -310,7 +317,7 @@ export const TrackMap = React.memo(function TrackMap({
         })}
 
         {/* On-track cars — initial transform is 0,0; rAF loop updates imperatively */}
-        {classification
+        {carIds
           .filter(id => !drivers[id]?.in_pit && !drivers[id]?.retired)
           .map((driverId) => {
             const color = teamColor(driverId)

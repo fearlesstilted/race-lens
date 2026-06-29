@@ -186,16 +186,19 @@ export function useTrackAnimation({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
 
-  // Register/unregister car group refs as classification set changes
+  // Register/unregister car group refs as the rendered car set changes.
+  // Include telemetry drivers so formation-lap cars (not yet in classification)
+  // keep their refs.
   useEffect(() => {
-    const ids = new Set(classification)
+    const ids = new Set<string>(classification)
+    if (positionsData) for (const k of Object.keys(positionsData.drivers)) ids.add(k)
     for (const id of carGroupRefs.current.keys()) {
       if (!ids.has(id)) {
         carGroupRefs.current.delete(id)
         currentFracRef.current.delete(id)
       }
     }
-  }, [classification])
+  }, [classification, positionsData])
 
   const registerCar = (driverId: string) => (el: SVGGElement | null) => {
     if (el) carGroupRefs.current.set(driverId, el)

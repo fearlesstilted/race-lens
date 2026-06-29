@@ -105,7 +105,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   const { loadSnapshot } = useSnapshotLoader(sessionId, set)
   const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
-  const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(atMs, markers)
+  const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(atMs, markers, timeline?.lights_out_ms ?? 0)
 
   // Recompute live gaps whenever state or positions data changes
   useEffect(() => {

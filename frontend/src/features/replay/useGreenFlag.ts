@@ -25,19 +25,20 @@ export type GreenFlag = {
 export function useGreenFlag(
   atMs: number,
   markers: RaceMarker[],
+  lightsOutMs = 0,
 ): GreenFlag {
   const result = useMemo(() => {
-    // Pre-start, negative session time (telemetry before lights-out):
-    //   running the formation lap → ON the grid (last GRID_FORM_MS) → lights out.
-    if (atMs < -GRID_FORM_MS) {
-      return { greenFlag: true, greenFlagText: 'FORMATION LAP' }
-    }
-    if (atMs < 0) {
+    // Pre-start window (formation lap → on the grid → lights out). All display
+    // times are non-negative; lights-out is at lightsOutMs.
+    if (lightsOutMs > 0 && atMs < lightsOutMs) {
+      if (atMs < lightsOutMs - GRID_FORM_MS) {
+        return { greenFlag: true, greenFlagText: 'FORMATION LAP' }
+      }
       return { greenFlag: true, greenFlagText: 'ON THE GRID' }
     }
 
-    // Race start flash (lights out at t=0)
-    if (atMs >= 0 && atMs < GREEN_FLASH_MS) {
+    // Race start flash (lights out)
+    if (atMs >= lightsOutMs && atMs < lightsOutMs + GREEN_FLASH_MS) {
       return { greenFlag: true, greenFlagText: 'LIGHTS OUT' }
     }
 
@@ -51,7 +52,7 @@ export function useGreenFlag(
     }
 
     return { greenFlag: false, greenFlagText: '' }
-  }, [atMs, markers])
+  }, [atMs, markers, lightsOutMs])
 
   return { ...result, reset: () => undefined }
 }
