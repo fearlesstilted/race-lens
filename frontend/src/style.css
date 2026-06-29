@@ -287,6 +287,13 @@ body {
   color: #4cdb6e;
   letter-spacing: 0.18em;
 }
+.hazard-formation {
+  background: #0e2438;
+}
+.hazard-formation span {
+  color: #58b6ff;
+  letter-spacing: 0.18em;
+}
 
 /* ── page shell: 100dvh grid ────────────────────────────────────── */
 #root {

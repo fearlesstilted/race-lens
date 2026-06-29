@@ -97,14 +97,19 @@ def list_sessions() -> list[dict]:
 
 
 @app.get("/api/sessions/{session_id}/state")
-def state(session_id: str, at_ms: int = Query(ge=0)) -> dict:
-    return _engine(session_id).state_at(at_ms)
+def state(session_id: str, at_ms: int = Query()) -> dict:
+    # Negative at_ms = formation lap (telemetry-only, before lights-out). There are
+    # no events yet, so show the grid (state at 0) but echo the requested time so
+    # the scrubber playhead stays in the pre-start window.
+    result = _engine(session_id).state_at(max(0, at_ms))
+    result["at_ms"] = at_ms
+    return result
 
 
 @app.get("/api/sessions/{session_id}/insights")
-def insights(session_id: str, at_ms: int = Query(ge=0)) -> dict:
+def insights(session_id: str, at_ms: int = Query()) -> dict:
     """Active insights at a timestamp, computed from state <= at_ms only."""
-    state = _engine(session_id).state_at(at_ms)
+    state = _engine(session_id).state_at(max(0, at_ms))
     return {"at_ms": at_ms, "insights": detect_all(state)}
 
 
@@ -523,9 +528,20 @@ def timeline(session_id: str) -> dict:
     for e in eng.events:
         if e.type == "LapCompleted" and e.lap and e.lap not in lap_marks:
             lap_marks[e.lap] = e.session_time_ms
+    start_ms = eng.events[0].session_time_ms if eng.events else 0
+    # The formation lap lives in telemetry (negative time), not events. Pull the
+    # pre-start origin from positions.json so the scrubber covers it.
+    # ponytail: reuses the already-served positions.json; no extra state to track.
+    pos_path = FIXTURES_DIR / f"{session_id}.positions.json"
+    if pos_path.is_file():
+        try:
+            pos_start = int(json.loads(pos_path.read_text(encoding="utf-8")).get("start_ms", 0))
+            start_ms = min(start_ms, pos_start)
+        except (ValueError, KeyError, TypeError):
+            pass
     return {
         "session_id": session_id,
-        "start_ms": eng.events[0].session_time_ms if eng.events else 0,
+        "start_ms": start_ms,
         "end_ms": _race_end_ms(eng),
         "events_total": len(eng.events),
         "lap_marks": lap_marks,

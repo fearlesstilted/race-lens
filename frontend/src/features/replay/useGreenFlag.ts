@@ -25,8 +25,14 @@ export function useGreenFlag(
   markers: RaceMarker[],
 ): GreenFlag {
   const result = useMemo(() => {
-    // Race start flash
-    if (atMs > 0 && atMs < GREEN_FLASH_MS) {
+    // Formation lap: negative session time (telemetry before lights-out).
+    // Persists for the whole pre-start window, not just a flash.
+    if (atMs < 0) {
+      return { greenFlag: true, greenFlagText: 'FORMATION LAP' }
+    }
+
+    // Race start flash (lights out at t=0)
+    if (atMs >= 0 && atMs < GREEN_FLASH_MS) {
       return { greenFlag: true, greenFlagText: 'LIGHTS OUT' }
     }
 

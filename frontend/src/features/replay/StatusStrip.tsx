@@ -31,6 +31,15 @@ export function StatusStrip({
       ? formatNeutralTimer(atMs, neutralizationStartMs)
       : '00:00'
 
+  // Formation lap shows regardless of session status (no events before lights-out).
+  if (greenFlag && greenFlagText === 'FORMATION LAP') {
+    return (
+      <div className="hazard hazard-formation">
+        <span>{greenFlagText}</span>
+      </div>
+    )
+  }
+
   if (greenFlag && status === 'started') {
     return (
       <div className="hazard hazard-green">

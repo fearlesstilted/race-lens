@@ -8,6 +8,11 @@ import json
 import sys
 from pathlib import Path
 
+# Telemetry kept before lights-out (t=0) so the formation lap / grid forming is
+# visible on the map. ~3 min covers a formation lap; widen if a track needs more.
+# ponytail: fixed window beats trying to detect formation-lap start from the data.
+PRE_START_MS = 180_000
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="racelens")
@@ -275,7 +280,7 @@ def main() -> None:
                         t_ms = int((date_ts - session_zero).total_seconds() * 1000) - t0_ms
                     except Exception:
                         continue
-                    if t_ms < -60000:
+                    if t_ms < -PRE_START_MS:
                         continue
                     try:
                         x = float(row.X)

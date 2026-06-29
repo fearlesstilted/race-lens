@@ -63,21 +63,23 @@ pub(crate) fn normalise(x: f64, y: f64, track: &TrackJson) -> (f64, f64) {
 
 // ── Resampling ───────────────────────────────────────────────────────────────
 
-/// Resample sorted (t, x, y) points onto a uniform tick grid [0..max_t] step tick_ms.
+/// Resample sorted (t, x, y) points onto a uniform tick grid [start_t..max_t]
+/// step tick_ms. start_t may be negative (pre-start / formation lap).
 /// Gap > 5000 ms → null frame. Returns Vec<Option<(f64, f64)>>.
 pub(crate) fn resample(
     points: &[(i64, f32, f32)],
+    start_t: i64,
     max_t: i64,
     tick_ms: i64,
     track: &TrackJson,
 ) -> Vec<Option<(f64, f64)>> {
-    let n_ticks = (max_t / tick_ms + 1) as usize;
+    let n_ticks = ((max_t - start_t) / tick_ms + 1) as usize;
     let mut frames: Vec<Option<(f64, f64)>> = Vec::with_capacity(n_ticks);
 
     let mut idx = 0usize;
 
     for frame_i in 0..n_ticks {
-        let t = frame_i as i64 * tick_ms;
+        let t = start_t + frame_i as i64 * tick_ms;
 
         // Advance idx so points[idx] is the last point with t <= query t
         while idx + 1 < points.len() && points[idx + 1].0 <= t {
@@ -170,8 +172,9 @@ fn main() {
 
     eprintln!("Loaded {} drivers", driver_points.len());
 
-    // Sort each driver by t, find global max_t
+    // Sort each driver by t, find global max_t and earliest sample (min_t)
     let mut max_t: i64 = 0;
+    let mut min_t: i64 = i64::MAX;
     for pts in driver_points.values_mut() {
         pts.sort_by_key(|(t, _, _)| *t);
         if let Some(&(t, _, _)) = pts.last() {
@@ -179,14 +182,25 @@ fn main() {
                 max_t = t;
             }
         }
+        if let Some(&(t, _, _)) = pts.first() {
+            if t < min_t {
+                min_t = t;
+            }
+        }
     }
+    if min_t == i64::MAX {
+        min_t = 0;
+    }
+    // Grid origin: include pre-start (formation lap) telemetry when present, but
+    // never start the grid after lights-out. Align to a tick boundary (toward -inf).
+    let grid_start = (((min_t.min(0)) as f64) / (tick_ms as f64)).floor() as i64 * tick_ms;
 
-    eprintln!("max_t = {max_t} ms, tick_ms = {tick_ms}");
+    eprintln!("grid_start = {grid_start} ms, max_t = {max_t} ms, tick_ms = {tick_ms}");
 
     // Resample each driver
     let mut drivers_out: HashMap<String, Vec<Value>> = HashMap::new();
     for (drv, pts) in &driver_points {
-        let frames = resample(&pts, max_t, tick_ms, &track);
+        let frames = resample(&pts, grid_start, max_t, tick_ms, &track);
         let values: Vec<Value> = frames
             .into_iter()
             .map(|f| match f {
@@ -200,7 +214,7 @@ fn main() {
         drivers_out.insert(drv.clone(), values);
     }
 
-    let n_frames = (max_t / tick_ms + 1) as usize;
+    let n_frames = ((max_t - grid_start) / tick_ms + 1) as usize;
     eprintln!("Writing {out_path} ({n_frames} frames) …");
 
     let out_file = File::create(out_path).expect("Cannot create output file");
@@ -208,7 +222,7 @@ fn main() {
 
     let result = json!({
         "session_id": track.session_id,
-        "start_ms": 0,
+        "start_ms": grid_start,
         "tick_ms": tick_ms,
         "viewbox": track.viewbox,
         "drivers": drivers_out,
@@ -239,7 +253,7 @@ mod tests {
     fn test_interpolation_midpoint() {
         let pts = vec![(0, 0.0f32, 0.0f32), (1000, 1000.0, 500.0)];
         let track = mock_track();
-        let frames = resample(&pts, 1000, 500, &track);
+        let frames = resample(&pts, 0, 1000, 500, &track);
         // Frame at t=500 should be midpoint of (0,0)→(1000,500) raw
         assert_eq!(frames.len(), 3); // t=0, t=500, t=1000
         let (nx, ny) = frames[1].expect("expected Some at t=500");
@@ -255,7 +269,7 @@ mod tests {
         let pts = vec![(0, 0.0f32, 0.0f32), (10000, 500.0, 250.0)];
         let track = mock_track();
         // Gap of 10000ms > 5000ms → frames at t=500..9500 should be null
-        let frames = resample(&pts, 10000, 500, &track);
+        let frames = resample(&pts, 0, 10000, 500, &track);
         // t=0 → Some (first point exactly), t=500..9500 → None (gap), t=10000 → Some
         assert!(frames[0].is_some(), "t=0 should be Some");
         for i in 1..20 {
@@ -282,8 +296,20 @@ mod tests {
     fn test_first_frame_at_t0() {
         let pts = vec![(0, 100.0f32, 200.0f32)];
         let track = mock_track();
-        let frames = resample(&pts, 0, 500, &track);
+        let frames = resample(&pts, 0, 0, 500, &track);
         assert_eq!(frames.len(), 1);
         assert!(frames[0].is_some());
+    }
+
+    #[test]
+    fn test_negative_start_grid() {
+        // Pre-start (formation lap) samples at negative t must produce frames.
+        let pts = vec![(-1000, 0.0f32, 0.0f32), (0, 1000.0, 500.0)];
+        let track = mock_track();
+        let frames = resample(&pts, -1000, 0, 500, &track);
+        // grid: t=-1000, -500, 0 → 3 frames, cars present from t=-1000
+        assert_eq!(frames.len(), 3);
+        assert!(frames[0].is_some(), "t=-1000 should be Some");
+        assert!(frames[2].is_some(), "t=0 should be Some");
     }
 }
