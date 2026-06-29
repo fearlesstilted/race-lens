@@ -31,8 +31,9 @@ export function StatusStrip({
       ? formatNeutralTimer(atMs, neutralizationStartMs)
       : '00:00'
 
-  // Formation lap shows regardless of session status (no events before lights-out).
-  if (greenFlag && greenFlagText === 'FORMATION LAP') {
+  // Pre-start banners (formation lap / on the grid) show regardless of session
+  // status — there are no events before lights-out.
+  if (greenFlag && (greenFlagText === 'FORMATION LAP' || greenFlagText === 'ON THE GRID')) {
     return (
       <div className="hazard hazard-formation">
         <span>{greenFlagText}</span>

@@ -12,6 +12,8 @@ import { useMemo } from 'react'
 import type { RaceMarker } from '../../api/types'
 
 const GREEN_FLASH_MS = 4000
+// Cars line up on the grid this long before lights-out (matches main.tsx rows gate).
+const GRID_FORM_MS = 10000
 
 export type GreenFlag = {
   greenFlag: boolean
@@ -25,10 +27,13 @@ export function useGreenFlag(
   markers: RaceMarker[],
 ): GreenFlag {
   const result = useMemo(() => {
-    // Formation lap: negative session time (telemetry before lights-out).
-    // Persists for the whole pre-start window, not just a flash.
-    if (atMs < 0) {
+    // Pre-start, negative session time (telemetry before lights-out):
+    //   running the formation lap → ON the grid (last GRID_FORM_MS) → lights out.
+    if (atMs < -GRID_FORM_MS) {
       return { greenFlag: true, greenFlagText: 'FORMATION LAP' }
+    }
+    if (atMs < 0) {
+      return { greenFlag: true, greenFlagText: 'ON THE GRID' }
     }
 
     // Race start flash (lights out at t=0)
