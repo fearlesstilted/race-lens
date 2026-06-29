@@ -29,6 +29,28 @@ def main() -> None:
     )
     p_ingest_openf1.add_argument("-o", "--out", required=True, help="output .jsonl path")
 
+    p_capture = sub.add_parser(
+        "capture-live",
+        help="record the live F1 SignalR feed to a file (run DURING a live session)",
+    )
+    p_capture.add_argument("-o", "--out", required=True, help="output raw feed path")
+    p_capture.add_argument("--timeout", type=int, default=60,
+                           help="exit after N seconds with no data (0 = never)")
+    p_capture.add_argument("--no-auth", action="store_true",
+                           help="connect without F1 auth (may return partial/empty data)")
+    p_capture.add_argument("--append", action="store_true",
+                           help="append instead of overwrite (resume a capture)")
+
+    p_ingest_live = sub.add_parser(
+        "ingest-live",
+        help="convert a recorded SignalR feed (capture-live) into normalized events",
+    )
+    p_ingest_live.add_argument("feed", nargs="+", help="recorded feed file(s)")
+    p_ingest_live.add_argument("--year", type=int, required=True)
+    p_ingest_live.add_argument("--gp", required=True, help='Grand Prix, e.g. "Silverstone"')
+    p_ingest_live.add_argument("--session", default="R", help="R / Q / FP1 ...")
+    p_ingest_live.add_argument("-o", "--out", required=True, help="output .jsonl path")
+
     p_track = sub.add_parser("track", help="export track outline from FastF1 telemetry")
     p_track.add_argument("year", type=int)
     p_track.add_argument("gp", help='Grand Prix name, e.g. "Monaco"')
@@ -85,6 +107,38 @@ def main() -> None:
         session_key = find_session(args.year, args.country, args.session)
         print(f"session_key={session_key}", file=sys.stderr)
         events = ingest_openf1(session_key)
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(dump_jsonl(events), encoding="utf-8")
+        print(f"{len(events)} events → {out}", file=sys.stderr)
+
+    elif args.cmd == "capture-live":
+        from fastf1.livetiming.client import SignalRClient
+
+        client = SignalRClient(
+            filename=args.out,
+            filemode="a" if args.append else "w",
+            timeout=args.timeout,
+            no_auth=args.no_auth,
+        )
+        print(
+            f"recording live feed → {args.out} "
+            f"(no_auth={args.no_auth}, timeout={args.timeout}s); Ctrl-C to stop …",
+            file=sys.stderr,
+        )
+        client.start()  # blocks until timeout / KeyboardInterrupt
+
+    elif args.cmd == "ingest-live":
+        import fastf1
+
+        from racelens.adapters.fastf1_adapter import ingest_live_feed
+        from racelens.events.models import dump_jsonl
+
+        cache_dir = Path("fastf1_cache")
+        cache_dir.mkdir(exist_ok=True)
+        fastf1.Cache.enable_cache(str(cache_dir))
+
+        events = ingest_live_feed(*args.feed, year=args.year, gp=args.gp, session=args.session)
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_jsonl(events), encoding="utf-8")

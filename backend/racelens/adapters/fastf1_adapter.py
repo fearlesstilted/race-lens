@@ -41,13 +41,44 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
     subsequent calls are local.
     """
     import fastf1
-    import pandas as pd
 
     ses = fastf1.get_session(year, gp, session)
     ses.load(telemetry=False, weather=False, messages=True)
+    return session_to_events(ses, session_id_for(year, gp, session))
 
-    sid = session_id_for(year, gp, session)
-    src = "fastf1"
+
+def ingest_live_feed(*feed_files: str, year: int, gp: str,
+                     session: str = "R") -> list[Event]:
+    """Map a recorded F1 SignalR live-timing feed to the same Event timeline.
+
+    *feed_files* are raw recordings saved by
+    :class:`fastf1.livetiming.client.SignalRClient`. FastF1 parses them through
+    its ``livedata`` path, so this reuses the exact historical Session->events
+    mapping in :func:`session_to_events` — no separate feed parser. *year/gp/
+    session* identify the event so FastF1 can attach schedule/circuit metadata.
+
+    ponytail: the pipeline is proven to run offline, but feed->field fidelity is
+    NOT yet validated against a real recording (Plan B Phase 1 needs a live
+    session to capture one). Synthetic feeds encode schema guesses, not reality.
+    """
+    import fastf1
+    from fastf1.livetiming.data import LiveTimingData
+
+    ltd = LiveTimingData(*feed_files)
+    ses = fastf1.get_session(year, gp, session)
+    ses.load(livedata=ltd, telemetry=False, weather=False, messages=True)
+    return session_to_events(ses, session_id_for(year, gp, session),
+                             src="f1live")
+
+
+def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
+    """Normalize a loaded FastF1 Session into the Event timeline.
+
+    Shared by historical ingestion (:func:`ingest_session`) and recorded
+    live-feed ingestion (:func:`ingest_live_feed`).
+    """
+    import pandas as pd
+
     events: list[Event] = []
 
     total_laps = getattr(ses, "total_laps", None)
