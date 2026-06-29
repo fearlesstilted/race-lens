@@ -386,6 +386,17 @@ function App() {
 
   const hasFocus = selectedIds.length > 0
 
+  // Header lap = the lap IN PROGRESS (laps_completed + 1), shown once racing.
+  // state.lap only counts completed laps, so without this the first lap reads "—".
+  // During the formation lap (before lights-out) there is no lap number.
+  const lightsOutMs = replay.timeline?.lights_out_ms ?? 0
+  const racing = !!state && replay.atMs >= lightsOutMs
+  let currentLap = 0
+  if (racing && state) {
+    const inProgress = (state.lap ?? 0) + 1
+    currentLap = state.total_laps ? Math.min(inProgress, state.total_laps) : inProgress
+  }
+
   // Build liveLabel for deck clock from current state lap
   const liveLabel = state ? `LAP ${state.lap}` : null
 
@@ -413,7 +424,7 @@ function App() {
         session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
         sessionId={mode === 'replay' ? sessionId : null}
         sessions={mode === 'replay' ? sessions : []}
-        lap={state?.lap ?? 0}
+        lap={currentLap}
         totalLaps={state?.total_laps ?? null}
         lang={replay.lang}
         level={replay.level}
