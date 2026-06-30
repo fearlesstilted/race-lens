@@ -269,15 +269,6 @@ function App() {
   // Center bottom segment tab
   const [centerTab, setCenterTab] = useState<CenterTab>('FEED')
 
-  // Map-sync calibration: shift the position telemetry (seconds) relative to the
-  // event timeline. FastF1's telemetry clock and lap-time clock disagree by a
-  // session-specific amount; dial this until the cars line up with lights-out.
-  const [posOffsetSec, setPosOffsetSec] = useState<number>(() => {
-    const v = Number(localStorage.getItem('mapSyncOffsetSec'))
-    return Number.isFinite(v) ? v : 0
-  })
-  useEffect(() => { localStorage.setItem('mapSyncOffsetSec', String(posOffsetSec)) }, [posOffsetSec])
-
   // Build DataSource from current mode
   const source = useMemo<DataSource | null>(() => {
     if (mode === 'replay') {
@@ -359,12 +350,7 @@ function App() {
   const state = replay.state
   const timeline = replay.timeline
 
-  const effectivePositionsData = useMemo(() => {
-    if (mode === 'live' || !replay.positionsData) return null
-    if (!posOffsetSec) return replay.positionsData
-    // Shift the whole telemetry layer relative to events by moving start_ms.
-    return { ...replay.positionsData, start_ms: replay.positionsData.start_ms - posOffsetSec * 1000 }
-  }, [mode, replay.positionsData, posOffsetSec])
+  const effectivePositionsData = mode === 'live' ? null : replay.positionsData
 
   // Order the timing tower by real track progress (positions.json `progress`)
   // so it tracks the map continuously, not just at the once-per-lap S/F line.
@@ -537,22 +523,6 @@ function App() {
             projection={mode === 'replay' && projection}
             battles={replay.battles}
           />
-          {mode === 'replay' && replay.positionsData && (
-            <div className="map-sync">
-              <span className="map-sync-lbl">MAP SYNC</span>
-              <input
-                type="range"
-                min={-300}
-                max={300}
-                step={1}
-                value={posOffsetSec}
-                onChange={(e) => setPosOffsetSec(Number(e.target.value))}
-                aria-label="Map telemetry sync offset (seconds)"
-              />
-              <span className="map-sync-val">{posOffsetSec > 0 ? `+${posOffsetSec}` : posOffsetSec}s</span>
-              <button className="map-sync-reset" onClick={() => setPosOffsetSec(0)}>reset</button>
-            </div>
-          )}
           {/* Center always keeps map + tabs — selecting drivers must never hide
               forecast/win%. Driver focus moves to the right column instead. */}
           <div className="ctr-bottom">

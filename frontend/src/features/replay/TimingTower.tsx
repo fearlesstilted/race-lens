@@ -97,16 +97,6 @@ export const TimingTower = React.memo(function TimingTower({
   const [posChanges, setPosChanges] = useState<Map<string, 'up' | 'down'>>(new Map())
   const highlightTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
-  // Capture tops before DOM update
-  useLayoutEffect(() => {
-    // Save current tops before the upcoming repaint
-    const map = new Map<string, number>()
-    for (const [id, el] of rowRefs.current) {
-      map.set(id, el.offsetTop)
-    }
-    prevTopsRef.current = map
-  })
-
   // After paint: detect moves, run FLIP, detect position changes
   useLayoutEffect(() => {
     const prev = prevTopsRef.current
@@ -197,6 +187,15 @@ export const TimingTower = React.memo(function TimingTower({
         return next
       })
     }
+
+    // Capture current tops for the NEXT FLIP — must run after the comparison
+    // above, otherwise it overwrites the old positions and every delta is 0
+    // (that was the bug: rows never moved, the number just blinked in place).
+    const tops = new Map<string, number>()
+    for (const [id, el] of rowRefs.current) {
+      tops.set(id, el.offsetTop)
+    }
+    prevTopsRef.current = tops
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
 
