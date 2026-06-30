@@ -143,14 +143,29 @@ body {
   display: flex;
 }
 .tog {
-  font: 700 11px var(--cond);
+  font: 700 13px var(--cond);
   letter-spacing: 0.18em;
   background: none;
   border: 1px solid #ffffff22;
   color: var(--dim);
-  padding: 4px 10px;
+  padding: 8px 14px;
   cursor: pointer;
   line-height: 1;
+  border-radius: 3px;
+  transition: border-color .15s ease, color .15s ease,
+              background-color .15s ease, transform .08s ease;
+}
+.tog:active { transform: translateY(1px); }
+
+/* Toggle activation: a subtle pop when a control switches on (REPLAY/LIVE,
+   EN/RU, speeds, LAYERS). State colour transitions are handled per-button. */
+@keyframes tog-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .b.on, .tog-on, .layer-toggle.on { animation: tog-pop .22s ease-out; }
 }
 .tog:first-child {
   border-right: none;
@@ -206,7 +221,7 @@ body {
   border-color: var(--hair);
 }
 .layer-state {
-  font: 700 11px var(--cond);
+  font: 700 13px var(--cond);
   letter-spacing: 0.16em;
   color: var(--dim);
 }
@@ -959,16 +974,19 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  top: 14px;
-  height: 2px;
+  top: 13px;
+  height: 4px;
   background: #2c2c34;
+  border-radius: 2px;
 }
 .rail .played {
   position: absolute;
   left: 0;
-  top: 14px;
-  height: 2px;
-  background: var(--ink);
+  top: 13px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7a0a1f, var(--red));
+  box-shadow: 0 0 8px #e8002d55;
 }
 /* Lap labels at every 10 laps, below the rail */
 .lap-label {
@@ -983,11 +1001,13 @@ body {
 }
 .rail .cursor {
   position: absolute;
-  top: 4px;
-  width: 2px;
-  height: 20px;
+  top: 2px;
+  width: 3px;
+  height: 24px;
   background: var(--red);
-  transform: translateX(-1px);
+  border-radius: 2px;
+  box-shadow: 0 0 6px #e8002daa;
+  transform: translateX(-1.5px);
 }
 .rail .cursor::after {
   content: attr(data-lap);
@@ -1001,20 +1021,39 @@ body {
 }
 
 .deckrow {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--s2);
   margin-top: var(--s2);
 }
+/* Transport (play + speeds) centered; clock/spoiler held to the right. */
+.transport {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  justify-self: center;
+}
+.deck-side {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+}
+.deck-right {
+  justify-self: end;
+  justify-content: flex-end;
+}
 .b {
-  font: 600 13px var(--cond);
+  font: 600 15px var(--cond);
   letter-spacing: 0.2em;
   background: none;
   border: 1px solid #ffffff2b;
   color: var(--ink);
   /* uniform button height across all deck controls */
-  height: 32px;
-  padding: 0 var(--s4);
+  height: 40px;
+  padding: 0 var(--s5);
+  border-radius: 3px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1045,7 +1084,6 @@ body {
 }
 .b.on:hover:not(:disabled) { border-color: var(--red); background: #e8002d2a; }
 .clock {
-  margin-left: auto;
   font: italic 700 18px var(--cond);
   font-variant-numeric: tabular-nums;
 }
@@ -2358,22 +2396,12 @@ body {
   transform: translateX(-50%) translateY(-2px);
   opacity: 1 !important;
 }
-/* CRASH / INCIDENT / OFF_TRACK: gentle pulse so the eye finds them */
-@keyframes mk-pulse {
-  0%, 100% { opacity: 0.92; }
-  50%       { opacity: 0.45; }
-}
+/* CRASH / INCIDENT / OFF_TRACK: static (no strobe). The SVG already renders these
+   red + a touch larger; a blinking timeline read as a seizure hazard. */
 .rail-marker-severe {
-  animation: mk-pulse 1.8s ease-in-out infinite;
-}
-.rail-marker-severe:hover {
-  animation: none;
-  opacity: 1 !important;
+  opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-  .rail-marker-severe {
-    animation: none;
-  }
   .rail-marker:hover {
     transform: translateX(-50%);
   }

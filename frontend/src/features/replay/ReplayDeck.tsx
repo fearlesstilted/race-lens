@@ -384,33 +384,38 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
       <div className="deckrow">
         {canScrub ? (
           <>
-            {playing ? (
-              <button className="b primary" type="button" onClick={onPause}>
-                PAUSE
-              </button>
-            ) : (
-              <button className="b primary" type="button" onClick={onPlay} disabled={!timeline}>
-                PLAY
-              </button>
-            )}
-            {SPEEDS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`b${speed === s ? ' on' : ''}`}
-                onClick={() => onSpeed(s)}
-              >
-                {s}×
-              </button>
-            ))}
-            <div className="sp" role="button" tabIndex={0} onClick={toggleSpoiler} onKeyDown={(e) => e.key === 'Enter' && toggleSpoiler()}>
-              SPOILER-FREE
-              <span className={`sw${spoilerFree ? ' sw-on' : ''}`} aria-checked={spoilerFree} role="switch" />
+            <div className="deck-side" />
+            <div className="transport">
+              {playing ? (
+                <button className="b primary" type="button" onClick={onPause}>
+                  PAUSE
+                </button>
+              ) : (
+                <button className="b primary" type="button" onClick={onPlay} disabled={!timeline}>
+                  PLAY
+                </button>
+              )}
+              {SPEEDS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`b${speed === s ? ' on' : ''}`}
+                  onClick={() => onSpeed(s)}
+                >
+                  {s}×
+                </button>
+              ))}
             </div>
-            <span className="clock">
-              <small>SESSION</small>
-              {inFormation || spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
-            </span>
+            <div className="deck-side deck-right">
+              <div className="sp" role="button" tabIndex={0} onClick={toggleSpoiler} onKeyDown={(e) => e.key === 'Enter' && toggleSpoiler()}>
+                SPOILER-FREE
+                <span className={`sw${spoilerFree ? ' sw-on' : ''}`} aria-checked={spoilerFree} role="switch" />
+              </div>
+              <span className="clock">
+                <small>SESSION</small>
+                {inFormation || spoilerFree ? sessionTime : `${sessionTime} / ${totalTime}`}
+              </span>
+            </div>
           </>
         ) : (
           <>
