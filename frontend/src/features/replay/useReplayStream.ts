@@ -23,10 +23,20 @@ export function useReplayStream(
   set: ReplaySetters,
 ) {
   const sourceRef = useRef<EventSource | null>(null)
+  // Throttle the data-heavy, animated updates (table / insights / feed) so they
+  // don't strobe at high playback speed (the stream can push ~5 frames/sec).
+  const lastDataRef = useRef(0)
+  const pendingRef = useRef<RaceState | null>(null)
+  const trailRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const DATA_THROTTLE_MS = 600
 
   const closeStream = useCallback(() => {
     sourceRef.current?.close()
     sourceRef.current = null
+    if (trailRef.current) {
+      clearTimeout(trailRef.current)
+      trailRef.current = null
+    }
   }, [])
 
   const openStream = useCallback(
@@ -40,16 +50,13 @@ export function useReplayStream(
       const source = new EventSource(url)
       sourceRef.current = source
 
-      source.onmessage = (event) => {
-        const raw = event.data as string
-        // Live stream can send empty heartbeat `{}` while no data yet
-        if (!raw || raw === '{}') return
-        const nextState = JSON.parse(raw) as RaceState
-        if (!nextState.at_ms) return
-        set.setState(nextState)
-        set.setInsights(nextState.active_insights ?? [])
-        set.setAtMs(nextState.at_ms)
-        const ms = nextState.at_ms
+      // Push the data-heavy, animated state (table / insights / feed / battles /
+      // commentary). Rate-limited via the throttle below.
+      const flushData = (st: RaceState) => {
+        lastDataRef.current = performance.now()
+        set.setState(st)
+        set.setInsights(st.active_insights ?? [])
+        const ms = st.at_ms
         if (sessionId) {
           void getBattles(sessionId, ms).then((r) => set.setBattles(r.battles)).catch(() => undefined)
           void getFeed(sessionId, ms, 30, nextLang)
@@ -57,6 +64,29 @@ export function useReplayStream(
             .catch((err: unknown) => set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
           void getCommentary(sessionId, ms, nextLang, nextLevel)
             .then((r) => set.setCommentary(r.items)).catch(() => undefined)
+        }
+      }
+
+      source.onmessage = (event) => {
+        const raw = event.data as string
+        // Live stream can send empty heartbeat `{}` while no data yet
+        if (!raw || raw === '{}') return
+        const nextState = JSON.parse(raw) as RaceState
+        if (!nextState.at_ms) return
+        // Clock / scrubber / map stay smooth — atMs is cheap, push every frame.
+        set.setAtMs(nextState.at_ms)
+        // Table / insights / feed are throttled (leading + trailing) so they
+        // settle calmly instead of strobing on every frame.
+        pendingRef.current = nextState
+        const elapsed = performance.now() - lastDataRef.current
+        if (elapsed >= DATA_THROTTLE_MS) {
+          if (trailRef.current) { clearTimeout(trailRef.current); trailRef.current = null }
+          flushData(nextState)
+        } else if (!trailRef.current) {
+          trailRef.current = setTimeout(() => {
+            trailRef.current = null
+            if (pendingRef.current) flushData(pendingRef.current)
+          }, DATA_THROTTLE_MS - elapsed)
         }
       }
 

@@ -356,11 +356,18 @@ function App() {
   // so it tracks the map continuously, not just at the once-per-lap S/F line.
   // Renumber POS to the track-order rank; leader is progress-max so it stays
   // correct. Falls back to official classification when progress is absent.
+  //
+  // Recompute the ORDER only on a coarse clock (every ORDER_QUANTUM_MS), not every
+  // frame: progress jitter during close running otherwise swaps rows every tick and
+  // the FLIP animation strobes. The order settles once per quantum; data still
+  // updates with state.
+  const ORDER_QUANTUM_MS = 1500
+  const orderAtMs = Math.floor(replay.atMs / ORDER_QUANTUM_MS) * ORDER_QUANTUM_MS
   const rows = useMemo(() => {
     if (!state) return []
     // During the formation lap there are no events yet, so state.classification is
     // empty and the tower is naturally empty — the grid appears at lights-out.
-    const order = trackOrder(effectivePositionsData, replay.atMs, state.classification, state.drivers)
+    const order = trackOrder(effectivePositionsData, orderAtMs, state.classification, state.drivers)
     let rank = 0
     return order.map((driverId) => {
       const d = state.drivers[driverId]
@@ -368,7 +375,7 @@ function App() {
       if (!isRetired) rank += 1
       return { id: driverId, ...d, position: isRetired ? d.position : rank }
     })
-  }, [state, effectivePositionsData, replay.atMs])
+  }, [state, effectivePositionsData, orderAtMs])
 
   const sessionStatus = state?.session_status ?? 'started'
 

@@ -14,68 +14,6 @@ from pathlib import Path
 PRE_START_MS = 180_000
 
 
-def _detect_launch_date(ses):
-    """Date of the standing-start launch (lights-out), detected from pos_data X/Y.
-
-    The field does the formation lap (moving, spread out), holds on the grid
-    (stationary, bunched) for several seconds, then launches (moves + disperses).
-    Detect the last stationary hold immediately followed by sustained motion.
-
-    Detecting in pos_data — the SAME channel that draws the map — avoids FastF1's
-    per-channel clock drift (car_data / pos_data / lap timing disagree by minutes).
-    Returns a pandas Timestamp, or None if no clean grid-hold-then-launch is found.
-    """
-    import numpy as np
-    import pandas as pd
-
-    cars = []
-    for dn in ses.pos_data:
-        df = ses.pos_data[dn]
-        if df is None or len(df) < 10:
-            continue
-        cars.append((df["Date"].to_numpy(),
-                     df["X"].to_numpy().astype(float),
-                     df["Y"].to_numpy().astype(float)))
-    if len(cars) < 10:
-        return None
-
-    d0 = min(c[0][0] for c in cars)
-    d1 = max(c[0][-1] for c in cars)
-    gt = pd.date_range(d0, d1, freq="1s").to_numpy()
-
-    def samp(dates, arr):
-        return arr[np.clip(np.searchsorted(dates, gt), 0, len(arr) - 1)]
-
-    xs = np.array([samp(d, x) for d, x, y in cars])
-    ys = np.array([samp(d, y) for d, x, y in cars])
-    # field-median per-second movement (speed) and bounding-box spread
-    speed = np.concatenate([[0.0],
-                            np.median(np.hypot(np.diff(xs, axis=1), np.diff(ys, axis=1)), axis=0)])
-    spread = (xs.max(0) - xs.min(0)) + (ys.max(0) - ys.min(0))
-
-    mx = np.percentile(speed, 95) or 1.0
-    stop, move, hold, after_n = mx * 0.05, mx * 0.4, 6, 20
-    stationary = speed < stop
-    launch = None
-    i = 0
-    while i < len(stationary):
-        if stationary[i]:
-            j = i
-            while j < len(stationary) and stationary[j]:
-                j += 1
-            if (j - i) >= hold:
-                after = speed[j:j + after_n]
-                # followed by sustained motion AND the hold was bunched (a real grid,
-                # not a scattered garage or a degenerate stacked-at-origin gap).
-                if (len(after) and np.median(after) > move
-                        and 1 < spread[i:j].mean() < spread.max() * 0.5):
-                    launch = gt[j]
-            i = j
-        else:
-            i += 1
-    return pd.Timestamp(launch) if launch is not None else None
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(prog="racelens")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -319,7 +257,8 @@ def main() -> None:
         # Anchor t=0 to the detected standing-start launch, in the SAME Date clock
         # used below, so the map's lights-out lines up with the cars actually
         # leaving the grid. Fall back to lap-1 start if no clean grid-hold is found.
-        launch_date = _detect_launch_date(ses)
+        from racelens.positions.launch import detect_launch_date
+        launch_date = detect_launch_date(ses)
         if launch_date is not None:
             t0_ms = int((launch_date - session_zero).total_seconds() * 1000)
             print(f"launch detected → t0 = {t0_ms} ms", file=sys.stderr)
