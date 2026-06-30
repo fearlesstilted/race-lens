@@ -352,6 +352,10 @@ function App() {
 
   const effectivePositionsData = mode === 'live' ? null : replay.positionsData
 
+  // Previous timing-tower order — fed back into trackOrder for hysteresis so the
+  // bunched start doesn't strobe.
+  const prevOrderRef = useRef<string[]>([])
+
   // Order the timing tower by real track progress (positions.json `progress`)
   // so it tracks the map continuously, not just at the once-per-lap S/F line.
   // Renumber POS to the track-order rank; leader is progress-max so it stays
@@ -367,7 +371,9 @@ function App() {
     if (!state) return []
     // During the formation lap there are no events yet, so state.classification is
     // empty and the tower is naturally empty — the grid appears at lights-out.
-    const order = trackOrder(effectivePositionsData, orderAtMs, state.classification, state.drivers)
+    // Pass the previous order so trackOrder can apply hysteresis (no strobe).
+    const order = trackOrder(effectivePositionsData, orderAtMs, state.classification, state.drivers, prevOrderRef.current)
+    prevOrderRef.current = order
     let rank = 0
     return order.map((driverId) => {
       const d = state.drivers[driverId]

@@ -259,6 +259,7 @@ export function trackOrder(
   atMs: number,
   classification: string[],
   drivers: Record<string, { retired?: boolean }>,
+  prevOrder: string[] = [],
 ): string[] {
   const prog = posData?.progress
   if (!prog || classification.length === 0) return classification
@@ -284,19 +285,26 @@ export function trackOrder(
   // track would float to "P1" — the last-lap chaos bug.
   if (active.some((id) => valueAt(id) === null)) return classification
 
-  // Anti-jitter: quantise progress into ~0.27s-of-track buckets (1 lap ≈ 90s →
-  // 0.003 lap). Cars within the same bucket keep the official order, so a bunched
-  // grid at the start / formation / nose-to-tail running doesn't strobe — rows
-  // only swap when track positions differ by a real margin. Quantising (not an
-  // epsilon compare) keeps the ordering transitive, so sort stays consistent.
-  const EPS = 0.003
-  const idx = new Map(classification.map((id, i) => [id, i]))
-  const bucket = (id: string) => Math.round((valueAt(id) as number) / EPS)
-  active.sort((a, b) => {
-    const d = bucket(b) - bucket(a)
-    if (d !== 0) return d
-    return (idx.get(a) ?? 0) - (idx.get(b) ?? 0)
-  })
+  // Hysteresis: start from the PREVIOUS order and let a car move ahead of the one
+  // in front only when it is CLEARLY ahead on track (gain > STICKY). Cars jittering
+  // within STICKY keep their order, so a bunched pack (start "garland" / formation /
+  // DRS train) does NOT strobe; a real overtake (clear margin) swaps once and the
+  // FLIP plays smoothly. Bubble pass is stable and transitive (n≈20, trivial cost).
+  const STICKY = 0.012  // laps of track (~1s) a car must gain to take a position
+  const base = (prevOrder.length ? prevOrder : classification).filter((id) => active.includes(id))
+  for (const id of active) if (!base.includes(id)) base.push(id)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (let i = 0; i < base.length - 1; i++) {
+      if ((valueAt(base[i + 1]) as number) > (valueAt(base[i]) as number) + STICKY) {
+        const tmp = base[i]
+        base[i] = base[i + 1]
+        base[i + 1] = tmp
+        changed = true
+      }
+    }
+  }
 
-  return [...active, ...retired]
+  return [...base, ...retired]
 }
