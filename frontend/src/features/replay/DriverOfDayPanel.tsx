@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getDriverOfDay } from '../../api/client'
 import type { DotdCandidate, DotdResponse } from '../../api/types'
 import { teamColor } from './teamColors'
@@ -20,6 +20,14 @@ const DOTD_VOTE_KEY = (sessionId: string) => `racelens_dotd_vote_${sessionId}`
 /** DOTD voting opens this many laps before the finish (as in real F1). */
 const UNLOCK_LAPS_TO_GO = 10
 
+function loadUserPick(sessionId: string): string | null {
+  try {
+    return localStorage.getItem(DOTD_VOTE_KEY(sessionId))
+  } catch {
+    return null
+  }
+}
+
 export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, totalLaps, atMs }: Props) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<DotdResponse | null>(null)
@@ -36,23 +44,13 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, t
       .catch(() => setData(null))
       .finally(() => setLoading(false))
     // Load saved vote from localStorage
-    try {
-      const saved = localStorage.getItem(DOTD_VOTE_KEY(sessionId))
-      setUserPick(saved)
-    } catch {
-      setUserPick(null)
-    }
+    setUserPick(loadUserPick(sessionId))
   }, [open, sessionId])
 
   // Reset on session change
   useEffect(() => {
     setData(null)
-    try {
-      const saved = localStorage.getItem(DOTD_VOTE_KEY(sessionId))
-      setUserPick(saved)
-    } catch {
-      setUserPick(null)
-    }
+    setUserPick(loadUserPick(sessionId))
   }, [sessionId])
 
   const vote = (driver: string) => {

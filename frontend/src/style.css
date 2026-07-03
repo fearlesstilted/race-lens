@@ -299,39 +299,6 @@ body {
   letter-spacing: 0.18em;
 }
 
-.map-sync {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: #8a8a96;
-}
-.map-sync input[type="range"] {
-  flex: 1;
-  accent-color: #58b6ff;
-}
-.map-sync-val {
-  min-width: 44px;
-  text-align: right;
-  color: #58b6ff;
-  font-variant-numeric: tabular-nums;
-}
-.map-sync-reset {
-  background: none;
-  border: 1px solid #3a3a44;
-  color: #8a8a96;
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 10px;
-  cursor: pointer;
-}
-.map-sync-reset:hover {
-  color: #cfd0d6;
-  border-color: #55555f;
-}
-
 /* ── page shell: 100dvh grid ────────────────────────────────────── */
 #root {
   /* Flex column so the deck stays pinned to the bottom regardless of how many
@@ -723,15 +690,6 @@ body {
   z-index: 2;
   pointer-events: none;
 }
-.map-pit {
-  position: absolute;
-  left: 18px;
-  bottom: 12px;
-  font: 700 11px var(--cond);
-  letter-spacing: 0.2em;
-  color: var(--amber);
-}
-
 /* feed scroll area: takes remaining height, internal scroll on hover */
 .col-center .ev-scroll {
   flex: 1;

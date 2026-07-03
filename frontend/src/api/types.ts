@@ -31,6 +31,7 @@ export type DriverState = {
   y: number | null
   /** Cumulative track progress (laps + arc). Animation only — NOT ordering. */
   progress: number | null
+  recent_laps_ms: number[]
 }
 
 export type DataQuality = {

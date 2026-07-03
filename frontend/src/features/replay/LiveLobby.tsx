@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getLiveSessions, liveStatus } from '../../api/client'
 import type { LiveSessionInfo } from '../../api/client'
 import { TrackMap } from './TrackMap'

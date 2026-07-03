@@ -1,5 +1,3 @@
-import React from 'react'
-
 type Props = {
   status: string
   lap?: number | null

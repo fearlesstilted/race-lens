@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHighlights } from '../../api/client'
 import type { Highlight } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'

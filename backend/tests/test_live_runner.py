@@ -3,7 +3,6 @@
 All async logic is tested via _poll_once() (sync), which the async loop wraps.
 """
 import asyncio
-import pytest
 
 from racelens.events.models import event
 from racelens.live.runner import LiveRunner
@@ -84,9 +83,6 @@ def test_ingest_seq_monotonic():
     for _ in range(3):
         runner._poll_once()
 
-    seqs = [e.ingest_seq for e in runner.engine.events]
-    # Filter out events that kept their original seq from fixture (seq = 0 default)
-    # What we care about: all seqs assigned by runner are unique non-negative ints
     runner_seqs = sorted(runner._all[eid].ingest_seq for eid in runner._all)
     assert runner_seqs == list(range(len(runner._all))), "ingest_seq not monotonic/dense"
 
@@ -244,9 +240,6 @@ def test_sse_generator_ends_after_stop():
         api._live = runner
         try:
             # runner.is_running is False (never started), so first yield should be end.
-            gen = api.live_stream.__wrapped__(tick_s=0.001).__aiter__() if hasattr(
-                api.live_stream, "__wrapped__"
-            ) else None
             # Build the generator directly via the inner function.
             # Replicate gen() logic from live_stream:
             chunks = []
@@ -367,19 +360,3 @@ def test_live_source_truncation_does_not_lose_events():
 
     runner._poll_once()
     assert runner.status()["events_total"] == total
-
-
-# ── API-level test ─────────────────────────────────────────────────────────────
-
-def test_live_state_before_start():
-    """GET /api/live/state before any session is started must return 404."""
-    pytest.importorskip("fastapi")
-    from fastapi.testclient import TestClient
-    import racelens.api as api
-
-    # Reset global state to ensure no lingering runner
-    api._live = None
-
-    client = TestClient(api.app)
-    r = client.get("/api/live/state")
-    assert r.status_code == 404

@@ -12,6 +12,13 @@ export function readLevel(): Level {
   try { return (localStorage.getItem(LEVEL_KEY) as Level) || 'pro' } catch { return 'pro' }
 }
 
+export function writePersisted(key: string, value: string) {
+  try { localStorage.setItem(key, value) } catch { /* noop */ }
+}
+
+/** Session statuses that count as a "neutralized" run (SC/VSC/red flag). */
+export const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
+
 /** Adaptive wall-clock tick interval (ms) for the SSE stream by speed. */
 export function tickMs(s: Speed): number {
   if (s === 1) return 500

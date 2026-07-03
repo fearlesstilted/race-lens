@@ -25,8 +25,8 @@ function fmtGap(s: number | null): string {
 }
 
 function recentLaps(driver: DriverState): number[] {
-  const raw = (driver as Record<string, unknown>)['recent_laps_ms']
-  if (Array.isArray(raw)) return (raw as number[]).filter((v) => v > 0).slice(-3)
+  const raw = driver.recent_laps_ms
+  if (Array.isArray(raw)) return raw.filter((v) => v > 0).slice(-3)
   if (driver.last_lap_ms && driver.last_lap_ms > 0) return [driver.last_lap_ms]
   return []
 }
@@ -34,10 +34,10 @@ function recentLaps(driver: DriverState): number[] {
 /** Detect if a lap time is an in/out-lap: 10+ seconds slower than median of recent laps */
 function isPitLap(driver: DriverState): boolean {
   if (!driver.last_lap_ms || driver.last_lap_ms <= 0) return false
-  const raw = (driver as Record<string, unknown>)['recent_laps_ms']
+  const raw = driver.recent_laps_ms
   let medMs: number | null = null
-  if (Array.isArray(raw) && (raw as number[]).length > 0) {
-    const valid = (raw as number[]).filter((v) => v > 0)
+  if (Array.isArray(raw) && raw.length > 0) {
+    const valid = raw.filter((v) => v > 0)
     if (valid.length > 0) {
       const sorted = [...valid].sort((a, b) => a - b)
       const mid = Math.floor(sorted.length / 2)

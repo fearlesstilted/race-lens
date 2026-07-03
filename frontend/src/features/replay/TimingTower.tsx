@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Battle, DriverState } from '../../api/types'
 import { teamColor } from './teamColors'
 
@@ -24,12 +24,11 @@ function paceTrend(row: DriverRow): 'up' | 'down' | null {
   const last = row.last_lap_ms
   if (!last || last <= 0) return null
 
-  // recent_laps_ms is not in the type yet; access via cast
-  const recent = (row as Record<string, unknown>)['recent_laps_ms']
+  const recent = row.recent_laps_ms
   let avg: number | null = null
 
   if (Array.isArray(recent) && recent.length > 0) {
-    const valid = (recent as number[]).filter((v) => v > 0)
+    const valid = recent.filter((v) => v > 0)
     if (valid.length > 0) avg = valid.reduce((a, b) => a + b, 0) / valid.length
   }
 
@@ -79,13 +78,6 @@ export const TimingTower = React.memo(function TimingTower({
   // Map driver_id → last measured offsetTop (before render)
   const prevTopsRef = useRef<Map<string, number>>(new Map())
 
-  // Capture positions BEFORE render (layout effect runs sync after DOM paint)
-  // We use a plain ref updated in render-time to capture before next layout
-  const capturedBeforeRef = useRef(false)
-
-  // Before each render we capture current tops
-  // This runs synchronously during render of parent, so it's "before" the upcoming paint
-  // We'll use useLayoutEffect in a wrapper div that fires before children repaint
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Track which drivers changed position direction for highlight

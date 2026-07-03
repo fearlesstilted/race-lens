@@ -1,8 +1,6 @@
 """Tests for the SC pit window insight detector and its renderer templates."""
 from __future__ import annotations
 
-import pytest
-
 from racelens.insights.sc_pit import detect_sc_pit, MIN_TYRE_AGE_LAPS
 from racelens.commentary.renderer import render
 

@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -64,11 +64,6 @@ export const getOvertake = (sessionId: string, atMs: number, ahead: string, behi
     `/api/sessions/${encodeURIComponent(sessionId)}/overtake?at_ms=${atMs}&ahead=${encodeURIComponent(ahead)}&behind=${encodeURIComponent(behind)}`,
   )
 
-export const getWinProb = (sessionId: string, atMs: number) =>
-  json<WinProb>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/win-prob?at_ms=${atMs}`,
-  )
-
 export const getWinProbSeries = (sessionId: string, untilMs: number, samples = 20) =>
   json<WinProbSeriesPoint[]>(
     `/api/sessions/${encodeURIComponent(sessionId)}/win-prob-series?until_ms=${untilMs}&samples=${samples}`,
@@ -125,8 +120,6 @@ export const liveStop = () => post<LiveStatusResult>('/api/live/stop')
 
 export const liveStreamUrl = (lang: string, level: string, tickS = 2) =>
   `/api/live/stream?tick_s=${tickS}&lang=${lang}&level=${level}`
-
-export const getLiveState = () => json<import('./types').RaceState>('/api/live/state')
 
 // ── Live lobby ────────────────────────────────────────────────────────────────
 

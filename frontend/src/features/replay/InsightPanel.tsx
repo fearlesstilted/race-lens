@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getOvertake } from '../../api/client'
 import type { CommentaryItem, Insight } from '../../api/types'
+import { NEUTRAL_STATUSES } from './replayTypes'
 
 type Props = {
   insights: Insight[]
@@ -190,8 +191,6 @@ type CardState = {
   leaving: boolean
   overtakePct: number | null
 }
-
-const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
 
 function isBattleType(type: string): boolean {
   return type.startsWith('BATTLE') || type.startsWith('TRAFFIC')

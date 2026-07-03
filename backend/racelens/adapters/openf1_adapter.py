@@ -156,7 +156,6 @@ def _flag_to_status(flag: str) -> str | None:
 # OpenF1IncrementalIngester both call it with their accumulated row sets.
 
 def _rows_to_events(
-    session_key: int,
     driver_rows: list[dict],
     session_rows: list[dict],
     lap_rows: list[dict],
@@ -428,7 +427,6 @@ def ingest_openf1(session_key: int) -> list[Event]:
     rc_rows = _get("/race_control", {"session_key": session_key}) or []
 
     return _rows_to_events(
-        session_key,
         driver_rows,
         session_rows,
         lap_rows,
@@ -550,7 +548,6 @@ class OpenF1IncrementalIngester:
         self._initialized = True
 
         return _rows_to_events(
-            self._session_key,
             self._driver_rows,
             self._session_rows,
             self._lap_rows,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import type { FeedItem, RaceMarker, Timeline } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
 

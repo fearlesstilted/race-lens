@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
@@ -31,98 +31,6 @@ function LiveStatusPill({ status }: { status: LiveStatusResult | null }) {
     <span className={`live-pill ${cls}`}>
       {q.toUpperCase()} · poll #{status.poll_count}
     </span>
-  )
-}
-
-// ── Live form ─────────────────────────────────────────────────────────────────
-
-type LiveFormProps = {
-  onStarted: () => void
-  onStopped: () => void
-  isLiveActive: boolean
-  liveStatus: LiveStatusResult | null
-}
-
-function LiveForm({ onStarted, onStopped, isLiveActive, liveStatus: statusData }: LiveFormProps) {
-  const [year, setYear] = useState(2026)
-  const [country, setCountry] = useState('')
-  const [session, setSession] = useState('Race')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  const handleStart = async () => {
-    if (!country.trim()) { setErr('Enter a country/event name'); return }
-    setBusy(true)
-    setErr(null)
-    try {
-      await liveStart(year, country.trim(), session)
-      onStarted()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to start live session')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleStop = async () => {
-    setBusy(true)
-    setErr(null)
-    try {
-      await liveStop()
-      onStopped()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to stop')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (isLiveActive) {
-    return (
-      <div className="live-bar">
-        <LiveStatusPill status={statusData} />
-        <button className="b danger" type="button" onClick={handleStop} disabled={busy}>STOP</button>
-        {err && <span className="live-err">{err}</span>}
-      </div>
-    )
-  }
-
-  return (
-    <div className="live-bar">
-      <input
-        className="live-input"
-        type="number"
-        value={year}
-        min={2018}
-        max={2030}
-        onChange={(e) => setYear(Number(e.target.value))}
-        title="Year"
-        style={{ width: '4rem' }}
-      />
-      <input
-        className="live-input"
-        type="text"
-        value={country}
-        placeholder="Austria"
-        onChange={(e) => setCountry(e.target.value)}
-        title="Country / event"
-        style={{ width: '8rem' }}
-        onKeyDown={(e) => e.key === 'Enter' && void handleStart()}
-      />
-      <input
-        className="live-input"
-        type="text"
-        value={session}
-        placeholder="Race"
-        onChange={(e) => setSession(e.target.value)}
-        title="Session type"
-        style={{ width: '5rem' }}
-      />
-      <button className="b primary" type="button" onClick={handleStart} disabled={busy}>
-        {busy ? '…' : 'START'}
-      </button>
-      {err && <span className="live-err">{err}</span>}
-    </div>
   )
 }
 

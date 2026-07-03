@@ -1,10 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
 import type { Battle, DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
-import { DEFAULT_LAP_MS } from '../../lib/liveGaps'
-import { buildPathD, interpolateRealPos, startFinishLine } from '../../lib/trackGeometry'
+import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
 import { teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
@@ -45,18 +44,18 @@ const PIT_CAR_SPACING = 26
 function statusWatermark(status: string): { text: string; color: string } | null {
   if (status === 'red_flag') return { text: 'RED FLAG', color: '#cc0000' }
   if (status === 'safety_car') return { text: 'SAFETY CAR', color: '#f2a900' }
-  if (status === 'virtual_safety_car' || status === 'vsc') return { text: 'VIRTUAL SC', color: '#f2a900' }
+  if (status === 'vsc') return { text: 'VIRTUAL SC', color: '#f2a900' }
   return null
 }
 
 function trackStrokeColor(status: string): string {
-  if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc') return '#f2a900'
+  if (status === 'safety_car' || status === 'vsc') return '#f2a900'
   if (status === 'red_flag') return '#cc0000'
   return '#26262e'
 }
 
 function trackShadow(status: string): string | undefined {
-  if (status === 'safety_car' || status === 'virtual_safety_car' || status === 'vsc')
+  if (status === 'safety_car' || status === 'vsc')
     return '0 0 18px 6px #f2a900aa'
   if (status === 'red_flag') return '0 0 18px 6px #cc0000aa'
   return undefined
@@ -79,9 +78,6 @@ export const TrackMap = React.memo(function TrackMap({
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
-
-  // Ghost positions (schematic mode): updated by rAF or atMs changes via a shared ref
-  const ghostFracsRef = useRef<Map<string, number>>(new Map())
 
   const { pathRef, registerCar, currentFracRef, driverLapMsRef, pelotonMedianRef } = useTrackAnimation({
     atMs, playing, playbackSpeed, drivers, classification, sessionStatus, positionsData,
@@ -305,16 +301,6 @@ export const TrackMap = React.memo(function TrackMap({
             )}
           </g>
         )}
-
-        {/* Battle highlight connector lines — drawn before cars so cars sit on top */}
-        {battles.map((b) => {
-          const lDrv = drivers[b.leader_id]
-          const cDrv = drivers[b.chaser_id]
-          if (lDrv?.in_pit || lDrv?.retired || cDrv?.in_pit || cDrv?.retired) return null
-          // We can't access the rAF-updated positions directly in React render.
-          // Draw an ambient glow ring on the chaser instead (visible in all modes).
-          return null // rings handled per-car below
-        })}
 
         {/* On-track cars — initial transform is 0,0; rAF loop updates imperatively */}
         {carIds

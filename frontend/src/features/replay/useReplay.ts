@@ -4,7 +4,7 @@ import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, 
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
 import type { PositionsData } from '../../lib/liveGaps'
-import { LANG_KEY, LEVEL_KEY, readLang, readLevel, tickMs } from './replayTypes'
+import { LANG_KEY, LEVEL_KEY, NEUTRAL_STATUSES, readLang, readLevel, tickMs, writePersisted } from './replayTypes'
 import type { Lang, Level, Speed } from './replayTypes'
 import type { ReplaySetters } from './replaySetters'
 import { useGreenFlag } from './useGreenFlag'
@@ -85,7 +85,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   // Derive stable values from source
   const isReplay = source?.kind === 'replay'
-  const isLive = source?.kind === 'live'
   const sessionId = source?.kind === 'replay' ? source.sessionId : null
   const active = source !== null
 
@@ -217,12 +216,12 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   )
 
   const setLang = useCallback((nextLang: Lang) => {
-    try { localStorage.setItem(LANG_KEY, nextLang) } catch { /* noop */ }
+    writePersisted(LANG_KEY, nextLang)
     setLangState(nextLang)
   }, [])
 
   const setLevel = useCallback((nextLevel: Level) => {
-    try { localStorage.setItem(LEVEL_KEY, nextLevel) } catch { /* noop */ }
+    writePersisted(LEVEL_KEY, nextLevel)
     setLevelState(nextLevel)
   }, [])
 
@@ -230,7 +229,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const frameMs = tickMs(speed) / speed
 
   // Derive neutralization start from backend state (works correctly after scrub)
-  const NEUTRAL_STATUSES = new Set(['safety_car', 'vsc', 'red_flag'])
   const neutralizationStartMs =
     state !== null && NEUTRAL_STATUSES.has(state.session_status)
       ? state.status_since_ms

@@ -258,13 +258,6 @@ async def live_start(
     return {"session_key": session_key, "poll_interval_s": poll_s, "status": "started"}
 
 
-@app.get("/api/live/state")
-def live_state() -> dict:
-    if _live is None or _live.engine is None:
-        raise HTTPException(404, "No live session active or no data yet")
-    return _attach_frame(_live.state_now())
-
-
 @app.get("/api/live/status")
 def live_status() -> dict:
     if _live is None:

@@ -7,7 +7,7 @@
  *
  * Data source: GET /api/sessions/{id}/win-prob-series?until_ms=&samples=20
  */
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getWinProbSeries } from '../../api/client'
 import type { WinProbSeriesPoint } from '../../api/types'
 import { teamColor } from './teamColors'
