@@ -263,105 +263,135 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, selectedIds])
 
-  const cardsRef = useRef<Map<string, CardState>>(new Map())
-  const [renderTick, forceRender] = useState(0)
+  // Cards are real React state; the transition below is PURE (no timers, no
+  // fetches inside the updater — StrictMode-safe). Side effects (leave timers,
+  // overtake fetches) are driven FROM the state in the effect further down.
+  const [cards, setCards] = useState<Map<string, CardState>>(new Map())
 
   useEffect(() => {
     const now = Date.now()
     const incomingKeys = new Set(incomingGroups.map((g) => stableKey(g.primary)))
-    const cards = cardsRef.current
+    setCards((prev) => {
+      const next = new Map<string, CardState>()
 
-    for (const [key, card] of cards) {
-      if (!incomingKeys.has(key)) {
-        card.absentCount += 1
-        const ageMs = now - card.appearedAt
-        const minExpired = ageMs >= MIN_VISIBLE_MS
-        if (card.absentCount >= ABSENT_THRESHOLD && minExpired) {
-          if (!card.leaving) {
+      // Carry existing cards forward (cloned — never mutate prev state).
+      for (const [key, old] of prev) {
+        const card = { ...old }
+        if (!incomingKeys.has(key)) {
+          card.absentCount += 1
+          if (card.absentCount >= ABSENT_THRESHOLD && now - card.appearedAt >= MIN_VISIBLE_MS) {
             card.leaving = true
-            window.setTimeout(() => {
-              cardsRef.current.delete(key)
-              forceRender((n) => n + 1)
-            }, 400)
           }
+        } else {
+          card.absentCount = 0
+          card.leaving = false
         }
-      } else {
-        card.absentCount = 0
-        card.leaving = false
-      }
-    }
-
-    for (const [key, card] of cards) {
-      const newText = commentaryMap[key] ?? card.text
-      if (newText !== card.text) card.text = newText
-    }
-
-    for (const group of incomingGroups) {
-      const key = stableKey(group.primary)
-      if (!cards.has(key)) {
-        cards.set(key, {
-          ins: group.primary,
-          also: group.also,
-          text: commentaryMap[key] ?? '',
-          appearedAt: now,
-          absentCount: 0,
-          leaving: false,
-          overtakePct: null,
-        })
-        // Fetch overtake % for battle/traffic cards with 2 drivers
-        if (sessionId && isBattleType(group.primary.type) && group.primary.driver_ids.length === 2) {
-          const [ahead, behind] = group.primary.driver_ids
-          const cacheKey = `${ahead}:${behind}`
-          if (overtakeCache.has(cacheKey)) {
-            const card = cards.get(key)
-            if (card) card.overtakePct = overtakeCache.get(cacheKey)!
-          } else {
-            getOvertake(sessionId, atMs, ahead, behind)
-              .then((res) => {
-                if (!res.error) {
-                  overtakeCache.set(cacheKey, res.probability)
-                  const c = cardsRef.current.get(key)
-                  if (c) { c.overtakePct = res.probability; forceRender((n) => n + 1) }
-                }
-              })
-              .catch(() => undefined)
-          }
-        }
-      } else {
-        const card = cards.get(key)!
-        card.ins = group.primary
-        card.also = group.also
         card.text = commentaryMap[key] ?? card.text
+        next.set(key, card)
       }
-    }
 
-    // Enforce 3 non-focused + 1 focused limit (total 4 max)
-    const focusedCards = [...cards.entries()].filter(([, c]) => !c.leaving && isFocused(c.ins))
-    const nonFocusedCards = [...cards.entries()].filter(([, c]) => !c.leaving && !isFocused(c.ins))
-    // Allow 1 focused + 3 non-focused = 4 total
-    const keepFocused = focusedCards.slice(0, 1)
-    const keepNonFocused = nonFocusedCards.slice(0, 2)
-    const keepKeys = new Set([...keepFocused, ...keepNonFocused].map(([k]) => k))
-    const activeCards = [...cards.entries()].filter(([, c]) => !c.leaving)
-    for (const [key, card] of activeCards) {
-      if (!keepKeys.has(key) && !card.leaving) {
-        const age = now - card.appearedAt
-        if (age >= MIN_VISIBLE_MS) {
-          card.leaving = true
-          window.setTimeout(() => {
-            cardsRef.current.delete(key)
-            forceRender((n) => n + 1)
-          }, 400)
+      // Add new / refresh present cards.
+      for (const group of incomingGroups) {
+        const key = stableKey(group.primary)
+        const existing = next.get(key)
+        if (!existing) {
+          const [ahead, behind] = group.primary.driver_ids
+          const cached = group.primary.driver_ids.length === 2
+            ? overtakeCache.get(`${ahead}:${behind}`) ?? null
+            : null
+          next.set(key, {
+            ins: group.primary,
+            also: group.also,
+            text: commentaryMap[key] ?? '',
+            appearedAt: now,
+            absentCount: 0,
+            leaving: false,
+            overtakePct: cached,
+          })
+        } else {
+          existing.ins = group.primary
+          existing.also = group.also
+          existing.text = commentaryMap[key] ?? existing.text
         }
       }
-    }
 
-    forceRender((n) => n + 1)
+      // Cap visible cards: 1 focused + 2 non-focused. Evicted cards leave
+      // (animated) once past their minimum visible time.
+      const active = [...next.entries()].filter(([, c]) => !c.leaving)
+      const keep = new Set([
+        ...active.filter(([, c]) => isFocused(c.ins)).slice(0, 1),
+        ...active.filter(([, c]) => !isFocused(c.ins)).slice(0, 2),
+      ].map(([k]) => k))
+      for (const [key, card] of active) {
+        if (!keep.has(key) && now - card.appearedAt >= MIN_VISIBLE_MS) {
+          card.leaving = true
+        }
+      }
+
+      return next
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomingGroups, commentaryMap])
 
+  // Side effects derived from card state:
+  //  - a leaving card gets a delete timer (cancelled if it comes back — the old
+  //    ref-based version leaked that timer and blinked returning cards away);
+  //  - a new 2-driver battle card without overtake % triggers one fetch.
+  const leaveTimersRef = useRef<Map<string, number>>(new Map())
+  const overtakeInFlightRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const timers = leaveTimersRef.current
+    for (const [key, card] of cards) {
+      if (card.leaving && !timers.has(key)) {
+        timers.set(key, window.setTimeout(() => {
+          timers.delete(key)
+          setCards((prev) => {
+            const next = new Map(prev)
+            next.delete(key)
+            return next
+          })
+        }, 400))
+      } else if (!card.leaving && timers.has(key)) {
+        window.clearTimeout(timers.get(key)!)
+        timers.delete(key)
+      }
+
+      if (
+        sessionId && card.overtakePct === null && !card.leaving &&
+        isBattleType(card.ins.type) && card.ins.driver_ids.length === 2
+      ) {
+        const [ahead, behind] = card.ins.driver_ids
+        const cacheKey = `${ahead}:${behind}`
+        if (overtakeInFlightRef.current.has(cacheKey)) continue
+        overtakeInFlightRef.current.add(cacheKey)
+        getOvertake(sessionId, atMs, ahead, behind)
+          .then((res) => {
+            if (!res.error) {
+              overtakeCache.set(cacheKey, res.probability)
+              setCards((prev) => {
+                const c = prev.get(key)
+                if (!c) return prev
+                const next = new Map(prev)
+                next.set(key, { ...c, overtakePct: res.probability })
+                return next
+              })
+            }
+          })
+          .catch(() => undefined)
+          .finally(() => overtakeInFlightRef.current.delete(cacheKey))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards, sessionId])
+
+  // Clear all pending timers on unmount.
+  useEffect(() => () => {
+    for (const t of leaveTimersRef.current.values()) window.clearTimeout(t)
+    leaveTimersRef.current.clear()
+  }, [])
+
   const displayItems = useMemo(() => {
-    const cards = cardsRef.current
     return [...cards.entries()].map(([key, card]) => ({
       key,
       ins: card.ins,
@@ -372,7 +402,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       overtakePct: card.overtakePct,
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderTick, selectedIds])
+  }, [cards, selectedIds])
 
   const hasVisible = displayItems.some((item) => !item.leaving)
 
