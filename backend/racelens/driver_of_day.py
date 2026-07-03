@@ -19,8 +19,14 @@ W_PIT_EXTRA = -0.5  # per pit beyond 1
 def driver_of_day(
     events: list[Event],
     state_engine: ReplayEngine,
+    at_ms: int | None = None,
 ) -> dict[str, Any]:
     """Compute Driver of the Day candidates.
+
+    Spoiler-free: when `at_ms` is given the pick is computed from the race SO FAR
+    (positions gained, fastest lap, pits up to that time) — a provisional pick
+    that updates as the race unfolds, exactly like real DOTD voting opening in the
+    final laps. Without `at_ms` it uses the full race (the final result).
 
     Returns:
         {
@@ -31,16 +37,20 @@ def driver_of_day(
           computed_pick: driver_id  # candidate[0].driver
         }
     """
+    # Cut-off time — only events at/before it count (spoiler-free).
+    final_ms = at_ms if at_ms is not None else max(e.session_time_ms for e in events)
+
     # Get starting grid: earliest PositionChanged for each driver
     start_positions: dict[str, int] = {}
     for e in sorted(events, key=lambda x: (x.session_time_ms, x.event_id)):
+        if e.session_time_ms > final_ms:
+            break
         if e.type == "PositionChanged" and e.driver_id not in start_positions:
             pos = e.payload.get("position")
             if pos is not None:
                 start_positions[e.driver_id] = pos
 
-    # Final state
-    final_ms = max(e.session_time_ms for e in events)
+    # State as of the cut-off
     final_state = state_engine.state_at(final_ms)
     drivers_state = final_state["drivers"]
 

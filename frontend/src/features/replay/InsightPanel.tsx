@@ -60,6 +60,24 @@ function evidenceData(insight: Insight): { label: string; value: string }[] {
 
 const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
+// Importance of each insight type — real action (battles, strategic threats)
+// outranks passive analytics (traffic/clean-air/deg), which are the repetitive
+// "noise". Ranked BEFORE severity because the noisy types are often flagged
+// "high" too, so severity alone can't separate them.
+const TYPE_PRIORITY: Array<[string, number]> = [
+  ['BATTLE_DETECTED', 0],
+  ['UNDERCUT_RISK', 1],
+  ['DRS_TRAIN', 2],
+  ['PIT_WINDOW', 3],
+  ['DEGRADATION_TREND', 5],
+  ['CLEAN_AIR_PACE', 6],
+  ['TRAFFIC_RISK', 7],
+]
+function typeRank(type: string): number {
+  const hit = TYPE_PRIORITY.find(([prefix]) => type.startsWith(prefix))
+  return hit ? hit[1] : 4
+}
+
 function severityClass(severity: string): string {
   if (severity === 'high') return 'ins high'
   if (severity === 'medium') return 'ins'
@@ -226,6 +244,8 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       const af = isFocused(a) ? 0 : 1
       const bf = isFocused(b) ? 0 : 1
       if (af !== bf) return af - bf
+      const td = typeRank(a.type) - typeRank(b.type)
+      if (td !== 0) return td
       const sd = (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
       if (sd !== 0) return sd
       return stableKey(a).localeCompare(stableKey(b))
@@ -236,9 +256,11 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       const af = isFocused(ga.primary) ? 0 : 1
       const bf = isFocused(gb.primary) ? 0 : 1
       if (af !== bf) return af - bf
+      const td = typeRank(ga.primary.type) - typeRank(gb.primary.type)
+      if (td !== 0) return td
       return (SEVERITY_ORDER[ga.primary.severity] ?? 9) - (SEVERITY_ORDER[gb.primary.severity] ?? 9)
     })
-    return groups.slice(0, 4)
+    return groups.slice(0, 3)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, selectedIds])
 
@@ -319,7 +341,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
     const nonFocusedCards = [...cards.entries()].filter(([, c]) => !c.leaving && !isFocused(c.ins))
     // Allow 1 focused + 3 non-focused = 4 total
     const keepFocused = focusedCards.slice(0, 1)
-    const keepNonFocused = nonFocusedCards.slice(0, 3)
+    const keepNonFocused = nonFocusedCards.slice(0, 2)
     const keepKeys = new Set([...keepFocused, ...keepNonFocused].map(([k]) => k))
     const activeCards = [...cards.entries()].filter(([, c]) => !c.leaving)
     for (const [key, card] of activeCards) {

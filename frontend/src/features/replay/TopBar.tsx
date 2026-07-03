@@ -27,9 +27,10 @@ type Props = {
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
   sessionStatus?: string
+  atMs?: number
 }
 
-export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus }: Props) {
+export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus, atMs }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
@@ -151,7 +152,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
       {mode === 'replay' && sessionId && onSeek && (
         <div className="top-panels">
           <HighlightsPanel sessionId={sessionId} lang={lang} onSeek={onSeek} />
-          <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} />
+          <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
         </div>
       )}
 

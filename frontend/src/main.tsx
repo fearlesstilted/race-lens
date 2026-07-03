@@ -4,7 +4,6 @@ import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
-import { trackOrder } from './lib/liveGaps'
 import { HighlightsPanel } from './features/replay/HighlightsPanel'
 import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
 import { LiveLobby } from './features/replay/LiveLobby'
@@ -147,9 +146,12 @@ type DrawerProps = {
   onSeek?: (ms: number) => void
   drawerLang?: 'en' | 'ru'
   sessionStatus?: string
+  lap?: number
+  totalLaps?: number | null
+  atMs?: number
 }
 
-function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang, sessionStatus }: DrawerProps) {
+function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang, sessionStatus, lap, totalLaps, atMs }: DrawerProps) {
   return (
     <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="settings-backdrop" onClick={onClose} />
@@ -201,7 +203,7 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
             <div className="settings-group-label">HIGHLIGHTS &amp; DOTD</div>
             <div className="drawer-panels-inner">
               <HighlightsPanel sessionId={sessionId} lang={drawerLang} onSeek={(ms) => { onSeek(ms); onClose() }} />
-              <DriverOfDayPanel sessionId={sessionId} lang={drawerLang} sessionStatus={sessionStatus} />
+              <DriverOfDayPanel sessionId={sessionId} lang={drawerLang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
             </div>
           </div>
         )}
@@ -352,36 +354,13 @@ function App() {
 
   const effectivePositionsData = mode === 'live' ? null : replay.positionsData
 
-  // Previous timing-tower order — fed back into trackOrder for hysteresis so the
-  // bunched start doesn't strobe.
-  const prevOrderRef = useRef<string[]>([])
-
-  // Order the timing tower by real track progress (positions.json `progress`)
-  // so it tracks the map continuously, not just at the once-per-lap S/F line.
-  // Renumber POS to the track-order rank; leader is progress-max so it stays
-  // correct. Falls back to official classification when progress is absent.
-  //
-  // Recompute the ORDER only on a coarse clock (every ORDER_QUANTUM_MS), not every
-  // frame: progress jitter during close running otherwise swaps rows every tick and
-  // the FLIP animation strobes. The order settles once per quantum; data still
-  // updates with state.
-  const ORDER_QUANTUM_MS = 1500
-  const orderAtMs = Math.floor(replay.atMs / ORDER_QUANTUM_MS) * ORDER_QUANTUM_MS
   const rows = useMemo(() => {
     if (!state) return []
-    // During the formation lap there are no events yet, so state.classification is
-    // empty and the tower is naturally empty — the grid appears at lights-out.
-    // Pass the previous order so trackOrder can apply hysteresis (no strobe).
-    const order = trackOrder(effectivePositionsData, orderAtMs, state.classification, state.drivers, prevOrderRef.current)
-    prevOrderRef.current = order
-    let rank = 0
-    return order.map((driverId) => {
+    return state.classification.map((driverId) => {
       const d = state.drivers[driverId]
-      const isRetired = d.retired === true
-      if (!isRetired) rank += 1
-      return { id: driverId, ...d, position: isRetired ? d.position : rank }
+      return { id: driverId, ...d, position: d.rank ?? d.position }
     })
-  }, [state, effectivePositionsData, orderAtMs])
+  }, [state])
 
   const sessionStatus = state?.session_status ?? 'started'
 
@@ -432,6 +411,9 @@ function App() {
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         drawerLang={replay.lang}
         sessionStatus={sessionStatus}
+        lap={currentLap}
+        totalLaps={state?.total_laps ?? null}
+        atMs={replay.atMs}
       />
       <TopBar
         session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
@@ -453,6 +435,7 @@ function App() {
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         sessionStatus={sessionStatus}
+        atMs={replay.atMs}
       />
 
       {mode === 'live' && !isLiveActive && (
@@ -517,7 +500,6 @@ function App() {
           battles={replay.battles}
           selectedIds={selectedIds}
           onSelectDriver={handleSelectDriver}
-          liveGaps={replay.liveGaps}
         />
 
         <div className="col col-center">

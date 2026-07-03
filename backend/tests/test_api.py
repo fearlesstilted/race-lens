@@ -24,8 +24,57 @@ def test_sessions_and_state(client):
     s = client.get("/api/sessions/2024_mini_race/state", params={"at_ms": 140_000}).json()
     assert s["classification"] == ["VER", "NOR", "LEC"]
     assert s["drivers"]["LEC"]["pit_count"] == 1
+    # rank = 1-based classification index — the single ordering truth.
+    assert [s["drivers"][d]["rank"] for d in ["VER", "NOR", "LEC"]] == [1, 2, 3]
+    # No positions.json for this fixture → live frame, x/y null (map dead-reckons).
+    assert s["frame_source"] == "live"
+    assert s["drivers"]["VER"]["x"] is None
 
     assert client.get("/api/sessions/nope/state", params={"at_ms": 0}).status_code == 404
+
+
+def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
+    import racelens.api as api
+
+    for name in ["aaa_no_map", "zzz_demo"]:
+        (tmp_path / f"{name}.jsonl").write_text(dump_jsonl(mini_race()), encoding="utf-8")
+    (tmp_path / "zzz_demo.positions.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine.cache_clear()
+
+    c = TestClient(api.app)
+    assert c.get("/api/sessions").json() == [
+        {"session_id": "zzz_demo"},
+        {"session_id": "aaa_no_map"},
+    ]
+
+
+def test_attach_frame_merges_xy_progress_by_tick(tmp_path, monkeypatch):
+    import json
+
+    import racelens.api as api
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._positions_data.cache_clear()
+    (tmp_path / "demo.positions.json").write_text(
+        json.dumps({
+            "tick_ms": 1000, "start_ms": 0, "viewbox": [600, 400],
+            "drivers": {"VER": [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]},
+            "progress": {"VER": [0.0, 0.5, 1.0]},
+        }),
+        encoding="utf-8",
+    )
+    # at_ms=1000 → tick 1 → the middle sample.
+    state = {"session_id": "internal_id", "at_ms": 1000, "drivers": {"VER": {}}}
+    api._attach_frame(state, "demo")
+    assert state["frame_source"] == "replay"
+    assert (state["drivers"]["VER"]["x"], state["drivers"]["VER"]["y"]) == (3.0, 4.0)
+    assert state["drivers"]["VER"]["progress"] == 0.5
+    assert state["viewbox"] == [600, 400]
+    # Past the last tick → null, not a crash.
+    state2 = {"session_id": "x", "at_ms": 9_999_999, "drivers": {"VER": {}}}
+    api._attach_frame(state2, "demo")
+    assert state2["drivers"]["VER"]["x"] is None
 
 
 def test_insights_endpoint(client):

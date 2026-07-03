@@ -1,6 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Battle, DriverState } from '../../api/types'
-import type { LiveGapResult } from '../../lib/liveGaps'
 import { teamColor } from './teamColors'
 
 type DriverRow = { id: string } & DriverState
@@ -10,8 +9,6 @@ type Props = {
   battles: Battle[]
   selectedIds: string[]
   onSelectDriver: (id: string) => void
-  /** Live gap estimates from telemetry; key = driver_id */
-  liveGaps?: Map<string, LiveGapResult>
 }
 
 function fmtLastLap(ms: number | null): string {
@@ -49,7 +46,6 @@ export const TimingTower = React.memo(function TimingTower({
   battles,
   selectedIds,
   onSelectDriver,
-  liveGaps,
 }: Props) {
   const battleSet = useMemo(() => {
     const s = new Set<string>()
@@ -229,13 +225,8 @@ export const TimingTower = React.memo(function TimingTower({
         const trend = paceTrend(row)
         const hasFastestLap = row.id === fastestLapHolder
 
-        // Prefer the backend's exact gap/interval (replay always has it). Only fall
-        // back to the telemetry-derived estimate when the backend value is missing
-        // (live mode) — the dead-reckoning estimate is noisy and can be internally
-        // inconsistent (e.g. P4 showing a smaller gap than P3 after a restart).
-        const liveEst = liveGaps?.get(row.id)
-        const displayInterval = row.interval_s ?? (liveEst?.fromTelemetry ? liveEst.interval_s : null)
-        const displayGap = row.gap_s ?? (liveEst?.fromTelemetry ? liveEst.gap_s : null)
+        const displayInterval = row.interval_s
+        const displayGap = row.gap_s
 
         const intDisplay = isRetired
           ? <span className="gap dim">OUT</span>

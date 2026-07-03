@@ -78,6 +78,53 @@ def _engine(session_id: str) -> ReplayEngine:
     return ReplayEngine(events)
 
 
+@lru_cache(maxsize=4)
+def _positions_data(session_id: str) -> dict | None:
+    path = FIXTURES_DIR / f"{session_id}.positions.json"
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _attach_frame(state: dict, session_id: str | None = None) -> dict:
+    """Merge per-tick track telemetry into the driver frame in place.
+
+    Single source of x/y+progress: the resampled positions.json (replay). rank
+    comes from the engine's official classification (stable, correct race order);
+    telemetry `progress` is too noisy to rank by (it can throw a P2 car to P7).
+    Live mode (no positions.json) leaves x/y null and the map dead-reckons.
+
+    `session_id` is the fixture stem (used to find positions.json) — NOT
+    state["session_id"], which is the internal event session id and differs.
+    """
+    pos = _positions_data(session_id) if session_id else None
+    if pos is None:
+        for d in state["drivers"].values():
+            d.setdefault("x", None)
+            d.setdefault("y", None)
+            d.setdefault("progress", None)
+        state["frame_source"] = "live"
+        state["viewbox"] = None
+        return state
+
+    tick_ms = int(pos.get("tick_ms") or 500)
+    start_ms = int(pos.get("start_ms") or 0)
+    # Both axes are DISPLAY time (events lead-shifted by LIGHTS_OUT_MS, grid already
+    # display-time), so no re-shift here — just index the tick.
+    tick = round((int(state["at_ms"]) - start_ms) / tick_ms)
+    xy = pos.get("drivers", {})
+    prog = pos.get("progress", {})
+    for drv, d in state["drivers"].items():
+        frames = xy.get(drv)
+        pt = frames[tick] if frames and 0 <= tick < len(frames) else None
+        d["x"], d["y"] = (pt[0], pt[1]) if pt else (None, None)
+        pframes = prog.get(drv)
+        d["progress"] = pframes[tick] if pframes and 0 <= tick < len(pframes) else None
+    state["frame_source"] = "replay"
+    state["viewbox"] = pos.get("viewbox", [600, 400])
+    return state
+
+
 def _race_end_ms(eng: ReplayEngine) -> int:
     """End of on-track action = chequered flag (or last lap), NOT the last event.
 
@@ -104,7 +151,14 @@ def ping():
 @app.get("/api/sessions")
 def list_sessions() -> list[dict]:
     out = []
-    for f in sorted(FIXTURES_DIR.glob("*.jsonl")):
+    files = sorted(
+        FIXTURES_DIR.glob("*.jsonl"),
+        key=lambda f: (
+            not (FIXTURES_DIR / f"{f.stem}.positions.json").is_file(),
+            f.stem,
+        ),
+    )
+    for f in files:
         out.append({"session_id": f.stem})
     return out
 
@@ -116,7 +170,7 @@ def state(session_id: str, at_ms: int = Query()) -> dict:
     # the scrubber playhead stays in the pre-start window.
     result = _engine(session_id).state_at(max(0, at_ms))
     result["at_ms"] = at_ms
-    return result
+    return _attach_frame(result, session_id)
 
 
 @app.get("/api/sessions/{session_id}/insights")
@@ -160,7 +214,7 @@ async def stream(
         t = from_ms
         while True:
             cur = min(t, end_ms)  # always emit the final state exactly at end_ms
-            state = eng.state_at(cur)
+            state = _attach_frame(eng.state_at(cur), session_id)
             state["active_insights"] = detect_all(state)
             state["commentary"] = render_all(state["active_insights"], lang, level)
             yield f"data: {json.dumps(state)}\n\n"
@@ -208,7 +262,7 @@ async def live_start(
 def live_state() -> dict:
     if _live is None or _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    return _live.state_now()
+    return _attach_frame(_live.state_now())
 
 
 @app.get("/api/live/status")
@@ -238,7 +292,7 @@ async def live_stream(
                 # Runner alive but no data yet — send empty heartbeat and keep waiting.
                 yield "data: {}\n\n"
             else:
-                state = _live.state_now()
+                state = _attach_frame(_live.state_now())
                 state["active_insights"] = detect_all(state)
                 state["commentary"] = render_all(state["active_insights"], lang, level)
                 yield f"data: {json.dumps(state)}\n\n"
@@ -527,10 +581,14 @@ def get_highlights(
 
 
 @app.get("/api/sessions/{session_id}/driver-of-day")
-def get_driver_of_day(session_id: str) -> dict:
-    """Algorithmic Driver of the Day: top candidates ranked by performance score."""
+def get_driver_of_day(session_id: str, at_ms: Optional[int] = Query(default=None)) -> dict:
+    """Algorithmic Driver of the Day: top candidates ranked by performance score.
+
+    Pass at_ms for a spoiler-free provisional pick from the race so far (used when
+    the panel unlocks in the final laps). Omit for the full-race result.
+    """
     eng = _engine(session_id)
-    return _driver_of_day(eng.events, eng)
+    return _driver_of_day(eng.events, eng, at_ms=None if at_ms is None else max(0, at_ms))
 
 
 @app.get("/api/sessions/{session_id}/timeline")

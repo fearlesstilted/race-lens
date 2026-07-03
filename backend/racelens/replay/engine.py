@@ -24,6 +24,7 @@ RECENT_LAPS_WINDOW = 3
 def _new_driver() -> dict[str, Any]:
     return {
         "position": None,
+        "rank": None,         # 1-based ordering truth (= classification index), set per frame
         "laps_completed": 0,
         "last_lap_ms": None,
         "best_lap_ms": None,
@@ -135,6 +136,10 @@ class ReplayEngine:
             reverse=True,
         )
         state["classification"] = active + retired
+        # rank = the single ordering truth for both map and tower. Official,
+        # event-derived, 1-based. The frontend renders this; it never re-sorts.
+        for i, drv in enumerate(state["classification"], start=1):
+            state["drivers"][drv]["rank"] = i
         return state
 
     def state_hash(self, at_ms: int) -> str:

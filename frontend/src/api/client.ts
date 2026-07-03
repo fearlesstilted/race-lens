@@ -90,8 +90,11 @@ export const getHighlights = (sessionId: string, topN = 8) =>
     `/api/sessions/${encodeURIComponent(sessionId)}/highlights?top_n=${topN}`,
   )
 
-export const getDriverOfDay = (sessionId: string) =>
-  json<DotdResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/driver-of-day`)
+export const getDriverOfDay = (sessionId: string, atMs?: number) =>
+  json<DotdResponse>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/driver-of-day` +
+    (atMs != null ? `?at_ms=${Math.max(0, Math.round(atMs))}` : ''),
+  )
 
 // ── Live endpoints ────────────────────────────────────────────────────────────
 

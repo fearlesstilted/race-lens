@@ -356,6 +356,9 @@ body {
 .wrap {
   display: grid;
   grid-template-columns: 380px 1fr 370px;
+  /* Constrain the row to the container height (not content), so columns get a
+     definite height and can fit-shrink their contents instead of overflowing. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   padding: 0 24px;
   min-height: 0;
@@ -375,6 +378,10 @@ body {
   overflow: hidden;
   container-type: size;
   container-name: tower;
+  /* Flex column so the rows can shrink-to-fit the available height (no scroll). */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ── mobile tab bar ──────────────────────────────────────────────── */
@@ -526,11 +533,18 @@ body {
   border-bottom: 1px solid var(--hair);
 }
 .trow {
+  /* All rows share the tower body height equally (flex) and shrink to fit when
+     the field is full — no scroll, ever. Capped at 46px so a short grid on a
+     tall screen doesn't stretch into giant rows. overflow:hidden clips the
+     fixed-size badges when a full field forces very short rows. */
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 46px;
   display: grid;
   grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 38px 22px;
   align-items: center;
   gap: 4px;
-  height: clamp(36px, calc((var(--tower-body-h, 600px) - 64px) / var(--row-count, 20)), 46px);
+  overflow: hidden;
   padding: 0 10px 0 14px;
   border-top: 1px solid #ffffff0a;
   font-variant-numeric: tabular-nums;
@@ -614,7 +628,7 @@ body {
   color: #fff;
 }
 .tbar {
-  height: 26px;
+  height: min(26px, 100%);
 }
 .code {
   font: italic 700 19px var(--cond);

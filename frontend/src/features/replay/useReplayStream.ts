@@ -23,8 +23,10 @@ export function useReplayStream(
   set: ReplaySetters,
 ) {
   const sourceRef = useRef<EventSource | null>(null)
-  // Throttle the data-heavy, animated updates (table / insights / feed) so they
-  // don't strobe at high playback speed (the stream can push ~5 frames/sec).
+  // Throttle ONLY the network side-data (feed / battles / commentary) so we don't
+  // flood the API at high speed. The table + scrubber + map are NOT throttled —
+  // they must render the same frame, else the tower lags the track by up to
+  // DATA_THROTTLE_MS * speed of session time (the map/table desync bug).
   const lastDataRef = useRef(0)
   const pendingRef = useRef<RaceState | null>(null)
   const trailRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,12 +52,10 @@ export function useReplayStream(
       const source = new EventSource(url)
       sourceRef.current = source
 
-      // Push the data-heavy, animated state (table / insights / feed / battles /
-      // commentary). Rate-limited via the throttle below.
-      const flushData = (st: RaceState) => {
+      // Network side-data (feed / battles / commentary). Throttled — these are
+      // API round-trips, not the on-screen frame. The table/map are NOT here.
+      const flushSideData = (st: RaceState) => {
         lastDataRef.current = performance.now()
-        set.setState(st)
-        set.setInsights(st.active_insights ?? [])
         const ms = st.at_ms
         if (sessionId) {
           void getBattles(sessionId, ms).then((r) => set.setBattles(r.battles)).catch(() => undefined)
@@ -73,19 +73,22 @@ export function useReplayStream(
         if (!raw || raw === '{}') return
         const nextState = JSON.parse(raw) as RaceState
         if (!nextState.at_ms) return
-        // Clock / scrubber / map stay smooth — atMs is cheap, push every frame.
+        // Table, scrubber and map all read the SAME frame — push every frame so
+        // the tower can never lag the track. rank is stable (Step 1), so the
+        // FLIP tower no longer strobes when updated per frame.
         set.setAtMs(nextState.at_ms)
-        // Table / insights / feed are throttled (leading + trailing) so they
-        // settle calmly instead of strobing on every frame.
+        set.setState(nextState)
+        set.setInsights(nextState.active_insights ?? [])
+        // Only the network side-data is throttled (leading + trailing).
         pendingRef.current = nextState
         const elapsed = performance.now() - lastDataRef.current
         if (elapsed >= DATA_THROTTLE_MS) {
           if (trailRef.current) { clearTimeout(trailRef.current); trailRef.current = null }
-          flushData(nextState)
+          flushSideData(nextState)
         } else if (!trailRef.current) {
           trailRef.current = setTimeout(() => {
             trailRef.current = null
-            if (pendingRef.current) flushData(pendingRef.current)
+            if (pendingRef.current) flushSideData(pendingRef.current)
           }, DATA_THROTTLE_MS - elapsed)
         }
       }

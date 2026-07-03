@@ -14,6 +14,8 @@ export type Timeline = {
 
 export type DriverState = {
   position: number | null
+  /** 1-based ordering truth (= classification index). Render this; never re-sort. */
+  rank: number | null
   laps_completed: number
   last_lap_ms: number | null
   best_lap_ms: number | null
@@ -24,6 +26,11 @@ export type DriverState = {
   pit_count: number
   in_pit: boolean
   retired: boolean
+  /** Track telemetry for this frame. null in live mode (map dead-reckons). */
+  x: number | null
+  y: number | null
+  /** Cumulative track progress (laps + arc). Animation only — NOT ordering. */
+  progress: number | null
 }
 
 export type DataQuality = {
@@ -55,6 +62,10 @@ export type RaceState = {
   drivers: Record<string, DriverState>
   data_quality: DataQuality
   active_insights?: Insight[]
+  /** Map viewbox [w,h] from telemetry, or null in live mode. */
+  viewbox?: [number, number] | null
+  /** "replay" (positions.json telemetry) or "live". */
+  frame_source?: string
 }
 
 export type InsightsResponse = {

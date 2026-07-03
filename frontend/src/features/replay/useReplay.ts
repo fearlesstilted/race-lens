@@ -3,8 +3,7 @@ import { getCommentary, getFeed, getMarkers, getTimeline } from '../../api/clien
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, Timeline } from '../../api/types'
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
-import { computeLiveGaps } from '../../lib/liveGaps'
-import type { LiveGapResult, PositionsData } from '../../lib/liveGaps'
+import type { PositionsData } from '../../lib/liveGaps'
 import { LANG_KEY, LEVEL_KEY, readLang, readLevel, tickMs } from './replayTypes'
 import type { Lang, Level, Speed } from './replayTypes'
 import type { ReplaySetters } from './replaySetters'
@@ -38,8 +37,6 @@ export type ReplayModel = {
   level: Level
   /** Positions telemetry data (null if not available for this session). */
   positionsData: PositionsData | null
-  /** Live gap estimates from telemetry; empty map if telemetry unavailable. */
-  liveGaps: Map<string, LiveGapResult>
   /** True when the green flag strip should be shown. */
   greenFlag: boolean
   /** Text to display in the green flag strip. */
@@ -79,7 +76,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [lang, setLangState] = useState<Lang>(readLang)
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
-  const [liveGaps, setLiveGaps] = useState<Map<string, LiveGapResult>>(new Map())
   const [markers, setMarkers] = useState<RaceMarker[]>([])
 
   const set = useMemo<ReplaySetters>(() => ({
@@ -107,15 +103,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
   const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(atMs, markers, timeline?.lights_out_ms ?? 0)
 
-  // Recompute live gaps whenever state or positions data changes
-  useEffect(() => {
-    if (!state || !positionsData) {
-      setLiveGaps(new Map())
-      return
-    }
-    setLiveGaps(computeLiveGaps(positionsData, state.at_ms, state.classification, state.drivers))
-  }, [state, positionsData])
-
   // Source change: reset everything, then load appropriately
   useEffect(() => {
     closeStream()
@@ -130,7 +117,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     setError(null)
     setFeedError(null)
     setPositionsData(null)
-    setLiveGaps(new Map())
     setMarkers([])
     resetGreenFlag()
 
@@ -253,7 +239,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   return {
     state, insights, battles, feed, commentary, timeline, markers,
     playing, speed, frameMs, atMs, loading, error, feedError,
-    lang, level, positionsData, liveGaps,
+    lang, level, positionsData,
     greenFlag, greenFlagText, neutralizationStartMs,
     canScrub: isReplay,
     scrub, play, pause, setSpeed, setLang, setLevel,

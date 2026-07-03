@@ -9,11 +9,18 @@ type Props = {
   sessionId: string
   lang?: Lang
   sessionStatus?: string
+  /** Current lap in progress + total, to unlock the panel in the final laps. */
+  lap?: number
+  totalLaps?: number | null
+  /** Current session time — the pick is computed spoiler-free up to here. */
+  atMs?: number
 }
 
 const DOTD_VOTE_KEY = (sessionId: string) => `racelens_dotd_vote_${sessionId}`
+/** DOTD voting opens this many laps before the finish (as in real F1). */
+const UNLOCK_LAPS_TO_GO = 10
 
-export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus }: Props) {
+export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, totalLaps, atMs }: Props) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<DotdResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -22,7 +29,9 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus }: Prop
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    getDriverOfDay(sessionId)
+    // Snapshot the pick at the moment the panel opens — spoiler-free (race so
+    // far). Not live-refreshed so it doesn't churn while reading.
+    getDriverOfDay(sessionId, sessionStatus === 'finished' ? undefined : atMs)
       .then((r) => setData(r))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
@@ -57,22 +66,29 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus }: Prop
 
   const maxScore = data?.candidates[0]?.score ?? 1
   const isFinished = sessionStatus === 'finished'
-  const dotdLabel = lang === 'ru' ? 'доступно после финиша' : 'available at the chequered flag'
+  const lapsToGo = totalLaps != null && lap != null ? totalLaps - lap : null
+  const available = isFinished || (lapsToGo != null && lapsToGo <= UNLOCK_LAPS_TO_GO)
+  const dotdLabel = lang === 'ru'
+    ? `открывается за ${UNLOCK_LAPS_TO_GO} кругов до финиша`
+    : `unlocks in the final ${UNLOCK_LAPS_TO_GO} laps`
+  const dotdTitle = isFinished
+    ? (lang === 'ru' ? 'Гонщик дня — алгоритмический выбор' : 'Driver of the Day — algorithmic pick')
+    : (lang === 'ru' ? 'Предварительный выбор — по гонке пока' : 'Provisional pick — race so far')
 
   return (
     <div className="dotd-wrap">
       <button
         type="button"
         className={`tog${open ? ' tog-on' : ''}`}
-        onClick={() => { if (isFinished) setOpen((v) => !v) }}
-        disabled={!isFinished}
-        title={isFinished ? 'Driver of the Day — algorithmic pick' : dotdLabel}
-        style={!isFinished ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-        aria-disabled={!isFinished}
+        onClick={() => { if (available) setOpen((v) => !v) }}
+        disabled={!available}
+        title={available ? dotdTitle : dotdLabel}
+        style={!available ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+        aria-disabled={!available}
       >
         DOTD
       </button>
-      {!isFinished && (
+      {!available && (
         <span className="dotd-gate-hint">{dotdLabel}</span>
       )}
 
@@ -82,6 +98,18 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus }: Prop
             <span className="dotd-title">DRIVER OF THE DAY</span>
             <span className="dotd-sub">model pick · tap to vote</span>
           </div>
+          <div className="dotd-footer" style={{ borderTop: 0, paddingTop: 0 }}>
+            {lang === 'ru'
+              ? 'Оценка: +3 за отыгранную позицию · +15 быстрейший круг · +10 камбэк (5+ поз.) · −0.5 за лишний пит'
+              : 'Score: +3 per position gained · +15 fastest lap · +10 comeback (5+) · −0.5 per extra pit'}
+          </div>
+          {!isFinished && lapsToGo != null && (
+            <div className="dotd-footer" style={{ borderTop: 0, paddingTop: 0, color: 'var(--red)' }}>
+              {lang === 'ru'
+                ? `предварительно — по гонке пока (осталось ${lapsToGo} кр.)`
+                : `provisional — race so far (${lapsToGo} laps to go)`}
+            </div>
+          )}
 
           {loading && <div className="dotd-empty">Loading…</div>}
           {!loading && !data && <div className="dotd-empty">No data</div>}

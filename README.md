@@ -27,7 +27,12 @@ uses only events up to `t`. Plain explainable models throughout; no machine lear
 
 ## Demo
 
-<!-- TODO: record 20s GIF -->
+```bash
+docker compose up --build
+```
+
+Open http://localhost:5173. The Spain 2024 replay ships with ready-made
+track positions, so the map works without FastF1, Rust, or preprocessing.
 
 ## Architecture
 
@@ -45,6 +50,14 @@ uses only events up to `t`. Plain explainable models throughout; no machine lear
 | **Frontend** | React + TS broadcast UI: timing tower, telemetry track map, insight feed, forecast & projection overlays | [`frontend/src/`](frontend/src/) |
 
 ## Quickstart
+
+**Run the replay UI (no FastF1/Rust needed):**
+
+```bash
+docker compose up --build
+# UI  → http://localhost:5173
+# API → http://localhost:8000
+```
 
 **Install and test (no network needed):**
 
@@ -106,8 +119,8 @@ npm run dev
 
 ```bash
 docker compose up
-# API at http://localhost:8000
-# Fixtures mounted from ./backend/fixtures
+# UI at http://localhost:5173, API at http://localhost:8000
+# Fixtures mounted from ./backend/fixtures; Spain 2024 includes positions.json
 ```
 
 ## API Endpoints

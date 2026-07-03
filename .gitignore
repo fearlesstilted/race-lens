@@ -10,6 +10,7 @@ fastf1_cache/
 # Heavy derived data stays out: raw telemetry (~40MB) and resampled positions (~4MB).
 backend/fixtures/*.positions_raw.jsonl
 backend/fixtures/*.positions.json
+!backend/fixtures/spain_2024_race.positions.json
 rust/target/
 .env
 frontend/node_modules/
