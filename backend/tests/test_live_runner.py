@@ -4,6 +4,11 @@ All async logic is tested via _poll_once() (sync), which the async loop wraps.
 """
 import asyncio
 
+import pytest
+
+fastapi = pytest.importorskip("fastapi")
+from fastapi.testclient import TestClient  # noqa: E402
+
 from racelens.events.models import event
 from racelens.live.runner import LiveRunner
 from tests.test_replay import mini_race, SID
@@ -360,3 +365,37 @@ def test_live_source_truncation_does_not_lose_events():
 
     runner._poll_once()
     assert runner.status()["events_total"] == total
+
+
+# ── /api/live/* thread-safety (sync handlers moved to async def) ──────────────
+
+def test_live_stop_twice_does_not_crash():
+    """Sequential stop→stop must not crash: `/api/live/*` handlers touching
+    `_live` are all `async def` now, so they serialize on the event loop
+    instead of racing across threadpool threads. status() after stop must
+    report the runner as not running (no live session active)."""
+    import racelens.api as api
+
+    client = TestClient(api.app)
+
+    original = api._live
+    try:
+        # Seed a "live" runner without touching the network.
+        runner = LiveRunner(lambda: mini_race(), poll_interval_s=60.0)
+        runner._poll_once()
+        api._live = runner
+
+        r1 = client.post("/api/live/stop")
+        assert r1.status_code == 200
+
+        # First stop cleared _live entirely — status must report not-running.
+        r_status = client.get("/api/live/status")
+        assert r_status.status_code == 404
+        assert "no live session" in r_status.json()["detail"].lower()
+
+        # Second stop: nothing to stop, must not crash — just 404, same as first extra call.
+        r2 = client.post("/api/live/stop")
+        assert r2.status_code == 404
+        assert "no live session" in r2.json()["detail"].lower()
+    finally:
+        api._live = original

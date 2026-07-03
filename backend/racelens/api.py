@@ -21,6 +21,7 @@ from racelens.adapters.openf1_adapter import (
     OpenF1IncrementalIngester,
     find_session,
     ingest_openf1,
+    list_sessions as _openf1_list_sessions,
 )
 from racelens.commentary.feed import render_feed
 from racelens.events_significant import significant_events
@@ -143,6 +144,16 @@ def _race_end_ms(eng: ReplayEngine) -> int:
         return max(laps)
     return eng.events[-1].session_time_ms if eng.events else 0
 
+def _clamp_at_ms(at_ms: int) -> int:
+    """Negative at_ms = formation lap (telemetry-only, before lights-out).
+
+    There are no events yet at negative timestamps, so callers clamp to 0
+    when querying engine state, while the response still echoes the raw
+    requested at_ms so the frontend scrubber playhead stays correct.
+    """
+    return max(0, at_ms)
+
+
 @app.get("/api/ping")
 def ping():
     return {"status": "ok"} #keepalive ping for render demo page 
@@ -168,7 +179,7 @@ def state(session_id: str, at_ms: int = Query()) -> dict:
     # Negative at_ms = formation lap (telemetry-only, before lights-out). There are
     # no events yet, so show the grid (state at 0) but echo the requested time so
     # the scrubber playhead stays in the pre-start window.
-    result = _engine(session_id).state_at(max(0, at_ms))
+    result = _engine(session_id).state_at(_clamp_at_ms(at_ms))
     result["at_ms"] = at_ms
     return _attach_frame(result, session_id)
 
@@ -176,21 +187,21 @@ def state(session_id: str, at_ms: int = Query()) -> dict:
 @app.get("/api/sessions/{session_id}/insights")
 def insights(session_id: str, at_ms: int = Query()) -> dict:
     """Active insights at a timestamp, computed from state <= at_ms only."""
-    state = _engine(session_id).state_at(max(0, at_ms))
+    state = _engine(session_id).state_at(_clamp_at_ms(at_ms))
     return {"at_ms": at_ms, "insights": detect_all(state)}
 
 
 @app.get("/api/sessions/{session_id}/battles")
 def battles(session_id: str, at_ms: int = Query()) -> dict:
     """On-track battles at a timestamp: pairs of neighbouring drivers in a real fight."""
-    state = _engine(session_id).state_at(max(0, at_ms))
+    state = _engine(session_id).state_at(_clamp_at_ms(at_ms))
     return {"at_ms": at_ms, "battles": detect_battles(state)}
 
 
 @app.get("/api/sessions/{session_id}/commentary")
 def commentary(session_id: str, at_ms: int = Query(), lang: str = "en", level: str = "pro") -> dict:
     """Active insights rendered as text. lang: en|ru, level: beginner|pro."""
-    state = _engine(session_id).state_at(max(0, at_ms))
+    state = _engine(session_id).state_at(_clamp_at_ms(at_ms))
     return {"at_ms": at_ms, "items": render_all(detect_all(state), lang, level)}
 
 
@@ -259,7 +270,7 @@ async def live_start(
 
 
 @app.get("/api/live/status")
-def live_status() -> dict:
+async def live_status() -> dict:
     if _live is None:
         raise HTTPException(404, "No live session active")
     return _live.status()
@@ -295,7 +306,7 @@ async def live_stream(
 
 
 @app.post("/api/live/stop")
-def live_stop() -> dict:
+async def live_stop() -> dict:
     global _live
     if _live is None:
         raise HTTPException(404, "No live session active")
@@ -365,51 +376,11 @@ def live_sessions(
     that is True when the current UTC time is >= date_start.
     """
     import urllib.error
-    from racelens.adapters.openf1_adapter import _get as openf1_get, _parse_iso
-    from datetime import datetime, timezone
 
     try:
-        rows = openf1_get("/sessions", {"year": year})
+        return _openf1_list_sessions(year, country)
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
         raise HTTPException(502, "OpenF1 unavailable") from exc
-
-    # Match like find_session: country can be a country, circuit or city
-    # (Miami → country "United States"/location "Miami"; Austria → location
-    # "Spielberg"), so filter across all three fields instead of country_name.
-    if country:
-        needle = country.lower()
-        rows = [
-            r for r in rows
-            if needle in str(r.get("country_name", "")).lower()
-            or needle in str(r.get("circuit_short_name", "")).lower()
-            or needle in str(r.get("location", "")).lower()
-        ]
-
-    now_ts = datetime.now(timezone.utc).timestamp()
-
-    result = []
-    for row in rows:
-        date_start = str(row.get("date_start") or "")
-        # OpenF1 date_start can arrive WITHOUT a timezone (it's track-local wall
-        # time). Glue on gmt_offset (e.g. "02:00:00" → "+02:00") so the frontend
-        # parses the correct instant instead of assuming UTC (the 16:00→18:00 bug).
-        gmt = str(row.get("gmt_offset") or "")
-        if date_start and "+" not in date_start and not date_start.endswith("Z") and gmt:
-            hh_mm = gmt[:5] if len(gmt) >= 5 else gmt  # "02:00:00" → "02:00"
-            sign = "+" if not hh_mm.startswith("-") else ""
-            date_start = f"{date_start}{sign}{hh_mm}"
-        ts = _parse_iso(date_start) if date_start else None
-        result.append({
-            "session_name": str(row.get("session_name") or ""),
-            "session_key": int(row["session_key"]),
-            "session_type": str(row.get("session_type") or ""),
-            "date_start": date_start,
-            "gmt_offset": gmt,
-            "started": ts is not None and now_ts >= ts,
-        })
-
-    result.sort(key=lambda x: x["date_start"])
-    return result
 
 
 @app.get("/api/sessions/{session_id}/win-prob")
@@ -419,7 +390,7 @@ def win_prob(
 ):
     """Win probability for every driver at a given timestamp."""
     engine = _engine(session_id)
-    state = engine.state_at(max(0, at_ms))
+    state = engine.state_at(_clamp_at_ms(at_ms))
     return win_probability(state, session_id)
 
 
@@ -456,29 +427,29 @@ def win_prob_series(
 @app.get("/api/sessions/{session_id}/forecast")
 def forecast(
     session_id: str,
-    at_ms: int = Query(ge=0),
+    at_ms: int = Query(),
     laps: int = Query(default=10, ge=1, le=50),
 ):
     engine = _engine(session_id)
-    state = engine.state_at(at_ms)
+    state = engine.state_at(_clamp_at_ms(at_ms))
     return project_order(state, laps_ahead=laps)
 
 
 @app.get("/api/sessions/{session_id}/simulate-pit")
 def simulate_pit_endpoint(
     session_id: str,
-    at_ms: int = Query(ge=0),
+    at_ms: int = Query(),
     driver: str = Query(...),
 ):
     engine = _engine(session_id)
-    state = engine.state_at(at_ms)
+    state = engine.state_at(_clamp_at_ms(at_ms))
     return simulate_pit(state, driver, session_id)
 
 
 @app.get("/api/sessions/{session_id}/what-if")
 def what_if_endpoint(
     session_id: str,
-    at_ms: int = Query(ge=0),
+    at_ms: int = Query(),
     scenario: str = Query(...),
     driver: Optional[str] = Query(default=None),
 ):
@@ -492,7 +463,7 @@ def what_if_endpoint(
     if scenario in {"pit_now", "stay_out"} and not driver:
         raise HTTPException(400, f"scenario='{scenario}' requires driver parameter")
     engine = _engine(session_id)
-    state = engine.state_at(at_ms)
+    state = engine.state_at(_clamp_at_ms(at_ms))
     try:
         return what_if(state, session_id, scenario, driver)
     except ValueError as exc:
@@ -502,12 +473,12 @@ def what_if_endpoint(
 @app.get("/api/sessions/{session_id}/overtake")
 def overtake_endpoint(
     session_id: str,
-    at_ms: int = Query(ge=0),
+    at_ms: int = Query(),
     ahead: str = Query(...),
     behind: str = Query(...),
 ):
     engine = _engine(session_id)
-    state = engine.state_at(at_ms)
+    state = engine.state_at(_clamp_at_ms(at_ms))
     return overtake_probability(state, ahead, behind, session_id)
 
 
@@ -581,7 +552,7 @@ def get_driver_of_day(session_id: str, at_ms: Optional[int] = Query(default=None
     the panel unlocks in the final laps). Omit for the full-race result.
     """
     eng = _engine(session_id)
-    return _driver_of_day(eng.events, eng, at_ms=None if at_ms is None else max(0, at_ms))
+    return _driver_of_day(eng.events, eng, at_ms=None if at_ms is None else _clamp_at_ms(at_ms))
 
 
 @app.get("/api/sessions/{session_id}/timeline")

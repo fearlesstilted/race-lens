@@ -2,9 +2,10 @@
  * StintTimeline — per-driver tyre strategy bars (compound-coloured, width = laps).
  * The whole race strategy at a glance. Replay only; fetched once per session.
  */
-import { useEffect, useState } from 'react'
 import { getStints } from '../../api/client'
 import type { StintsResponse } from '../../api/types'
+import { compoundColor } from './teamColors'
+import { useAsync } from './useAsync'
 
 type Props = {
   sessionId: string
@@ -12,29 +13,8 @@ type Props = {
   order?: string[]
 }
 
-const COMPOUND_COLOR: Record<string, string> = {
-  SOFT: '#e8002d',
-  MEDIUM: '#f2c500',
-  HARD: '#e8e8ec',
-  INTERMEDIATE: '#3cba54',
-  WET: '#2d6fe8',
-  UNKNOWN: '#5a5a63',
-}
-
-function compoundColor(c: string): string {
-  return COMPOUND_COLOR[(c || '').toUpperCase()] ?? COMPOUND_COLOR.UNKNOWN
-}
-
 export function StintTimeline({ sessionId, order }: Props) {
-  const [data, setData] = useState<StintsResponse | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    getStints(sessionId)
-      .then((d) => { if (!cancelled) setData(d) })
-      .catch(() => undefined)
-    return () => { cancelled = true }
-  }, [sessionId])
+  const { data } = useAsync<StintsResponse>(() => getStints(sessionId), [sessionId])
 
   if (!data || data.total_laps <= 0) return null
   const total = data.total_laps

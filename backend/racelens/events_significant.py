@@ -199,19 +199,40 @@ def significant_events(
     markers: list[dict[str, Any]] = []
     seen_ids: set[str] = set()  # deduplicate by event_id
 
-    # ── Track classification state for lead/podium/fastest ────────────────────
-    # We iterate LapCompleted events in order and query state at each one.
+    _detect_lead_podium_fastest(visible_sorted, state_engine, markers, seen_ids)
+    _detect_off_track(visible_sorted, markers, seen_ids)
+    _detect_status_events(visible_sorted, markers, seen_ids)
+    _detect_race_control_events(visible_sorted, markers, seen_ids)
+
+    # TODO: RETIREMENT — reliable detection requires tracking retired flag
+    # transitions. The engine marks drivers retired=True after falling >5 laps
+    # behind the leader, but this doesn't produce a precise at_ms. Skipping
+    # for now; can be added when the engine emits a RetiredFlag event.
+
+    # Backfill lap for markers built from race-control messages (which carry no
+    # lap number) so the UI never shows "Lap null".
+    for m in markers:
+        if m["lap"] is None:
+            m["lap"] = state_engine.state_at(m["at_ms"]).get("lap")
+
+    # ── Sort by at_ms, stable ─────────────────────────────────────────────────
+    markers.sort(key=lambda m: (m["at_ms"], m["kind"]))
+    return markers
+
+
+# ── Detection helpers ────────────────────────────────────────────────────────
+
+def _detect_lead_podium_fastest(
+    visible_sorted: list[Event],
+    state_engine: ReplayEngine,
+    markers: list[dict[str, Any]],
+    seen_ids: set[str],
+) -> None:
+    """LEAD_CHANGE / PODIUM_CHANGE / FASTEST_LAP — sampled at each LapCompleted
+    checkpoint by querying classification state from the engine."""
     prev_leader: str | None = None
     prev_top3: frozenset[str] = frozenset()
     best_race_lap_ms: int | None = None  # absolute fastest lap in race so far
-
-    # Laps where a driver was in/out of the pits — excluded from off-track detection
-    # (an in/out lap is legitimately slow).
-    pit_laps: set[tuple[str, int]] = {
-        (e.driver_id, e.lap)
-        for e in visible_sorted
-        if e.type in ("PitIn", "PitOut") and e.driver_id and e.lap is not None
-    }
 
     # Pre-collect classification checkpoints: times where we should sample state.
     # Use all LapCompleted times (de-duped, sorted) for efficiency.
@@ -288,10 +309,24 @@ def significant_events(
         prev_leader = new_leader
         prev_top3 = new_top3
 
-    # ── OFF_TRACK — a lap far slower than the driver's own recent pace ─────────
-    # (spin / off / big time loss). An individual off hits one or two drivers;
-    # a Safety Car / yellow slows the whole field, so we only flag laps where at
-    # most _OFF_TRACK_MAX_PER_LAP drivers are slow. Pit laps excluded.
+
+def _detect_off_track(
+    visible_sorted: list[Event],
+    markers: list[dict[str, Any]],
+    seen_ids: set[str],
+) -> None:
+    """OFF_TRACK — a lap far slower than the driver's own recent pace
+    (spin / off / big time loss). An individual off hits one or two drivers;
+    a Safety Car / yellow slows the whole field, so we only flag laps where at
+    most _OFF_TRACK_MAX_PER_LAP drivers are slow. Pit laps excluded."""
+    # Laps where a driver was in/out of the pits — excluded from off-track detection
+    # (an in/out lap is legitimately slow).
+    pit_laps: set[tuple[str, int]] = {
+        (e.driver_id, e.lap)
+        for e in visible_sorted
+        if e.type in ("PitIn", "PitOut") and e.driver_id and e.lap is not None
+    }
+
     recent_laps: dict[str, list[int]] = {}
     candidates: list[tuple[int, int, str, float]] = []  # (at_ms, lap, drv, delta_s)
     for e in visible_sorted:
@@ -328,7 +363,13 @@ def significant_events(
             dedup_key=f"off:{at_ms_c}:{drv}",
         )
 
-    # ── Session status events (flags and restarts) ────────────────────────────
+
+def _detect_status_events(
+    visible_sorted: list[Event],
+    markers: list[dict[str, Any]],
+    seen_ids: set[str],
+) -> None:
+    """SC / VSC / red flag / green (restart) markers from SessionStatusChanged."""
     prev_status: str | None = None
     neutralisation_active = False  # True when red_flag / SC / VSC in effect
 
@@ -374,7 +415,13 @@ def significant_events(
 
         prev_status = status
 
-    # ── Race control messages: incidents, penalties ───────────────────────────
+
+def _detect_race_control_events(
+    visible_sorted: list[Event],
+    markers: list[dict[str, Any]],
+    seen_ids: set[str],
+) -> None:
+    """INCIDENT / CRASH / PENALTY / investigation markers from RaceControlMessage."""
     for e in visible_sorted:
         if e.event_id in seen_ids:
             continue
@@ -425,21 +472,6 @@ def significant_events(
                 text_ru=text_ru,
                 dedup_key=f"penalty:{e.event_id}",
             )
-
-    # TODO: RETIREMENT — reliable detection requires tracking retired flag
-    # transitions. The engine marks drivers retired=True after falling >5 laps
-    # behind the leader, but this doesn't produce a precise at_ms. Skipping
-    # for now; can be added when the engine emits a RetiredFlag event.
-
-    # Backfill lap for markers built from race-control messages (which carry no
-    # lap number) so the UI never shows "Lap null".
-    for m in markers:
-        if m["lap"] is None:
-            m["lap"] = state_engine.state_at(m["at_ms"]).get("lap")
-
-    # ── Sort by at_ms, stable ─────────────────────────────────────────────────
-    markers.sort(key=lambda m: (m["at_ms"], m["kind"]))
-    return markers
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────

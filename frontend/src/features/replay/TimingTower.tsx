@@ -120,10 +120,9 @@ export const TimingTower = React.memo(function TimingTower({
             el.style.transition = ''
           }, 320)
           // Track so we don't leak timers (overwrite if another swap fires sooner).
-          ;(el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> })._zTimer && clearTimeout(
-            (el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> })._zTimer!
-          )
-          ;(el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> })._zTimer = clearZ
+          const zEl = el as HTMLDivElement & { _zTimer?: ReturnType<typeof setTimeout> }
+          if (zEl._zTimer) clearTimeout(zEl._zTimer)
+          zEl._zTimer = clearZ
         }
       }
     }
@@ -184,7 +183,7 @@ export const TimingTower = React.memo(function TimingTower({
       tops.set(id, el.offsetTop)
     }
     prevTopsRef.current = tops
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [rows])
 
   return (

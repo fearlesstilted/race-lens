@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getDriverOfDay } from '../../api/client'
 import type { DotdCandidate, DotdResponse } from '../../api/types'
 import { teamColor } from './teamColors'
+import { useAsync } from './useAsync'
 
 type Lang = 'en' | 'ru'
 
@@ -30,26 +31,25 @@ function loadUserPick(sessionId: string): string | null {
 
 export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, totalLaps, atMs }: Props) {
   const [open, setOpen] = useState(false)
-  const [data, setData] = useState<DotdResponse | null>(null)
-  const [loading, setLoading] = useState(false)
   const [userPick, setUserPick] = useState<string | null>(null)
+
+  // Snapshot the pick at the moment the panel opens — spoiler-free (race so
+  // far). Not live-refreshed so it doesn't churn while reading. atMs/sessionStatus
+  // are deliberately excluded from deps for the same reason.
+  const { data, loading } = useAsync<DotdResponse>(
+    () => getDriverOfDay(sessionId, sessionStatus === 'finished' ? undefined : atMs),
+    [sessionId],
+    open,
+  )
 
   useEffect(() => {
     if (!open) return
-    setLoading(true)
-    // Snapshot the pick at the moment the panel opens — spoiler-free (race so
-    // far). Not live-refreshed so it doesn't churn while reading.
-    getDriverOfDay(sessionId, sessionStatus === 'finished' ? undefined : atMs)
-      .then((r) => setData(r))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
     // Load saved vote from localStorage
     setUserPick(loadUserPick(sessionId))
   }, [open, sessionId])
 
   // Reset on session change
   useEffect(() => {
-    setData(null)
     setUserPick(loadUserPick(sessionId))
   }, [sessionId])
 

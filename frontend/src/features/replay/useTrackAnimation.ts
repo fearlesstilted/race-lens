@@ -183,7 +183,7 @@ export function useTrackAnimation({
       }
       lastTimestampRef.current = null
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [playing])
 
   // Register/unregister car group refs as the rendered car set changes.

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getHighlights } from '../../api/client'
-import type { Highlight } from '../../api/types'
+import type { Highlight, HighlightsResponse } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
+import { useAsync } from './useAsync'
 
 type Lang = 'en' | 'ru'
 
@@ -39,25 +40,16 @@ const KIND_COLOR: Record<string, string> = {
 
 export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {
   const [open, setOpen] = useState(false)
-  const [highlights, setHighlights] = useState<Highlight[]>([])
-  const [loading, setLoading] = useState(false)
   const [playing, setPlaying] = useState(false)
   const playRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const playIdxRef = useRef(0)
 
-  useEffect(() => {
-    if (!open) return
-    setLoading(true)
-    getHighlights(sessionId, 8)
-      .then((r) => setHighlights(r.highlights))
-      .catch(() => setHighlights([]))
-      .finally(() => setLoading(false))
-  }, [open, sessionId])
+  const { data, loading } = useAsync<HighlightsResponse>(() => getHighlights(sessionId, 8), [sessionId], open)
+  const highlights: Highlight[] = data?.highlights ?? []
 
   // Stop playback when closed or session changes
   useEffect(() => {
     stopPlay()
-    setHighlights([])
   }, [sessionId])
 
   const stopPlay = useCallback(() => {

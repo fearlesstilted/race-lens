@@ -4,7 +4,7 @@ import { getTrack } from '../../api/client'
 import type { Battle, DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
-import { teamColor } from './teamColors'
+import { compoundColor, normalizeCompound, teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
 type Props = {
@@ -313,13 +313,8 @@ export const TrackMap = React.memo(function TrackMap({
             const r = isSelected ? 9 : 7
             const showLabel = isSelected || isTop3
             const inBattle = battles.some(b => b.chaser_id === driverId || b.leader_id === driverId)
-            const compound = drivers[driverId]?.tyre_compound?.charAt(0).toUpperCase() ?? null
-            const compoundColor =
-              compound === 'S' ? '#ff2d2d' :
-              compound === 'M' ? '#ffd900' :
-              compound === 'H' ? '#ececec' :
-              compound === 'I' ? '#39b54a' :
-              compound === 'W' ? '#0067ff' : null
+            const tyreCompound = drivers[driverId]?.tyre_compound
+            const ringColor = normalizeCompound(tyreCompound) ? compoundColor(tyreCompound) : null
             return (
               <g
                 key={driverId}
@@ -332,8 +327,8 @@ export const TrackMap = React.memo(function TrackMap({
                   <circle r={r + 5} fill="none" stroke="#f2a900" strokeWidth={1.2} opacity={0.7} />
                 )}
                 {/* Compound ring */}
-                {compoundColor && !inBattle && (
-                  <circle r={r + 3} fill="none" stroke={compoundColor} strokeWidth={1} opacity={0.55} />
+                {ringColor && !inBattle && (
+                  <circle r={r + 3} fill="none" stroke={ringColor} strokeWidth={1} opacity={0.55} />
                 )}
                 <circle
                   r={r}

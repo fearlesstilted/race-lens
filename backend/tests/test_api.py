@@ -77,6 +77,24 @@ def test_attach_frame_merges_xy_progress_by_tick(tmp_path, monkeypatch):
     assert state2["drivers"]["VER"]["x"] is None
 
 
+@pytest.mark.parametrize("path,extra_params", [
+    ("forecast", {"laps": 5}),
+    ("simulate-pit", {"driver": "VER"}),
+    ("what-if", {"scenario": "baseline"}),
+    ("overtake", {"ahead": "VER", "behind": "LEC"}),
+])
+def test_negative_at_ms_clamps_to_zero(client, path, extra_params):
+    """Negative at_ms (formation lap, before lights-out) must not 422 — it
+    clamps to 0 via _clamp_at_ms, the same semantic already used by
+    state/insights/battles/commentary/win-prob (see state() docstring)."""
+    url = f"/api/sessions/2024_mini_race/{path}"
+    r_neg = client.get(url, params={"at_ms": -5000, **extra_params})
+    r_zero = client.get(url, params={"at_ms": 0, **extra_params})
+    assert r_neg.status_code == 200, r_neg.text
+    assert r_zero.status_code == 200, r_zero.text
+    assert r_neg.json() == r_zero.json()
+
+
 def test_insights_endpoint(client):
     r = client.get("/api/sessions/2024_mini_race/insights", params={"at_ms": 247_000}).json()
     assert r["insights"][0]["driver_ids"] == ["LEC", "NOR"]

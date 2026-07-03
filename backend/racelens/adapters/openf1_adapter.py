@@ -101,6 +101,56 @@ def find_session(year: int, country_or_circuit: str, session_name: str = "Race")
     )
 
 
+# ── Session listing ───────────────────────────────────────────────────────────
+
+def list_sessions(year: int, country: str | None = None) -> list[dict]:
+    """List OpenF1 sessions for *year* (optionally filtered by country/circuit/city).
+
+    Returns a list sorted by date_start. Each item includes a `started` flag
+    that is True when the current UTC time is >= date_start.
+
+    Matches like find_session: country can be a country, circuit or city
+    (Miami → country "United States"/location "Miami"; Austria → location
+    "Spielberg"), so filter across all three fields instead of country_name.
+    """
+    rows = _get("/sessions", {"year": year})
+
+    if country:
+        needle = country.lower()
+        rows = [
+            r for r in rows
+            if needle in str(r.get("country_name", "")).lower()
+            or needle in str(r.get("circuit_short_name", "")).lower()
+            or needle in str(r.get("location", "")).lower()
+        ]
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    result = []
+    for row in rows:
+        date_start = str(row.get("date_start") or "")
+        # OpenF1 date_start can arrive WITHOUT a timezone (it's track-local wall
+        # time). Glue on gmt_offset (e.g. "02:00:00" → "+02:00") so the frontend
+        # parses the correct instant instead of assuming UTC (the 16:00→18:00 bug).
+        gmt = str(row.get("gmt_offset") or "")
+        if date_start and "+" not in date_start and not date_start.endswith("Z") and gmt:
+            hh_mm = gmt[:5] if len(gmt) >= 5 else gmt  # "02:00:00" → "02:00"
+            sign = "+" if not hh_mm.startswith("-") else ""
+            date_start = f"{date_start}{sign}{hh_mm}"
+        ts = _parse_iso(date_start) if date_start else None
+        result.append({
+            "session_name": str(row.get("session_name") or ""),
+            "session_key": int(row["session_key"]),
+            "session_type": str(row.get("session_type") or ""),
+            "date_start": date_start,
+            "gmt_offset": gmt,
+            "started": ts is not None and now_ts >= ts,
+        })
+
+    result.sort(key=lambda x: x["date_start"])
+    return result
+
+
 # ── Time helpers ──────────────────────────────────────────────────────────────
 
 def _parse_iso(s: str | None) -> float | None:
