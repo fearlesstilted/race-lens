@@ -109,9 +109,11 @@ const post = async <T>(path: string): Promise<T> => {
   return (await response.json()) as T
 }
 
-export const liveStart = (year: number, country: string, session: string, pollS = 2) =>
+export type LiveSource = 'openf1' | 'signalr'
+
+export const liveStart = (year: number, country: string, session: string, pollS = 2, source: LiveSource = 'openf1') =>
   post<LiveStartResult>(
-    `/api/live/start?year=${year}&country=${encodeURIComponent(country)}&session=${encodeURIComponent(session)}&poll_s=${pollS}`,
+    `/api/live/start?year=${year}&country=${encodeURIComponent(country)}&session=${encodeURIComponent(session)}&poll_s=${pollS}&source=${source}`,
   )
 
 export const liveStatus = () => json<LiveStatusResult>('/api/live/status')

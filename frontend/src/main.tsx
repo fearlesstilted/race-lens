@@ -348,9 +348,9 @@ function App() {
 
       {mode === 'live' && !isLiveActive && (
         <LiveLobby
-          onStart={async (y, c, sessionName) => {
+          onStart={async (y, c, sessionName, source) => {
             try {
-              await liveStart(y, c, sessionName)
+              await liveStart(y, c, sessionName, 2, source)
               setIsLiveActive(true)
             } catch {
               // error is surfaced inside LiveLobby via the live/start call failure

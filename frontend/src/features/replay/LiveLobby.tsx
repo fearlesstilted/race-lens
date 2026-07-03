@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getLiveSessions, liveStatus } from '../../api/client'
-import type { LiveSessionInfo } from '../../api/client'
+import type { LiveSessionInfo, LiveSource } from '../../api/client'
 import { TrackMap } from './TrackMap'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -8,7 +8,7 @@ import { TrackMap } from './TrackMap'
 type LobbyPhase = 'LOBBY' | 'SESSIONS' | 'COUNTDOWN' | 'LIVE'
 
 type Props = {
-  onStart: (year: number, country: string, sessionName: string) => void
+  onStart: (year: number, country: string, sessionName: string, source: LiveSource) => void
   onStop: () => void
 }
 
@@ -43,6 +43,8 @@ export function LiveLobby({ onStart, onStop }: Props) {
   // LOBBY inputs
   const [year, setYear] = useState(2026)
   const [country, setCountry] = useState('Austria')
+  // signalr = free official F1 live-timing feed (default); openf1 realtime is paid.
+  const [source, setSource] = useState<LiveSource>('signalr')
   const [loadBusy, setLoadBusy] = useState(false)
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
@@ -82,7 +84,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
     if (session.started) {
       // Immediately start live stream
       setPhase('LIVE')
-      onStart(year, country.trim(), session.session_name)
+      onStart(year, country.trim(), session.session_name, source)
     } else {
       // Enter countdown
       setCountdownTarget(session)
@@ -90,7 +92,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
       setRemainMs(Math.max(0, target - Date.now()))
       setPhase('COUNTDOWN')
     }
-  }, [year, country, onStart])
+  }, [year, country, source, onStart])
 
   // Countdown tick + live-start polling
   useEffect(() => {
@@ -111,7 +113,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
           // events_total isn't in liveStatus, but poll_count > 0 and is_running means data is flowing
           if (s.is_running && s.poll_count > 0 && s.last_poll_ok) {
             setPhase('LIVE')
-            onStart(year, country.trim(), countdownTarget.session_name)
+            onStart(year, country.trim(), countdownTarget.session_name, source)
           }
         })
         .catch(() => undefined)
@@ -122,15 +124,15 @@ export function LiveLobby({ onStart, onStop }: Props) {
       if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     }
-  }, [phase, countdownTarget, year, country, onStart])
+  }, [phase, countdownTarget, year, country, source, onStart])
 
   // Also auto-start when countdown hits zero
   useEffect(() => {
     if (phase === 'COUNTDOWN' && remainMs === 0 && countdownTarget) {
       setPhase('LIVE')
-      onStart(year, country.trim(), countdownTarget.session_name)
+      onStart(year, country.trim(), countdownTarget.session_name, source)
     }
-  }, [remainMs, phase, countdownTarget, year, country, onStart])
+  }, [remainMs, phase, countdownTarget, year, country, source, onStart])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -161,6 +163,24 @@ export function LiveLobby({ onStart, onStop }: Props) {
           <button className="b primary" type="button" onClick={handleLoad} disabled={loadBusy}>
             {loadBusy ? '...' : 'LOAD'}
           </button>
+          <div className="tog-group" title="Live data source">
+            <button
+              type="button"
+              className={`tog${source === 'signalr' ? ' tog-on' : ''}`}
+              onClick={() => setSource('signalr')}
+              title="Official F1 live-timing feed — free"
+            >
+              F1 FEED
+            </button>
+            <button
+              type="button"
+              className={`tog${source === 'openf1' ? ' tog-on' : ''}`}
+              onClick={() => setSource('openf1')}
+              title="OpenF1 API — realtime tier is paid; free tier is delayed"
+            >
+              OPENF1
+            </button>
+          </div>
         </div>
         {loadErr && <span className="live-err">{loadErr}</span>}
       </div>
