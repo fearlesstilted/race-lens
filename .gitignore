@@ -16,3 +16,4 @@ backend/fixtures/*.positions.json
 frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+backend/fixtures/_capture_*

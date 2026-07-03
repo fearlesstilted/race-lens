@@ -37,12 +37,16 @@ from racelens.forecast.win_prob import win_probability
 from racelens.insights.battles import detect_battles
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
+from racelens.live.signalr import SignalRCapture, make_signalr_fetch
 from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 
 # Global live runner — None when no live session is active.
 _live: Optional[LiveRunner] = None
+
+# Capture subprocess for source=signalr live sessions (None otherwise).
+_capture: Optional[SignalRCapture] = None
 
 # Lock to prevent concurrent start requests.
 _start_lock: asyncio.Lock = asyncio.Lock()
@@ -53,6 +57,8 @@ async def lifespan(app: FastAPI):
     yield
     if _live is not None:
         _live.stop()
+    if _capture is not None:
+        _capture.stop()
 
 
 app = FastAPI(title="Race Lens", version="0.1.0", lifespan=lifespan)
@@ -262,16 +268,34 @@ async def live_start(
     country: str = Query(...),
     session: str = Query(default="Race"),
     poll_s: float = Query(default=12.0, gt=0),
+    source: str = Query(default="openf1", pattern="^(openf1|signalr)$"),
 ) -> dict:
-    """Find the OpenF1 session and start polling.
+    """Start the live pipeline.
 
-    Works for both live and historical (finished) sessions — the poller will
-    just keep receiving the same complete snapshot.
+    source=openf1: find the OpenF1 session and poll it (needs realtime tier
+    for actually-live data). Works for historical sessions too.
+    source=signalr: record the FREE official F1 SignalR feed via a capture
+    subprocess and re-ingest the growing recording each poll. `country` is the
+    FastF1 Grand Prix name here (e.g. "Silverstone"). The recording survives
+    at fixtures/_capture_*.txt — post-race `racelens ingest-live` turns it
+    into a replay fixture even if live mode misbehaves.
     """
-    global _live
+    global _live, _capture
     async with _start_lock:
         if _live is not None and _live.is_running:
             raise HTTPException(409, "A live session is already running. Stop it first.")
+
+        if source == "signalr":
+            feed_path = FIXTURES_DIR / f"_capture_{year}_{country.lower().replace(' ', '_')}_{session.lower()}.txt"
+            _capture = SignalRCapture(feed_path)
+            _capture.start()
+            fetch = make_signalr_fetch(feed_path, year, country, session)
+            _live = LiveRunner(fetch, poll_interval_s=max(poll_s, 5.0))
+            await _live.start()
+            return {
+                "source": "signalr", "feed_file": str(feed_path),
+                "poll_interval_s": max(poll_s, 5.0), "status": "started",
+            }
 
         try:
             session_key = find_session(year, country, session)
@@ -288,7 +312,10 @@ async def live_start(
 async def live_status() -> dict:
     if _live is None:
         raise HTTPException(404, "No live session active")
-    return _live.status()
+    status = _live.status()
+    if _capture is not None:
+        status["capture_alive"] = _capture.alive
+    return status
 
 
 @app.get("/api/live/stream")
@@ -322,12 +349,15 @@ async def live_stream(
 
 @app.post("/api/live/stop")
 async def live_stop() -> dict:
-    global _live
+    global _live, _capture
     if _live is None:
         raise HTTPException(404, "No live session active")
     final_status = _live.status()
     _live.stop()
     _live = None
+    if _capture is not None:
+        _capture.stop()
+        _capture = None
     return final_status
 
 
