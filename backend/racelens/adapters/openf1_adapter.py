@@ -27,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from racelens.adapters._common import message_to_status
 from racelens.events.models import Event, event
@@ -204,44 +204,24 @@ def _flag_to_status(flag: str) -> str | None:
 # ── Shared row→Event transform ────────────────────────────────────────────────
 # This is the single source of truth. ingest_openf1() and
 # OpenF1IncrementalIngester both call it with their accumulated row sets.
+#
+# _rows_to_events() (bottom of this section) is the orchestrator: it builds the
+# shared context (driver_map, session id, t0/to_ms rebase, mk() event factory)
+# and hands each raw row list to the matching helper below, in arrival order.
 
-def _rows_to_events(
-    driver_rows: list[dict],
-    session_rows: list[dict],
-    lap_rows: list[dict],
-    pos_rows: list[dict],
-    pit_rows: list[dict],
-    stint_rows: list[dict],
-    interval_rows: list[dict],
-    rc_rows: list[dict],
-) -> list[Event]:
-    """Convert raw OpenF1 row sets into a sorted Event list.
-
-    All eight raw row lists are consumed in one pass.  The result is
-    deterministic: identical accumulated inputs always produce identical outputs.
-    This function has no side effects and does not call the network.
-    """
-    src = "openf1"
-    events: list[Event] = []
-    seq = 0  # monotonic ingest_seq counter
-
-    def mk(sid: str, type_: str, t_ms: int, drv: str | None = None,
-           lap: int | None = None, **kw) -> Event:
-        nonlocal seq
-        e = event(sid, type_, t_ms, drv, lap=lap, source=src, **kw)
-        e.ingest_seq = seq
-        seq += 1
-        return e
-
-    # ── Drivers ──────────────────────────────────────────────────────────────
+def _build_driver_map(driver_rows: list[dict]) -> dict[int, str]:
+    """Drivers → {driver_number: acronym}."""
     driver_map: dict[int, str] = {}
     for row in driver_rows:
         dn = row.get("driver_number")
         acronym = row.get("name_acronym") or row.get("broadcast_name") or str(dn)
         if dn is not None:
             driver_map[int(dn)] = str(acronym)
+    return driver_map
 
-    # ── Session metadata → derive session_id ─────────────────────────────────
+
+def _derive_session_id(session_rows: list[dict]) -> str:
+    """Session metadata → deterministic session_id."""
     if session_rows:
         s = session_rows[0]
         year = s.get("year", "unknown")
@@ -251,22 +231,29 @@ def _rows_to_events(
         year = "unknown"
         location = "unknown"
         session_name = "race"
-    sid = f"{year}_{location}_{session_name}"
+    return f"{year}_{location}_{session_name}"
 
-    events.append(mk(sid, "SessionStarted", 0))
 
-    # ── Laps → LapCompleted, compute t0 (rebase anchor) ─────────────────────
-    # t0: earliest date_start of lap 1 across all drivers (POSIX seconds)
+def _compute_t0(lap_rows: list[dict]) -> float | None:
+    """t0 rebase anchor: earliest date_start of lap 1 across all drivers (POSIX seconds)."""
     t0_posix: float | None = None
     for row in lap_rows:
         if row.get("lap_number") == 1 and row.get("date_start"):
             ts = _parse_iso(row["date_start"])
             if ts is not None and (t0_posix is None or ts < t0_posix):
                 t0_posix = ts
+    return t0_posix
 
-    def to_ms(posix: float) -> int:
-        return max(0, round((posix - (t0_posix or 0)) * 1000))
 
+def _laps_to_events(
+    lap_rows: list[dict],
+    driver_map: dict[int, str],
+    sid: str,
+    to_ms: Callable[[float], int],
+    mk: Callable[..., Event],
+) -> list[Event]:
+    """Laps → LapCompleted."""
+    events: list[Event] = []
     for row in lap_rows:
         dn = row.get("driver_number")
         drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
@@ -299,8 +286,18 @@ def _rows_to_events(
 
         events.append(mk(sid, "LapCompleted", t_end_ms, drv, lap=lap_no,
                          lap_time_ms=lap_time_ms))
+    return events
 
-    # ── Position → PositionChanged (real changes only) ───────────────────────
+
+def _position_to_events(
+    pos_rows: list[dict],
+    driver_map: dict[int, str],
+    sid: str,
+    to_ms: Callable[[float], int],
+    mk: Callable[..., Event],
+) -> list[Event]:
+    """Position → PositionChanged (real changes only)."""
+    events: list[Event] = []
     last_pos: dict[str, int] = {}  # driver → last seen position
     for row in pos_rows:
         dn = row.get("driver_number")
@@ -316,8 +313,18 @@ def _rows_to_events(
         if last_pos.get(drv) != pos:
             last_pos[drv] = pos
             events.append(mk(sid, "PositionChanged", t_ms, drv, position=pos))
+    return events
 
-    # ── Pits → PitIn / PitOut ────────────────────────────────────────────────
+
+def _pits_to_events(
+    pit_rows: list[dict],
+    driver_map: dict[int, str],
+    sid: str,
+    to_ms: Callable[[float], int],
+    mk: Callable[..., Event],
+) -> list[Event]:
+    """Pits → PitIn / PitOut."""
+    events: list[Event] = []
     for row in pit_rows:
         dn = row.get("driver_number")
         drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
@@ -335,8 +342,19 @@ def _rows_to_events(
                 events.append(mk(sid, "PitOut", t_out_ms, drv, lap=lap_no))
             except (TypeError, ValueError):
                 pass
+    return events
 
-    # ── Stints → TyreStintUpdated ─────────────────────────────────────────────
+
+def _stints_to_events(
+    stint_rows: list[dict],
+    lap_rows: list[dict],
+    driver_map: dict[int, str],
+    sid: str,
+    to_ms: Callable[[float], int],
+    mk: Callable[..., Event],
+) -> list[Event]:
+    """Stints → TyreStintUpdated."""
+    events: list[Event] = []
     for row in stint_rows:
         dn = row.get("driver_number")
         drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
@@ -369,26 +387,39 @@ def _rows_to_events(
                          lap=int(lap_start) if lap_start else None,
                          compound=str(compound),
                          age_laps=int(tyre_age) if tyre_age is not None else 0))
+    return events
 
-    # ── Intervals → GapUpdated / IntervalUpdated (sampled ≤ 1 per driver / 30 s) ──
+
+_INTERVAL_SAMPLE_MS = 30_000
+
+
+def _parse_gap_value(x: Any) -> float | None:
+    """Parse a gap/interval value: numeric, "+N.NNN", or "+N LAP" formats.
+
+    Returns None for non-numeric values such as "+1 LAP".
+    Negative values (e.g. leader or timing artefacts) are valid and returned.
+    """
+    if x is None:
+        return None
+    s = str(x).lstrip("+")
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _intervals_to_events(
+    interval_rows: list[dict],
+    driver_map: dict[int, str],
+    sid: str,
+    to_ms: Callable[[float], int],
+    mk: Callable[..., Event],
+) -> list[Event]:
+    """Intervals → GapUpdated / IntervalUpdated (sampled ≤ 1 per driver / 30 s)."""
+    events: list[Event] = []
     last_interval_t: dict[str, int] = {}  # driver → last emitted session_time_ms
     # Track the last valid row seen per driver so we can emit a final sample.
     last_interval_row: dict[str, tuple[int, Any, Any]] = {}  # driver → (t_ms, gap, interval)
-    _INTERVAL_SAMPLE_MS = 30_000
-
-    def _parse_gap_value(x: Any) -> float | None:
-        """Parse a gap/interval value: numeric, "+N.NNN", or "+N LAP" formats.
-
-        Returns None for non-numeric values such as "+1 LAP".
-        Negative values (e.g. leader or timing artefacts) are valid and returned.
-        """
-        if x is None:
-            return None
-        s = str(x).lstrip("+")
-        try:
-            return float(s)
-        except (ValueError, TypeError):
-            return None
 
     for row in interval_rows:
         dn = row.get("driver_number")
@@ -424,8 +455,17 @@ def _rows_to_events(
                 events.append(mk(sid, "GapUpdated", t_ms, drv, gap_s=round(gap, 3)))
             if interval is not None:
                 events.append(mk(sid, "IntervalUpdated", t_ms, drv, interval_s=round(interval, 3)))
+    return events
 
-    # ── Race control → RaceControlMessage + SessionStatusChanged ─────────────
+
+def _race_control_to_events(
+    rc_rows: list[dict],
+    sid: str,
+    to_ms: Callable[[float], int],
+    mk: Callable[..., Event],
+) -> list[Event]:
+    """Race control → RaceControlMessage + SessionStatusChanged."""
+    events: list[Event] = []
     for row in rc_rows:
         date = _parse_iso(row.get("date"))
         if date is None:
@@ -444,6 +484,52 @@ def _rows_to_events(
             status = _flag_to_status(flag)
         if status:
             events.append(mk(sid, "SessionStatusChanged", t_ms, status=status))
+    return events
+
+
+def _rows_to_events(
+    driver_rows: list[dict],
+    session_rows: list[dict],
+    lap_rows: list[dict],
+    pos_rows: list[dict],
+    pit_rows: list[dict],
+    stint_rows: list[dict],
+    interval_rows: list[dict],
+    rc_rows: list[dict],
+) -> list[Event]:
+    """Convert raw OpenF1 row sets into a sorted Event list.
+
+    All eight raw row lists are consumed in one pass.  The result is
+    deterministic: identical accumulated inputs always produce identical outputs.
+    This function has no side effects and does not call the network.
+    """
+    src = "openf1"
+    seq = 0  # monotonic ingest_seq counter, shared across all helpers via mk()
+
+    def mk(sid: str, type_: str, t_ms: int, drv: str | None = None,
+           lap: int | None = None, **kw) -> Event:
+        nonlocal seq
+        e = event(sid, type_, t_ms, drv, lap=lap, source=src, **kw)
+        e.ingest_seq = seq
+        seq += 1
+        return e
+
+    driver_map = _build_driver_map(driver_rows)
+    sid = _derive_session_id(session_rows)
+
+    events: list[Event] = [mk(sid, "SessionStarted", 0)]
+
+    t0_posix = _compute_t0(lap_rows)
+
+    def to_ms(posix: float) -> int:
+        return max(0, round((posix - (t0_posix or 0)) * 1000))
+
+    events.extend(_laps_to_events(lap_rows, driver_map, sid, to_ms, mk))
+    events.extend(_position_to_events(pos_rows, driver_map, sid, to_ms, mk))
+    events.extend(_pits_to_events(pit_rows, driver_map, sid, to_ms, mk))
+    events.extend(_stints_to_events(stint_rows, lap_rows, driver_map, sid, to_ms, mk))
+    events.extend(_intervals_to_events(interval_rows, driver_map, sid, to_ms, mk))
+    events.extend(_race_control_to_events(rc_rows, sid, to_ms, mk))
 
     # TODO(live-map): OpenF1 /location endpoint streams X/Y car positions at ~3.7 Hz
     # during a live session.  Ingest that here to replace dead-reckoning in the
@@ -452,7 +538,6 @@ def _rows_to_events(
     # Suggested event type: CarPosition(t_ms, driver, x, y).
     # Sample at ~1 Hz for the replay engine (native 3.7 Hz would flood _all).
 
-    # ── Assign ingest_seq and sort ────────────────────────────────────────────
     # ingest_seq is already assigned in creation order (arrival order)
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events

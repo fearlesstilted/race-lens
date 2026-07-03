@@ -8,7 +8,7 @@
 
 // Formation-lap lead (ms). Frames are shifted so display time = physical + LEAD,
 // i.e. the formation lap occupies [0, LEAD) and lights-out = LEAD. Keeps the
-// timeline non-negative. Must match LIGHTS_OUT_MS (api) and PRE_START_MS (cli).
+// timeline non-negative. Must match LIGHTS_OUT_MS (api) and PRE_START_MS (positions/track.py).
 const LEAD_MS: i64 = 180_000;
 
 use std::collections::HashMap;

@@ -60,31 +60,46 @@ app = FastAPI(title="Race Lens", version="0.1.0", lifespan=lifespan)
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
 # lap occupies display time [0, LIGHTS_OUT_MS) and lights-out = LIGHTS_OUT_MS.
-# Keeps the whole timeline non-negative. Must match PRE_START_MS (cli) and
+# Keeps the whole timeline non-negative. Must match PRE_START_MS (positions/track.py) and
 # LEAD_MS (rust race-core) so the map telemetry and events line up at lights-out.
 LIGHTS_OUT_MS = 180_000
 
 
 @lru_cache(maxsize=8)
-def _engine(session_id: str) -> ReplayEngine:
-    path = FIXTURES_DIR / f"{session_id}.jsonl"
+def _engine_cached(session_id: str, fixtures_dir: str) -> ReplayEngine:
+    fixtures_dir_path = Path(fixtures_dir)
+    path = fixtures_dir_path / f"{session_id}.jsonl"
     if not path.is_file():
         raise HTTPException(404, f"session '{session_id}' not found")
     events = load_jsonl(path.read_text(encoding="utf-8"))
     # Only sessions with formation-lap telemetry (a positions.json) get the lead
     # shift; others keep lights-out at 0 (no empty pre-roll).
-    if (FIXTURES_DIR / f"{session_id}.positions.json").is_file():
+    if (fixtures_dir_path / f"{session_id}.positions.json").is_file():
         for e in events:
             e.session_time_ms += LIGHTS_OUT_MS
     return ReplayEngine(events)
 
 
+def _engine(session_id: str) -> ReplayEngine:
+    """Thin wrapper so the cache key includes FIXTURES_DIR (read at call time).
+
+    Keeps monkeypatched FIXTURES_DIR (tests) from colliding with real cache
+    entries — no manual cache_clear() needed across test runs.
+    """
+    return _engine_cached(session_id, str(FIXTURES_DIR))
+
+
 @lru_cache(maxsize=4)
-def _positions_data(session_id: str) -> dict | None:
-    path = FIXTURES_DIR / f"{session_id}.positions.json"
+def _positions_data_cached(session_id: str, fixtures_dir: str) -> dict | None:
+    path = Path(fixtures_dir) / f"{session_id}.positions.json"
     if not path.is_file():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _positions_data(session_id: str) -> dict | None:
+    """Thin wrapper so the cache key includes FIXTURES_DIR (see _engine)."""
+    return _positions_data_cached(session_id, str(FIXTURES_DIR))
 
 
 def _attach_frame(state: dict, session_id: str | None = None) -> dict:
@@ -360,7 +375,8 @@ def download_replay(
     out_path.write_text(dump_jsonl(events), encoding="utf-8")
 
     # Invalidate the engine cache so the new fixture is immediately available
-    _engine.cache_clear()
+    # (this can overwrite an existing fixture at the same session_id + FIXTURES_DIR).
+    _engine_cached.cache_clear()
 
     return {"session_id": slug, "events": len(events), "path": str(out_path)}
 

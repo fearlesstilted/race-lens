@@ -125,7 +125,6 @@ def client(tmp_path, monkeypatch):
     import racelens.api as api
 
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
     return TestClient(api.app)
 
 

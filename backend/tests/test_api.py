@@ -14,7 +14,6 @@ def client(tmp_path, monkeypatch):
     import racelens.api as api
 
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
     return TestClient(api.app)
 
 
@@ -40,7 +39,6 @@ def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
         (tmp_path / f"{name}.jsonl").write_text(dump_jsonl(mini_race()), encoding="utf-8")
     (tmp_path / "zzz_demo.positions.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
 
     c = TestClient(api.app)
     assert c.get("/api/sessions").json() == [
@@ -55,7 +53,6 @@ def test_attach_frame_merges_xy_progress_by_tick(tmp_path, monkeypatch):
     import racelens.api as api
 
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._positions_data.cache_clear()
     (tmp_path / "demo.positions.json").write_text(
         json.dumps({
             "tick_ms": 1000, "start_ms": 0, "viewbox": [600, 400],
@@ -143,7 +140,6 @@ def test_track_endpoint(tmp_path, monkeypatch):
         _json.dumps(track_data), encoding="utf-8"
     )
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
     c = TestClient(api.app)
 
     r = c.get("/api/sessions/2024_mini_race/track")
@@ -174,7 +170,6 @@ def test_positions_endpoint(tmp_path, monkeypatch):
         _json.dumps(pos_data), encoding="utf-8"
     )
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
     c = TestClient(api.app)
 
     r = c.get("/api/sessions/2024_mini_race/positions")
@@ -203,7 +198,6 @@ def test_download_replay_writes_fixture_and_returns_shape(tmp_path, monkeypatch)
 
     # Use tmp_path as fixture dir so the write is isolated
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
 
     fake_events = mini_race()
 
@@ -247,7 +241,6 @@ def test_download_replay_404_on_unknown_session(tmp_path, monkeypatch):
     import racelens.api as api
 
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
 
     c = TestClient(api.app)
 
@@ -271,7 +264,6 @@ def test_download_replay_502_on_openf1_error(tmp_path, monkeypatch):
     import racelens.api as api
 
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
-    api._engine.cache_clear()
 
     c = TestClient(api.app)
 
