@@ -81,14 +81,25 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
 
     events: list[Event] = []
 
-    total_laps = getattr(ses, "total_laps", None)
+    # fastf1 3.8: total_laps/laps are RAISING properties (DataNotLoadedError)
+    # until the (live) feed actually contains laps — normal early in a session.
+    # Emit what we can; the next live poll re-parses a fuller recording.
+    try:
+        total_laps = ses.total_laps
+    except Exception:
+        total_laps = None
     events.append(
         event(sid, "SessionStarted", 0, source=src,
               total_laps=int(total_laps) if total_laps else None)
     )
 
+    try:
+        laps = ses.laps
+    except Exception:
+        return events  # no laps yet (pre-start / formation) — status-only frame
+
     by_lap: dict[int, list[tuple[int, int, str]]] = {}  # lap → [(position, t_end, driver)]
-    for _, lap in ses.laps.iterlaps():
+    for _, lap in laps.iterlaps():
         drv = str(lap["Driver"])
         lap_no = int(lap["LapNumber"])
         t_end = _ms(lap["Time"])  # session time when the lap was completed

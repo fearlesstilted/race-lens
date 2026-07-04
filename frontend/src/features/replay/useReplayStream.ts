@@ -72,7 +72,8 @@ export function useReplayStream(
         // Live stream can send empty heartbeat `{}` while no data yet
         if (!raw || raw === '{}') return
         const nextState = JSON.parse(raw) as RaceState
-        if (!nextState.at_ms) return
+        // at_ms can legitimately be 0 (live joins anchor early events at t=0).
+        if (nextState.at_ms == null) return
         // Table, scrubber and map all read the SAME frame — push every frame so
         // the tower can never lag the track. rank is stable (Step 1), so the
         // FLIP tower no longer strobes when updated per frame.

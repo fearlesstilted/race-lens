@@ -45,6 +45,8 @@ export function LiveLobby({ onStart, onStop }: Props) {
   const [country, setCountry] = useState('Austria')
   // signalr = free official F1 live-timing feed (default); openf1 realtime is paid.
   const [source, setSource] = useState<LiveSource>('signalr')
+  // signalr only: FastF1 session name — no OpenF1 discovery involved.
+  const [sessionName, setSessionName] = useState('Race')
   const [loadBusy, setLoadBusy] = useState(false)
   const [loadErr, setLoadErr] = useState<string | null>(null)
 
@@ -79,6 +81,15 @@ export function LiveLobby({ onStart, onStop }: Props) {
       setLoadBusy(false)
     }
   }, [year, country])
+
+  // F1 FEED path: connect straight to the official SignalR feed — no OpenF1
+  // discovery (which 401/502s on race days), no session list, just start.
+  const handleDirectStart = useCallback(() => {
+    if (!country.trim()) { setLoadErr('Enter the Grand Prix name, e.g. Silverstone'); return }
+    setLoadErr(null)
+    setPhase('LIVE')
+    onStart(year, country.trim(), sessionName.trim() || 'Race', 'signalr')
+  }, [year, country, sessionName, onStart])
 
   const handleSessionClick = useCallback((session: LiveSessionInfo) => {
     if (session.started) {
@@ -160,15 +171,33 @@ export function LiveLobby({ onStart, onStop }: Props) {
             style={{ width: '9rem' }}
             onKeyDown={(e) => e.key === 'Enter' && void handleLoad()}
           />
-          <button className="b primary" type="button" onClick={handleLoad} disabled={loadBusy}>
-            {loadBusy ? '...' : 'LOAD'}
-          </button>
+          {source === 'signalr' ? (
+            <>
+              <input
+                className="live-input"
+                type="text"
+                value={sessionName}
+                placeholder="Race"
+                onChange={(e) => setSessionName(e.target.value)}
+                title='Session: Race / Qualifying / Sprint / FP1…'
+                style={{ width: '7rem' }}
+                onKeyDown={(e) => e.key === 'Enter' && handleDirectStart()}
+              />
+              <button className="b primary" type="button" onClick={handleDirectStart}>
+                START
+              </button>
+            </>
+          ) : (
+            <button className="b primary" type="button" onClick={handleLoad} disabled={loadBusy}>
+              {loadBusy ? '...' : 'LOAD'}
+            </button>
+          )}
           <div className="tog-group" title="Live data source">
             <button
               type="button"
               className={`tog${source === 'signalr' ? ' tog-on' : ''}`}
               onClick={() => setSource('signalr')}
-              title="Official F1 live-timing feed — free"
+              title="Official F1 live-timing feed — free, direct connect"
             >
               F1 FEED
             </button>
@@ -182,6 +211,11 @@ export function LiveLobby({ onStart, onStop }: Props) {
             </button>
           </div>
         </div>
+        {source === 'signalr' && (
+          <span style={{ color: '#666', fontSize: '0.65rem', letterSpacing: '0.08em' }}>
+            прямое подключение к официальному F1 live timing — подключайся ДО старта сессии
+          </span>
+        )}
         {loadErr && <span className="live-err">{loadErr}</span>}
       </div>
     )

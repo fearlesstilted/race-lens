@@ -287,7 +287,10 @@ async def live_start(
 
         if source == "signalr":
             feed_path = FIXTURES_DIR / f"_capture_{year}_{country.lower().replace(' ', '_')}_{session.lower()}.txt"
-            _capture = SignalRCapture(feed_path)
+            # no_auth: the authenticated path needs an interactive browser login,
+            # impossible in a subprocess — and the anonymous feed carries full
+            # timing (verified live: TimingData/gaps/sectors all present).
+            _capture = SignalRCapture(feed_path, no_auth=True)
             _capture.start()
             fetch = make_signalr_fetch(feed_path, year, country, session)
             _live = LiveRunner(fetch, poll_interval_s=max(poll_s, 5.0))
@@ -313,6 +316,10 @@ async def live_status() -> dict:
     if _live is None:
         raise HTTPException(404, "No live session active")
     status = _live.status()
+    # Fields the frontend contract expects (LiveStatusResult).
+    status["is_running"] = _live.is_running
+    status["poll_count"] = status["polls"]
+    status["last_poll_ok"] = status["consecutive_failures"] == 0
     if _capture is not None:
         status["capture_alive"] = _capture.alive
     return status

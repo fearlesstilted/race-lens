@@ -205,6 +205,17 @@ function App() {
     return () => { cancelled = true }
   }, [])
 
+  // Reattach after refresh: if the backend already runs a live session, adopt
+  // it — otherwise F5 lands in the lobby and a new START just 409s.
+  useEffect(() => {
+    if (mode !== 'live' || isLiveActive) return
+    let cancelled = false
+    liveStatus()
+      .then((s) => { if (!cancelled && s.is_running) setIsLiveActive(true) })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [mode, isLiveActive])
+
   // Poll live status every 5 s when live is active
   useEffect(() => {
     if (!isLiveActive) { setLiveStatusData(null); return }

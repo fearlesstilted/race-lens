@@ -38,6 +38,20 @@ def _cmd_ingest_openf1(args: argparse.Namespace) -> None:
 def _cmd_capture_live(args: argparse.Namespace) -> None:
     from fastf1.livetiming.client import SignalRClient
 
+    if args.no_auth:
+        # ponytail: fastf1 3.8.3 bug — no_auth passes access_token_factory=None,
+        # signalrcore rejects non-callable. Strip the key. Drop when fastf1 fixes.
+        from signalrcore.hub_connection_builder import HubConnectionBuilder
+
+        _orig_with_url = HubConnectionBuilder.with_url
+
+        def _with_url_no_none_factory(self, url, options=None):
+            if options and options.get("access_token_factory") is None:
+                options = {k: v for k, v in options.items() if k != "access_token_factory"}
+            return _orig_with_url(self, url, options=options)
+
+        HubConnectionBuilder.with_url = _with_url_no_none_factory
+
     client = SignalRClient(
         filename=args.out,
         filemode="a" if args.append else "w",
