@@ -58,6 +58,10 @@ def _cmd_capture_live(args: argparse.Namespace) -> None:
         timeout=args.timeout,
         no_auth=args.no_auth,
     )
+    # Record real car coordinates too (fastf1's default topic list omits them).
+    # Costs file size only; enables a real live map (decode is a separate step).
+    if "Position.z" not in client.topics:
+        client.topics.append("Position.z")
     print(
         f"recording live feed → {args.out} "
         f"(no_auth={args.no_auth}, timeout={args.timeout}s); Ctrl-C to stop …",
