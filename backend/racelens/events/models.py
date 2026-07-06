@@ -23,6 +23,7 @@ EVENT_TYPES = {
     "PitOut",
     "TyreStintUpdated",
     "RaceControlMessage",
+    "RetirementDetected",
     "WeatherUpdated",
 }
 

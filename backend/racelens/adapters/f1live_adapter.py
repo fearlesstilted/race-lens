@@ -145,7 +145,15 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     laps: dict[str, int] = {}
     in_pit: dict[str, bool] = {}
     last_lap_ms: dict[str, int | None] = {}
+    retired: set[str] = set()
+    last_status: str | None = None  # dedupe SessionStatus vs RCM-derived statuses
     join_ms: int | None = None  # keyframe events land at the join moment
+
+    def emit_status(status: str, t_ms: int) -> None:
+        nonlocal last_status
+        if status != last_status:
+            last_status = status
+            events.append(event(sid, "SessionStatusChanged", t_ms, status=status))
 
     def drv(num: str) -> str:
         return num_to_abbr.get(num, str(num))
@@ -196,10 +204,18 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                 was_in = in_pit.get(d)
                 if was_in is None or now_in != was_in:
                     in_pit[d] = now_in
+                    cur_lap = laps.get(d, 0) + 1  # NumberOfLaps = completed
                     if now_in:
-                        events.append(event(sid, "PitIn", t_ms, d))
+                        events.append(event(sid, "PitIn", t_ms, d, lap=cur_lap))
                     elif was_in:  # only a real out after a seen in
-                        events.append(event(sid, "PitOut", t_ms, d))
+                        events.append(event(sid, "PitOut", t_ms, d, lap=cur_lap))
+
+            # 'Retired' is definitive; 'Stopped' can be a spin-and-continue, so
+            # only the explicit flag retires a car. Once per driver.
+            if patch.get("Retired") and d not in retired:
+                retired.add(d)
+                events.append(event(sid, "RetirementDetected", t_ms, d,
+                                    lap=laps.get(d, 0) + 1))
 
     def apply_tyres(lines: dict, t_ms: int) -> None:
         for num, patch in lines.items():
@@ -245,7 +261,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
         if cat == "SessionStatus":
             status = _STATUS_MAP.get(str(payload.get("Status")))
             if status:
-                events.append(event(sid, "SessionStatusChanged", t_ms, status=status))
+                emit_status(status, t_ms)
         elif cat == "TimingData":
             lines = payload.get("Lines")
             if isinstance(lines, dict):
@@ -261,11 +277,12 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                 if not isinstance(m, dict) or not m.get("Message"):
                     continue
                 text = str(m["Message"])
-                events.append(event(sid, "RaceControlMessage", t_ms,
+                lap_no = m.get("Lap") if isinstance(m.get("Lap"), int) else None
+                events.append(event(sid, "RaceControlMessage", t_ms, lap=lap_no,
                                     category=str(m.get("Category", "")), message=text))
                 status = message_to_status(text)
                 if status is not None:
-                    events.append(event(sid, "SessionStatusChanged", t_ms, status=status))
+                    emit_status(status, t_ms)
         elif cat == "TeamRadio":
             caps = payload.get("Captures")
             items = caps.values() if isinstance(caps, dict) else (caps or [])

@@ -134,6 +134,8 @@ def render_feed(
                 lo = bisect.bisect_left(stints, (t0,))
                 if lo < len(stints) and stints[lo][0] <= t1:
                     compound = stints[lo][1]
+            if compound and compound.upper() == "UNKNOWN":
+                compound = None  # feed sometimes ships UNKNOWN — plain "rejoins" reads better
             if compound:
                 cname_en = _COMPOUND_EN.get(compound.upper(), compound.lower() + "s")
                 cname_ru = _COMPOUND_RU.get(compound.upper(), compound.lower())
@@ -155,6 +157,16 @@ def render_feed(
                 emitted_status.add(status)
             prev_status = status
             driver_id = None
+
+        elif e.type == "RetirementDetected":
+            drv = e.driver_id or "?"
+            text = f"{drv} сходит с дистанции" if lang == "ru" else f"{drv} retires"
+            driver_id = e.driver_id
+
+        elif e.type == "RaceControlMessage" and e.payload.get("category") == "Radio":
+            # Team-radio capture — message is "RADIO: XXX", audio_path in payload.
+            text = e.payload.get("message", "")
+            driver_id = e.driver_id
 
         elif e.type == "RaceControlMessage":
             msg = e.payload.get("message", "")

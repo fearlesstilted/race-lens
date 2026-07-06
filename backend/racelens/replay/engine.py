@@ -190,6 +190,9 @@ class ReplayEngine:
         elif e.type == "IntervalUpdated":
             self._driver(state, e.driver_id)["interval_s"] = p.get("interval_s")
 
+        elif e.type == "RetirementDetected":
+            self._driver(state, e.driver_id)["retired"] = True
+
         elif e.type == "PitIn":
             d = self._driver(state, e.driver_id)
             d["in_pit"] = True
