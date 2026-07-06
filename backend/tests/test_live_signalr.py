@@ -104,6 +104,73 @@ def test_live_start_signalr_wires_runner_and_capture(tmp_path, monkeypatch):
     assert c.get("/api/live/status").status_code == 404
 
 
+def test_live_feed_returns_items_once_engine_ready(tmp_path, monkeypatch):
+    """/api/live/feed renders the accumulated live events (no session_id needed)."""
+    import racelens.api as api
+
+    started: dict = {"capture": 0, "stopped": 0}
+
+    class FakeCapture:
+        def __init__(self, out_path, no_auth=False):
+            self.out_path = out_path
+
+        def start(self):
+            started["capture"] += 1
+
+        def stop(self):
+            started["stopped"] += 1
+
+        @property
+        def alive(self):
+            return started["capture"] > started["stopped"]
+
+    def fake_make_fetch(feed_path, year, gp, session):
+        def fetch():
+            return [
+                event("live_test", "SessionStarted", 0, total_laps=5),
+                event("live_test", "PositionChanged", 1000, "VER", position=1),
+                event(
+                    "live_test", "RaceControlMessage", 5000,
+                    category="Other", message="TEST PENALTY",
+                ),
+            ]
+        return fetch
+
+    monkeypatch.setattr(api, "SignalRCapture", FakeCapture)
+    monkeypatch.setattr(api, "make_signalr_fetch", fake_make_fetch)
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+
+    c = TestClient(api.app)
+    r = c.post("/api/live/start", params={
+        "year": 2026, "country": "Silverstone", "session": "R",
+        "source": "signalr", "poll_s": 0.05,
+    })
+    assert r.status_code == 200, r.text
+
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline and (api._live is None or api._live.engine is None):
+            time.sleep(0.05)
+        assert api._live is not None and api._live.engine is not None, "runner never built engine"
+
+        feed_resp = c.get("/api/live/feed")
+        assert feed_resp.status_code == 200, feed_resp.text
+        items = feed_resp.json()
+        assert isinstance(items, list)
+        assert len(items) >= 1
+    finally:
+        c.post("/api/live/stop")
+
+
+def test_live_feed_404_without_session():
+    import racelens.api as api
+
+    assert api._live is None
+    c = TestClient(api.app)
+    r = c.get("/api/live/feed")
+    assert r.status_code == 404
+
+
 def test_live_start_rejects_unknown_source(tmp_path, monkeypatch):
     import racelens.api as api
 

@@ -354,6 +354,15 @@ async def live_stream(
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+@app.get("/api/live/feed")
+async def live_feed(lang: str = "en", limit: int = 30) -> list:
+    """Event feed for the frontend during live mode (no session_id to scope by)."""
+    if _live is None or _live.engine is None:
+        raise HTTPException(404, "No live session active or no data yet")
+    until_ms = _live.engine.events[-1].session_time_ms
+    return render_feed(_live.engine.events, until_ms, lang=lang, limit=limit)
+
+
 @app.post("/api/live/stop")
 async def live_stop() -> dict:
     global _live, _capture

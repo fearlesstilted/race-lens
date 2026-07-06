@@ -63,7 +63,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
       ) : (
         <div className="sess">
           <b>LIVE</b>
-          <i>Near-live · OpenF1</i>
+          <i>Near-live · F1 feed</i>
         </div>
       )}
 

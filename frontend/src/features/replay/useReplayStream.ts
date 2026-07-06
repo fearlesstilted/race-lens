@@ -6,7 +6,7 @@
  * this hook without duplicating SSE logic.
  */
 import { useCallback, useRef } from 'react'
-import { getBattles, getCommentary, getFeed } from '../../api/client'
+import { getBattles, getCommentary, getFeed, getLiveFeed } from '../../api/client'
 import type { RaceState } from '../../api/types'
 import type { Lang, Level, Speed } from './replayTypes'
 import type { ReplaySetters } from './replaySetters'
@@ -64,6 +64,12 @@ export function useReplayStream(
             .catch((err: unknown) => set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
           void getCommentary(sessionId, ms, nextLang, nextLevel)
             .then((r) => set.setCommentary(r.items)).catch(() => undefined)
+        } else {
+          // Live mode has no session_id to scope by — feed comes from the live
+          // engine's own event log. Battles/commentary stay replay-only.
+          void getLiveFeed(30, nextLang)
+            .then((r) => { set.setFeed(r.items); set.setFeedError(null) })
+            .catch((err: unknown) => set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
         }
       }
 

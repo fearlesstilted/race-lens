@@ -123,6 +123,13 @@ export const liveStop = () => post<LiveStatusResult>('/api/live/stop')
 export const liveStreamUrl = (lang: string, level: string, tickS = 2) =>
   `/api/live/stream?tick_s=${tickS}&lang=${lang}&level=${level}`
 
+/** The backend returns a bare list; normalise to {items} for the rest of the app. */
+export const getLiveFeed = async (limit = 30, lang = 'en'): Promise<FeedResponse> => {
+  const raw = await json<FeedItem[] | FeedResponse>(`/api/live/feed?lang=${lang}&limit=${limit}`)
+  if (Array.isArray(raw)) return { items: raw }
+  return raw
+}
+
 // ── Live lobby ────────────────────────────────────────────────────────────────
 
 export interface LiveSessionInfo {
