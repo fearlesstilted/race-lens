@@ -1,24 +1,29 @@
+// 2026 grid — official TeamColour values straight from the F1 live-timing
+// DriverList feed (recorded Silverstone 2026). Unknown drivers fall back to
+// grey, which reads as a ghost car — update this map when the grid changes.
 export const TEAM_COLORS: Record<string, string> = {
-  LEC: '#e10600',
-  SAI: '#e10600',
-  PIA: '#ff8700',
-  NOR: '#ff8700',
-  RUS: '#00d2be',
-  HAM: '#00d2be',
-  VER: '#0600ef',
-  PER: '#0600ef',
-  TSU: '#2b4562',
-  RIC: '#2b4562',
-  ALO: '#006f62',
-  STR: '#006f62',
-  GAS: '#0090ff',
-  OCO: '#0090ff',
-  ALB: '#005aff',
-  SAR: '#005aff',
-  BOT: '#900000',
-  ZHO: '#900000',
-  MAG: '#ffffff',
-  HUL: '#ffffff',
+  // Ferrari
+  LEC: '#ED1131', HAM: '#ED1131',
+  // Mercedes
+  RUS: '#00D7B6', ANT: '#00D7B6',
+  // Red Bull Racing
+  VER: '#4781D7', HAD: '#4781D7',
+  // McLaren
+  NOR: '#F47600', PIA: '#F47600',
+  // Racing Bulls
+  LIN: '#6C98FF', LAW: '#6C98FF',
+  // Audi
+  BOR: '#F50537', HUL: '#F50537',
+  // Haas
+  BEA: '#9C9FA2', OCO: '#9C9FA2',
+  // Williams
+  SAI: '#1868DB', ALB: '#1868DB',
+  // Alpine
+  GAS: '#00A1E8', COL: '#00A1E8',
+  // Cadillac
+  BOT: '#909090', PER: '#909090',
+  // Aston Martin
+  ALO: '#229971', STR: '#229971',
 }
 
 export const teamColor = (driverCode: string): string =>
