@@ -19,6 +19,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Iterator
 
+from racelens.adapters._common import message_to_status
 from racelens.events.models import Event, event
 
 # SessionStatus.Status → our SessionStatusChanged payload status
@@ -205,9 +206,16 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             if not isinstance(patch, dict):
                 continue
             stints = patch.get("Stints")
-            if not isinstance(stints, dict):
+            # Feed duality: keyframes send Stints as a LIST (full history),
+            # increments as a DICT of patches. Accept both, else starting
+            # compounds are lost on mid-join and TYR stays empty until a stop.
+            if isinstance(stints, dict):
+                stint_iter = stints.values()
+            elif isinstance(stints, list):
+                stint_iter = stints
+            else:
                 continue
-            for stint in stints.values():
+            for stint in stint_iter:
                 if isinstance(stint, dict) and stint.get("Compound"):
                     events.append(event(
                         sid, "TyreStintUpdated", t_ms, drv(str(num)),
@@ -246,6 +254,29 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             lines = payload.get("Lines")
             if isinstance(lines, dict):
                 apply_tyres(lines, t_ms)
+        elif cat == "RaceControlMessages":
+            msgs = payload.get("Messages")
+            items = msgs.values() if isinstance(msgs, dict) else (msgs or [])
+            for m in items:
+                if not isinstance(m, dict) or not m.get("Message"):
+                    continue
+                text = str(m["Message"])
+                events.append(event(sid, "RaceControlMessage", t_ms,
+                                    category=str(m.get("Category", "")), message=text))
+                status = message_to_status(text)
+                if status is not None:
+                    events.append(event(sid, "SessionStatusChanged", t_ms, status=status))
+        elif cat == "TeamRadio":
+            caps = payload.get("Captures")
+            items = caps.values() if isinstance(caps, dict) else (caps or [])
+            for c in items:
+                if not isinstance(c, dict) or not c.get("Path"):
+                    continue
+                d = drv(str(c.get("RacingNumber", "")))
+                events.append(event(sid, "RaceControlMessage", t_ms, d,
+                                    category="Radio",
+                                    message=f"RADIO: {d}",
+                                    audio_path=str(c["Path"])))
 
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events
