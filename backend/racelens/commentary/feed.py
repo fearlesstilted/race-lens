@@ -91,6 +91,7 @@ def render_feed(
     for e in visible_sorted:
         text: str | None = None
         driver_id: str | None = e.driver_id
+        audio_url: str | None = None
 
         if e.type == "SessionStarted":
             text = "Свет погас — старт!" if lang == "ru" else "Lights out — race start!"
@@ -167,6 +168,7 @@ def render_feed(
             # Team-radio capture — message is "RADIO: XXX", audio_path in payload.
             text = e.payload.get("message", "")
             driver_id = e.driver_id
+            audio_url = e.payload.get("audio_url")
 
         elif e.type == "RaceControlMessage":
             msg = e.payload.get("message", "")
@@ -209,14 +211,17 @@ def render_feed(
 
         # Lights-out opens lap 1; SessionStarted carries no lap of its own.
         item_lap = 1 if e.type == "SessionStarted" else e.lap
-        items.append({
+        item: dict[str, Any] = {
             "at_ms": e.session_time_ms,
             "lap": item_lap,
             "kind": e.type,
             "tag": tag,
             "text": text,
             "driver_id": driver_id,
-        })
+        }
+        if audio_url:
+            item["audio_url"] = audio_url
+        items.append(item)
 
     # Newest first, then apply limit
     items.sort(key=lambda x: x["at_ms"], reverse=True)

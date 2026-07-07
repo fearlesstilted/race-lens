@@ -80,6 +80,7 @@ export type FeedItem = {
   text: string
   kind: string // 'status' | 'fastest_lap' | 'pit' | 'info' | ...
   tag?: 'PIT' | 'FLAG' | 'FASTEST' | 'INFO'
+  audio_url?: string
 }
 
 export type FeedResponse = {

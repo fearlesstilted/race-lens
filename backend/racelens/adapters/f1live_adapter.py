@@ -148,6 +148,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     retired: set[str] = set()
     last_status: str | None = None  # dedupe SessionStatus vs RCM-derived statuses
     join_ms: int | None = None  # keyframe events land at the join moment
+    session_path: str | None = None  # SessionInfo "Path", to build absolute radio audio_url
 
     def emit_status(status: str, t_ms: int) -> None:
         nonlocal last_status
@@ -258,7 +259,11 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             if join_ms is None:
                 join_ms = t_ms
 
-        if cat == "SessionStatus":
+        if cat == "SessionInfo":
+            path = payload.get("Path")
+            if isinstance(path, str) and path:
+                session_path = path
+        elif cat == "SessionStatus":
             status = _STATUS_MAP.get(str(payload.get("Status")))
             if status:
                 emit_status(status, t_ms)
@@ -290,10 +295,18 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                 if not isinstance(c, dict) or not c.get("Path"):
                     continue
                 d = drv(str(c.get("RacingNumber", "")))
+                radio_payload: dict[str, Any] = {
+                    "category": "Radio",
+                    "message": f"RADIO: {d}",
+                    "audio_path": str(c["Path"]),
+                }
+                if session_path:
+                    radio_payload["audio_url"] = (
+                        f"https://livetiming.formula1.com/static/{session_path}{c['Path']}"
+                    )
                 events.append(event(sid, "RaceControlMessage", t_ms, d,
-                                    category="Radio",
-                                    message=f"RADIO: {d}",
-                                    audio_path=str(c["Path"])))
+                                    lap=laps.get(d, 0) + 1,
+                                    **radio_payload))
 
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events
