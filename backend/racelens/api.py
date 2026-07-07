@@ -72,7 +72,9 @@ LIGHTS_OUT_MS = 180_000
 
 
 @lru_cache(maxsize=8)
-def _engine_cached(session_id: str, fixtures_dir: str) -> ReplayEngine:
+def _engine_cached(session_id: str, fixtures_dir: str, mtime: float) -> ReplayEngine:
+    # mtime is part of the cache key: regenerating a fixture on disk must not
+    # keep serving the stale engine (bit us when re-ingesting live recordings).
     fixtures_dir_path = Path(fixtures_dir)
     path = fixtures_dir_path / f"{session_id}.jsonl"
     if not path.is_file():
@@ -87,12 +89,14 @@ def _engine_cached(session_id: str, fixtures_dir: str) -> ReplayEngine:
 
 
 def _engine(session_id: str) -> ReplayEngine:
-    """Thin wrapper so the cache key includes FIXTURES_DIR (read at call time).
+    """Thin wrapper so the cache key includes FIXTURES_DIR + file mtime.
 
     Keeps monkeypatched FIXTURES_DIR (tests) from colliding with real cache
-    entries — no manual cache_clear() needed across test runs.
+    entries, and picks up regenerated fixture files without a restart.
     """
-    return _engine_cached(session_id, str(FIXTURES_DIR))
+    path = FIXTURES_DIR / f"{session_id}.jsonl"
+    mtime = path.stat().st_mtime if path.is_file() else 0.0
+    return _engine_cached(session_id, str(FIXTURES_DIR), mtime)
 
 
 @lru_cache(maxsize=4)
