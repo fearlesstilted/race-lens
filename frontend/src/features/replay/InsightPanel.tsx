@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getOvertake } from '../../api/client'
 import type { CommentaryItem, Insight } from '../../api/types'
-import { NEUTRAL_STATUSES } from './replayTypes'
+import { NEUTRAL_STATUSES, writePersisted } from './replayTypes'
 
 type Props = {
   insights: Insight[]
@@ -37,6 +37,23 @@ const TYPE_LABELS: Array<[string, string]> = [
 function baseLabel(type: string): string {
   const hit = TYPE_LABELS.find(([prefix]) => type.startsWith(prefix))
   return hit ? hit[1] : type.replace(/_/g, ' ')
+}
+
+const WTW_HIDDEN_TYPES_KEY = 'racelens_wtw_hidden_types'
+
+function readHiddenTypes(): Set<string> {
+  try {
+    const raw = localStorage.getItem(WTW_HIDDEN_TYPES_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? new Set(parsed.filter((v) => typeof v === 'string')) : new Set()
+  } catch { return new Set() }
+}
+
+/** True if the insight's type matches a prefix currently hidden by the user. */
+function isHiddenType(type: string, hidden: Set<string>): boolean {
+  if (hidden.size === 0) return false
+  return TYPE_LABELS.some(([prefix]) => type.startsWith(prefix) && hidden.has(prefix))
 }
 
 function insightTitle(insight: Insight): string {
@@ -198,6 +215,23 @@ function isBattleType(type: string): boolean {
 
 export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [], sessionStatus = '', sessionId, atMs = 0 }: Props) {
   const isNeutral = NEUTRAL_STATUSES.has(sessionStatus)
+
+  // User-controlled type filters for the "WHAT TO WATCH" panel — read once on
+  // mount (lazy initializer), persisted to localStorage on change.
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(() => readHiddenTypes())
+
+  useEffect(() => {
+    writePersisted(WTW_HIDDEN_TYPES_KEY, JSON.stringify([...hiddenTypes]))
+  }, [hiddenTypes])
+
+  const toggleTypeFilter = (prefix: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev)
+      if (next.has(prefix)) next.delete(prefix)
+      else next.add(prefix)
+      return next
+    })
+  }
   const commentaryMap: Record<string, string> = useMemo(() => {
     const m: Record<string, string> = {}
     for (const c of commentary) {
@@ -238,7 +272,8 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
 
   // Sort, then group by pair, then rank groups (excluding SC_PIT_WINDOW when grouped)
   const incomingGroups = useMemo(() => {
-    const filtered = isNeutral ? insights.filter((ins) => !ins.type.startsWith('SC_PIT_WINDOW')) : insights
+    const scFiltered = isNeutral ? insights.filter((ins) => !ins.type.startsWith('SC_PIT_WINDOW')) : insights
+    const filtered = scFiltered.filter((ins) => !isHiddenType(ins.type, hiddenTypes))
     const ranked = [...filtered].sort((a, b) => {
       const af = isFocused(a) ? 0 : 1
       const bf = isFocused(b) ? 0 : 1
@@ -261,7 +296,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
     })
     return groups.slice(0, 3)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [insights, selectedIds])
+  }, [insights, selectedIds, hiddenTypes])
 
   // Cards are real React state; the transition below is PURE (no timers, no
   // fetches inside the updater — StrictMode-safe). Side effects (leave timers,
@@ -409,6 +444,19 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
   return (
     <div className="col col-insights">
       <div className="label">WHAT TO WATCH</div>
+      <div className="ins-filter">
+        {TYPE_LABELS.map(([prefix, label]) => (
+          <button
+            key={prefix}
+            type="button"
+            className={`tog${hiddenTypes.has(prefix) ? '' : ' tog-on'}`}
+            onClick={() => toggleTypeFilter(prefix)}
+            title={`Toggle ${label} insights`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {scPitDrivers.length > 0 && (
         <ScPitWindowCard drivers={scPitDrivers} />
       )}

@@ -794,6 +794,22 @@ body {
   animation: ev-flash 2s ease-out forwards;
 }
 
+/* ── insights: type filter chips ─────────────────────────────── */
+.ins-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px var(--s5) 6px;
+  border-bottom: 1px solid var(--hair);
+}
+.ins-filter .tog {
+  font-size: 9px;
+  padding: 2px 6px;
+}
+.ins-filter .tog:first-child {
+  border-right: 1px solid #ffffff22;
+}
+
 /* ── insights: lower-thirds ───────────────────────────────────── */
 .col-insights {
   overflow: hidden;
