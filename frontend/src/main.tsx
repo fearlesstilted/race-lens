@@ -17,6 +17,7 @@ import { ReplayDeck } from './features/replay/ReplayDeck'
 import { StatusStrip } from './features/replay/StatusStrip'
 import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
+import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
 import { useReplay } from './features/replay/useReplay'
 import './style.css'
@@ -174,6 +175,8 @@ function App() {
   const [projection, setProjection] = useState(false)
   // WIN % toggle — replay only
   const [winProb, setWinProb] = useState(false)
+  // VOICE alerts — speak flags/fastest laps/passes from the feed
+  const [voice, setVoice] = useState(false)
   // Center bottom segment tab
   const [centerTab, setCenterTab] = useState<CenterTab>('FEED')
 
@@ -186,6 +189,7 @@ function App() {
   }, [mode, sessionId, isLiveActive])
 
   const replay = useReplay(source)
+  useVoiceAlerts(replay.feed, voice, replay.lang)
 
   // Load replay sessions list once
   useEffect(() => {
@@ -343,10 +347,12 @@ function App() {
         mode={mode}
         projection={projection}
         winProb={winProb}
+        voice={voice}
         onModeChange={handleModeSwitch}
         onSessionChange={handleSessionChange}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
+        onVoice={setVoice}
         onProjection={setProjection}
         onWinProb={setWinProb}
         onSeek={mode === 'replay' ? replay.scrub : undefined}

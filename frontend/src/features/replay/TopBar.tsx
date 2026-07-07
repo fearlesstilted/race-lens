@@ -18,12 +18,14 @@ type Props = {
   mode: AppMode
   projection: boolean
   winProb: boolean
+  voice: boolean
   onModeChange: (mode: AppMode) => void
   onSessionChange: (id: string) => void
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
   onWinProb: (on: boolean) => void
+  onVoice: (on: boolean) => void
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
   sessionStatus?: string
@@ -32,11 +34,11 @@ type Props = {
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
+export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, voice, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
-  const anyLayer = projection || winProb || level === 'beginner'
+  const anyLayer = projection || winProb || voice || level === 'beginner'
   return (
     <div className="top">
       <div className="ident">
@@ -139,6 +141,14 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
                 >
                   <span className="layer-name">WIN %</span>
                   <span className="layer-state">{winProb ? 'ON' : 'OFF'}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`layer-row layer-toggle${voice ? ' on' : ''}`}
+                  onClick={() => onVoice(!voice)}
+                >
+                  <span className="layer-name">VOICE</span>
+                  <span className="layer-state">{voice ? 'ON' : 'OFF'}</span>
                 </button>
               </div>
             </>
