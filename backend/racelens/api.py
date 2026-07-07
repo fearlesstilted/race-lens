@@ -273,6 +273,7 @@ async def live_start(
     session: str = Query(default="Race"),
     poll_s: float = Query(default=12.0, gt=0),
     source: str = Query(default="openf1", pattern="^(openf1|signalr)$"),
+    auth: int = Query(default=0),
 ) -> dict:
     """Start the live pipeline.
 
@@ -291,10 +292,10 @@ async def live_start(
 
         if source == "signalr":
             feed_path = FIXTURES_DIR / f"_capture_{year}_{country.lower().replace(' ', '_')}_{session.lower()}.txt"
-            # no_auth: the authenticated path needs an interactive browser login,
-            # impossible in a subprocess — and the anonymous feed carries full
-            # timing (verified live: TimingData/gaps/sectors all present).
-            _capture = SignalRCapture(feed_path, no_auth=True)
+            # Default no_auth: anonymous feed carries full timing (verified
+            # live). auth=1 uses the fastf1 token cache (one-time browser
+            # login via scripts/f1_login.py) — unlocks Position.z coordinates.
+            _capture = SignalRCapture(feed_path, no_auth=not auth)
             _capture.start()
             fetch = make_signalr_fetch(feed_path, year, country, session)
             _live = LiveRunner(fetch, poll_interval_s=max(poll_s, 5.0))
