@@ -10,6 +10,7 @@ import bisect
 from typing import Any
 
 from racelens.events.models import Event
+from racelens.insights.passes import KIND_UNDERCUT, detect_passes
 
 # Compound display names — handle both full names and abbreviations
 _COMPOUND_EN = {
@@ -222,6 +223,30 @@ def render_feed(
         if audio_url:
             item["audio_url"] = audio_url
         items.append(item)
+
+    # Overtakes / undercuts — detected from raw PositionChanged, not events
+    # the loop above renders.
+    for p in detect_passes(visible):
+        if p.kind == KIND_UNDERCUT:
+            text = (
+                f"Андеркат: {p.ahead} перепрыгивает {p.behind}"
+                if lang == "ru"
+                else f"Undercut: {p.ahead} jumps {p.behind}"
+            )
+        else:
+            text = (
+                f"{p.ahead} обгоняет {p.behind} — P{p.position}"
+                if lang == "ru"
+                else f"{p.ahead} passes {p.behind} for P{p.position}"
+            )
+        items.append({
+            "at_ms": p.at_ms,
+            "lap": p.lap,
+            "kind": p.kind,
+            "tag": "PASS",
+            "text": text,
+            "driver_id": p.ahead,
+        })
 
     # Newest first, then apply limit
     items.sort(key=lambda x: x["at_ms"], reverse=True)

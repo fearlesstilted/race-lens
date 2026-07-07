@@ -31,6 +31,8 @@ KIND_LEAD_CHANGE = "LEAD_CHANGE"
 KIND_PODIUM_CHANGE = "PODIUM_CHANGE"
 KIND_FASTEST_LAP = "FASTEST_LAP"
 KIND_OFF_TRACK = "OFF_TRACK"
+KIND_OVERTAKE = "OVERTAKE"
+KIND_UNDERCUT = "UNDERCUT"
 
 # A lap this much slower than the driver's own recent pace (and not a pit lap or
 # under neutralisation) signals an off / spin / big time loss — the dramatic
@@ -200,6 +202,7 @@ def significant_events(
     seen_ids: set[str] = set()  # deduplicate by event_id
 
     _detect_lead_podium_fastest(visible_sorted, state_engine, markers, seen_ids)
+    _detect_pass_markers(visible_sorted, markers, seen_ids)
     _detect_off_track(visible_sorted, markers, seen_ids)
     _detect_status_events(visible_sorted, markers, seen_ids)
     _detect_race_control_events(visible_sorted, markers, seen_ids)
@@ -308,6 +311,41 @@ def _detect_lead_podium_fastest(
 
         prev_leader = new_leader
         prev_top3 = new_top3
+
+
+def _detect_pass_markers(
+    visible_sorted: list[Event],
+    markers: list[dict[str, Any]],
+    seen_ids: set[str],
+) -> None:
+    """OVERTAKE / UNDERCUT — precise on-track passes from raw PositionChanged
+    events (racelens.insights.passes), unlike LEAD/PODIUM lap-checkpoint
+    sampling."""
+    from racelens.insights.passes import KIND_UNDERCUT as PASS_UNDERCUT
+    from racelens.insights.passes import detect_passes
+
+    for p in detect_passes(visible_sorted):
+        if p.kind == PASS_UNDERCUT:
+            kind = KIND_UNDERCUT
+            text_en = f"Undercut: {p.ahead} jumps {p.behind} (P{p.position})"
+            text_ru = f"Андеркат: {p.ahead} перепрыгивает {p.behind} (P{p.position})"
+            severity = SEV_MEDIUM
+        else:
+            kind = KIND_OVERTAKE
+            text_en = f"{p.ahead} passes {p.behind} for P{p.position}"
+            text_ru = f"{p.ahead} обгоняет {p.behind} — P{p.position}"
+            severity = SEV_MEDIUM if p.position <= 3 else SEV_LOW
+        _add_marker(
+            markers, seen_ids,
+            at_ms=p.at_ms,
+            lap=p.lap,
+            kind=kind,
+            severity=severity,
+            driver_ids=[p.ahead, p.behind],
+            text_en=text_en,
+            text_ru=text_ru,
+            dedup_key=f"pass:{p.at_ms}:{p.ahead}:{p.behind}",
+        )
 
 
 def _detect_off_track(

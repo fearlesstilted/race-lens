@@ -125,6 +125,8 @@ function markerStyle(kind: RaceMarker['kind']): MarkerStyle {
     case 'LEAD_CHANGE': return { color: '#ffffff', shape: 'chevron',  zIndex: 2 }
     case 'FASTEST_LAP': return { color: '#b388ff', shape: 'dot',      zIndex: 2 }
     case 'PODIUM_CHANGE': return { color: '#555566', shape: 'line',   zIndex: 1 }
+    case 'OVERTAKE':    return { color: '#00d2be', shape: 'chevron',  zIndex: 2 }
+    case 'UNDERCUT':    return { color: '#00d2be', shape: 'dot',      zIndex: 2 }
     default:            return { color: '#888899', shape: 'dot',      zIndex: 1 }
   }
 }

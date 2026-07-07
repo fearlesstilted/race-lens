@@ -79,7 +79,7 @@ export type FeedItem = {
   lap: number | null
   text: string
   kind: string // 'status' | 'fastest_lap' | 'pit' | 'info' | ...
-  tag?: 'PIT' | 'FLAG' | 'FASTEST' | 'INFO'
+  tag?: 'PIT' | 'FLAG' | 'FASTEST' | 'FINISH' | 'PASS' | 'INFO'
   audio_url?: string
 }
 
@@ -180,6 +180,8 @@ export type MarkerKind =
   | 'PODIUM_CHANGE'
   | 'FASTEST_LAP'
   | 'OFF_TRACK'
+  | 'OVERTAKE'
+  | 'UNDERCUT'
 
 export type MarkerSeverity = 'critical' | 'high' | 'medium' | 'low'
 

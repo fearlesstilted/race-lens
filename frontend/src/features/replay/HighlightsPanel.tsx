@@ -23,6 +23,8 @@ const KIND_ICON: Record<string, string> = {
   LEAD_CHANGE: '⬆',
   PODIUM_CHANGE: '↕',
   FASTEST_LAP: '🟣',
+  OVERTAKE: '⏩',
+  UNDERCUT: '⤵',
 }
 
 const KIND_COLOR: Record<string, string> = {
@@ -36,6 +38,8 @@ const KIND_COLOR: Record<string, string> = {
   LEAD_CHANGE: '#ffffff',
   PODIUM_CHANGE: '#aaaacc',
   FASTEST_LAP: '#b388ff',
+  OVERTAKE: '#00d2be',
+  UNDERCUT: '#00d2be',
 }
 
 export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {

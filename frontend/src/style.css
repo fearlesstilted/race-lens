@@ -784,6 +784,7 @@ body {
 .ev-tag-fastest { background: #b388ff22; color: #b388ff; }
 .ev-tag-info  { background: #ffffff11; color: var(--dim); }
 .ev-tag-finish { background: #ffffff1c; color: #fff; }
+.ev-tag-pass  { background: #00d2be33; color: #00d2be; }
 
 /* radio play/stop button in feed rows */
 .ev-radio-btn {
