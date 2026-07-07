@@ -399,3 +399,71 @@ def test_live_stop_twice_does_not_crash():
         assert "no live session" in r2.json()["detail"].lower()
     finally:
         api._live = original
+
+
+# ── Auto-stop: 5 min after a "finished" status is seen ─────────────────────────
+
+
+def test_poll_once_sets_finish_seen_at_once(monkeypatch):
+    """First poll observing a 'finished' status stamps _finish_seen_at; later
+    polls that still see it (full-snapshot re-fetch) must not refresh it —
+    the countdown starts at first sighting, not at every poll."""
+    import racelens.live.runner as runner_mod
+
+    monkeypatch.setattr(runner_mod.time, "time", lambda: 555.0)
+    runner = LiveRunner(lambda: mini_race(), poll_interval_s=5.0)
+    assert runner._finish_seen_at is None
+
+    runner._poll_once()
+    assert runner._finish_seen_at == 555.0
+
+    monkeypatch.setattr(runner_mod.time, "time", lambda: 999.0)
+    runner._poll_once()
+    assert runner._finish_seen_at == 555.0, "finish_seen_at must be set once, not refreshed each poll"
+
+
+def test_poll_once_no_finish_seen_without_finished_status():
+    """A race with no 'finished' status yet must not start the countdown."""
+    events = [e for e in mini_race() if e.type != "SessionStatusChanged"]
+    runner = LiveRunner(lambda: events, poll_interval_s=5.0)
+    runner._poll_once()
+    assert runner._finish_seen_at is None
+    assert runner.auto_stopped is False
+
+
+def test_runner_auto_stops_after_finish_plus_delay(monkeypatch):
+    """The loop stops ITSELF (its normal stop() path) once AUTO_STOP_DELAY_S
+    has elapsed since a 'finished' status was first observed — no external
+    caller needed. Uses a fake clock (monkeypatched time.time) so the test
+    doesn't have to sleep for 5 real minutes; the asyncio loop itself still
+    runs on tiny real sleeps."""
+    import racelens.live.runner as runner_mod
+
+    fake_now = [1_000_000.0]
+    monkeypatch.setattr(runner_mod.time, "time", lambda: fake_now[0])
+
+    runner = LiveRunner(lambda: mini_race(), poll_interval_s=0.001)
+
+    async def _run():
+        await runner.start()
+
+        # Let the loop run its first poll cycle(s) and observe 'finished'.
+        for _ in range(200):
+            await asyncio.sleep(0.001)
+            if runner._finish_seen_at is not None:
+                break
+        assert runner._finish_seen_at is not None, "finish not detected"
+        assert runner.is_running is True
+        assert runner.auto_stopped is False
+
+        # Jump the fake clock past the auto-stop delay and let the loop notice.
+        fake_now[0] += LiveRunner.AUTO_STOP_DELAY_S + 1
+        for _ in range(200):
+            await asyncio.sleep(0.001)
+            if not runner.is_running:
+                break
+
+        assert runner.is_running is False
+        assert runner.auto_stopped is True
+
+    asyncio.run(_run())

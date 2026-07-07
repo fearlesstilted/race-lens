@@ -1,13 +1,15 @@
 import React, { useCallback, useState } from 'react'
-import { getSimulatePit, getWhatIf } from '../../api/client'
+import { getLiveSimulatePit, getSimulatePit, getWhatIf } from '../../api/client'
 import type { DriverState, PitSim, PitSimEvidence, WhatIf, WhatIfDiff } from '../../api/types'
 import { teamColor } from './teamColors'
 
 type Props = {
   selectedIds: string[]
   drivers: Record<string, DriverState>
-  /** Session ID for pit-sim endpoint (replay only; null in live). */
+  /** Session ID for pit-sim/what-if (replay only; null in live). */
   sessionId: string | null
+  /** Live mode: PIT NOW uses /api/live/simulate-pit instead (WHAT IF has no live mirror). */
+  live?: boolean
   atMs: number
 }
 
@@ -95,7 +97,7 @@ function WhatIfCard({ result, lang }: { result: WhatIf; lang?: string }) {
 }
 
 /** Single-driver card (non-H2H mode) */
-function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; driver: DriverState; sessionId: string | null; atMs: number }) {
+function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: string; driver: DriverState; sessionId: string | null; live?: boolean; atMs: number }) {
   const color = teamColor(driverId)
   const laps = recentLaps(driver)
   const compound = driver.tyre_compound?.charAt(0).toUpperCase() ?? '?'
@@ -108,13 +110,14 @@ function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; d
   const [whatIfScenario, setWhatIfScenario] = useState<string | null>(null)
 
   const handlePitNow = useCallback(() => {
-    if (!sessionId) return
+    if (!sessionId && !live) return
     setPitBusy(true)
-    getSimulatePit(sessionId, atMs, driverId)
+    const req = sessionId ? getSimulatePit(sessionId, atMs, driverId) : getLiveSimulatePit(driverId)
+    req
       .then((res) => { setPitSim(res) })
       .catch(() => undefined)
       .finally(() => setPitBusy(false))
-  }, [sessionId, atMs, driverId])
+  }, [sessionId, live, atMs, driverId])
 
   const handleWhatIf = useCallback((scenario: string) => {
     if (!sessionId) return
@@ -166,7 +169,7 @@ function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; d
           INT <b>+{driver.interval_s.toFixed(2)}s</b> to car ahead
         </div>
       )}
-      {sessionId && (
+      {(sessionId || live) && (
         <div className="focus-pit-row">
           <button className="b pit-now-btn" type="button" onClick={handlePitNow} disabled={pitBusy}>
             {pitBusy ? '…' : 'PIT NOW'}
@@ -175,6 +178,7 @@ function DriverCard({ driverId, driver, sessionId, atMs }: { driverId: string; d
         </div>
       )}
       {sessionId && (
+        // WHAT IF has no live mirror (server-side) — replay only.
         <div className="focus-whatif-section">
           <div className="focus-whatif-label">WHAT IF</div>
           <div className="focus-whatif-btns">
@@ -293,7 +297,7 @@ function H2HDeltas({
   )
 }
 
-export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, atMs }: Props) {
+export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs }: Props) {
   if (selectedIds.length === 0) return null
 
   const [idA, idB] = selectedIds
@@ -321,7 +325,7 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers,
   return (
     <div className="focus-panel">
       <div className="focus-cards">
-        <DriverCard driverId={idA} driver={driverA} sessionId={sessionId} atMs={atMs} />
+        <DriverCard driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} />
       </div>
     </div>
   )

@@ -82,6 +82,7 @@ class ReplayEngine:
             "at_ms": None,
             "lap": 0,
             "session_status": "unknown",
+            "session_name": None,  # e.g. "SILVERSTONE · RACE" (live only — see SessionStarted)
             "status_since_ms": 0,
             "total_laps": None,
             "classification": [],
@@ -160,6 +161,8 @@ class ReplayEngine:
             state["session_status"] = "started"
             state["status_since_ms"] = e.session_time_ms
             state["total_laps"] = p.get("total_laps")
+            if "session_name" in p:
+                state["session_name"] = p["session_name"]
 
         elif e.type == "SessionStatusChanged":
             new_status = p.get("status", state["session_status"])

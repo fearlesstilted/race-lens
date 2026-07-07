@@ -49,6 +49,11 @@ _live: Optional[LiveRunner] = None
 # Capture subprocess for source=signalr live sessions (None otherwise).
 _capture: Optional[SignalRCapture] = None
 
+# session_id for the active source=signalr live session (same formula as
+# make_signalr_fetch), used by the /api/live/* predictive mirrors to look up
+# track params. None for source=openf1 sessions or when no live session runs.
+_live_session_id: Optional[str] = None
+
 # Lock to prevent concurrent start requests.
 _start_lock: asyncio.Lock = asyncio.Lock()
 
@@ -304,10 +309,14 @@ async def live_start(
     at fixtures/_capture_*.txt — post-race `racelens ingest-live` turns it
     into a replay fixture even if live mode misbehaves.
     """
-    global _live, _capture
+    global _live, _capture, _live_session_id
     async with _start_lock:
         if _live is not None and _live.is_running:
             raise HTTPException(409, "A live session is already running. Stop it first.")
+
+        # Reset any sid left over from a prior session (belt-and-braces —
+        # normally cleared by live_stop already).
+        _live_session_id = None
 
         if source == "signalr":
             feed_path = FIXTURES_DIR / f"_capture_{year}_{country.lower().replace(' ', '_')}_{session.lower()}.txt"
@@ -318,6 +327,8 @@ async def live_start(
             _capture.start()
             fetch = make_signalr_fetch(feed_path, year, country, session)
             _live = LiveRunner(fetch, poll_interval_s=max(poll_s, 5.0))
+            # Same formula as make_signalr_fetch's internal session_id (signalr.py).
+            _live_session_id = f"{country}_{year}_{session}".lower().replace(" ", "_")
             await _live.start()
             return {
                 "source": "signalr", "feed_file": str(feed_path),
@@ -335,10 +346,30 @@ async def live_start(
     return {"session_key": session_key, "poll_interval_s": poll_s, "status": "started"}
 
 
+def _reap_capture_if_stopped() -> None:
+    """Stop the capture subprocess once the runner has self-stopped.
+
+    Normal `/api/live/stop` already tears down both `_live` and `_capture`
+    together — this covers the runner stopping ITSELF (auto-stop 5 min after
+    session finish; see LiveRunner._loop), which has no other trigger to also
+    kill the now-orphaned capture subprocess. Called from the two places the
+    frontend polls the runner's liveness (`live_status`, `live_stream`).
+
+    Gated on `auto_stopped` (not `not is_running`) — `is_running` can be
+    False for unrelated reasons (not started yet, externally cancelled) and
+    must not be conflated with the runner's own decision to stop.
+    """
+    global _capture
+    if _live is not None and _live.auto_stopped and _capture is not None:
+        _capture.stop()
+        _capture = None
+
+
 @app.get("/api/live/status")
 async def live_status() -> dict:
     if _live is None:
         raise HTTPException(404, "No live session active")
+    _reap_capture_if_stopped()
     status = _live.status()
     # Fields the frontend contract expects (LiveStatusResult).
     status["is_running"] = _live.is_running
@@ -366,7 +397,9 @@ async def live_stream(
         passes_cache: dict[str, Any] = {"count": -1, "passes": []}
         while True:
             if _live is None or not _live.is_running:
-                # Runner stopped — signal end to the client and close the stream.
+                # Runner stopped (explicitly or via auto-stop) — reap the capture
+                # subprocess if it's still around, signal end, close the stream.
+                _reap_capture_if_stopped()
                 yield "event: end\ndata: {}\n\n"
                 return
             if _live.engine is None:
@@ -399,16 +432,57 @@ async def live_feed(lang: str = "en", limit: int = 30) -> list:
 
 @app.post("/api/live/stop")
 async def live_stop() -> dict:
-    global _live, _capture
+    global _live, _capture, _live_session_id
     if _live is None:
         raise HTTPException(404, "No live session active")
     final_status = _live.status()
     _live.stop()
     _live = None
+    _live_session_id = None
     if _capture is not None:
         _capture.stop()
         _capture = None
     return final_status
+
+
+# ── Live mirrors of the predictive endpoints ──────────────────────────────────
+#
+# Same pure functions as the replay /sessions/{id}/... endpoints, fed by
+# _live.state_now() instead of engine.state_at(). _live_session_id (set at
+# live/start for source=signalr) stands in for the replay sid — used only for
+# track-params lookup (win_probability doesn't use it at all).
+
+
+@app.get("/api/live/forecast")
+async def live_forecast(laps: int = Query(default=10, ge=1, le=50)) -> dict:
+    if _live is None or _live.engine is None:
+        raise HTTPException(404, "No live session active or no data yet")
+    state = _live.state_now()
+    return project_order(state, laps_ahead=laps)
+
+
+@app.get("/api/live/win-prob")
+async def live_win_prob() -> dict:
+    if _live is None or _live.engine is None:
+        raise HTTPException(404, "No live session active or no data yet")
+    state = _live.state_now()
+    return win_probability(state, _live_session_id or "")
+
+
+@app.get("/api/live/battles")
+async def live_battles() -> dict:
+    if _live is None or _live.engine is None:
+        raise HTTPException(404, "No live session active or no data yet")
+    state = _live.state_now()
+    return {"at_ms": state["at_ms"], "battles": detect_battles(state)}
+
+
+@app.get("/api/live/simulate-pit")
+async def live_simulate_pit(driver: str = Query(...)) -> dict:
+    if _live is None or _live.engine is None:
+        raise HTTPException(404, "No live session active or no data yet")
+    state = _live.state_now()
+    return simulate_pit(state, driver, _live_session_id or "")
 
 
 @app.post("/api/replays/download")

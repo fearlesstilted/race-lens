@@ -1,14 +1,17 @@
 /**
  * ForecastStrip — shows PROJECTED FINISH (+10 LAPS) order with delta positions.
- * Only rendered when PROJECTION is on and a sessionId is available (replay only).
+ * Only rendered when PROJECTION is on and a sessionId (replay) or `live` (live
+ * mode, via the /api/live/forecast mirror) is available.
  */
 import React, { useEffect, useRef, useState } from 'react'
-import { getForecast } from '../../api/client'
+import { getForecast, getLiveForecast } from '../../api/client'
 import type { Forecast } from '../../api/types'
 
 type Props = {
-  sessionId: string
+  sessionId?: string | null
   atMs: number
+  /** Live mode: fetch from /api/live/forecast instead of the session-scoped endpoint. */
+  live?: boolean
 }
 
 // ponytail: throttle, not debounce — during play atMs ticks continuously and a
@@ -23,14 +26,15 @@ function deltaMark(delta: number): { text: string; cls: string } {
   return { text: '=', cls: 'proj-eq' }
 }
 
-export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs }: Props) {
+export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs, live }: Props) {
   const [forecast, setForecast] = useState<Forecast | null>(null)
   const lastFetch = useRef(0)
 
   useEffect(() => {
     const run = () => {
       lastFetch.current = Date.now()
-      getForecast(sessionId, atMs, 10).then(setForecast).catch(() => undefined)
+      const req = live ? getLiveForecast(10) : sessionId ? getForecast(sessionId, atMs, 10) : null
+      req?.then(setForecast).catch(() => undefined)
     }
     const elapsed = Date.now() - lastFetch.current
     if (elapsed >= THROTTLE_MS) {
@@ -39,7 +43,7 @@ export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs
     }
     const t = setTimeout(run, THROTTLE_MS - elapsed)
     return () => clearTimeout(t)
-  }, [sessionId, atMs])
+  }, [sessionId, atMs, live])
 
   if (!forecast) return null
 

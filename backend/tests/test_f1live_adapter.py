@@ -1,6 +1,9 @@
 """Tests for the direct SignalR feed → Event adapter (live team-radio bits)."""
+import json
+
 from racelens.adapters.f1live_adapter import ingest_f1live
 from racelens.commentary.feed import render_feed
+from racelens.replay.engine import ReplayEngine
 
 _SESSION_PATH = "2026/2026-07-05_British_Grand_Prix/2026-07-05_Race/"
 _RADIO_PATH = "TeamRadio/HAMILTONLEWIS_44_20260705_1505.mp3"
@@ -43,3 +46,43 @@ def test_render_feed_carries_audio_url(tmp_path):
     radio_items = [i for i in feed if i.get("audio_url")]
     assert len(radio_items) == 1
     assert radio_items[0]["audio_url"].startswith("https://livetiming.formula1.com/static/")
+
+
+# ── Session badge: Meeting.Location + session Name → state["session_name"] ────
+
+_SESSION_INFO_PAYLOAD = {
+    "Meeting": {"Name": "British Grand Prix", "Location": "Silverstone"},
+    "Name": "Race",
+    "Path": _SESSION_PATH,
+}
+
+
+def _write_session_info_feed(tmp_path):
+    lines = [
+        "['SessionInfo', %s, '']" % json.dumps(json.dumps(_SESSION_INFO_PAYLOAD)),
+        "['SessionStatus', {'Status': 'Started'}, '2026-07-05T15:00:00.000Z']",
+    ]
+    feed = tmp_path / "feed.txt"
+    feed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(feed)
+
+
+def test_session_started_carries_session_name(tmp_path):
+    events = ingest_f1live(_write_session_info_feed(tmp_path), session_id="test")
+    started = [e for e in events if e.type == "SessionStarted"]
+    assert len(started) == 1
+    assert started[0].payload.get("session_name") == "SILVERSTONE · RACE"
+
+
+def test_session_name_lands_in_engine_state(tmp_path):
+    events = ingest_f1live(_write_session_info_feed(tmp_path), session_id="test")
+    state = ReplayEngine(events).state_at(0)
+    assert state["session_name"] == "SILVERSTONE · RACE"
+
+
+def test_session_name_absent_when_no_session_info(tmp_path):
+    """Feeds without Meeting/Name (e.g. the radio fixture above, which only
+    carries Path) must not crash and leave session_name unset."""
+    events = ingest_f1live(_write_feed(tmp_path), session_id="test")
+    state = ReplayEngine(events).state_at(0)
+    assert state["session_name"] is None

@@ -28,13 +28,15 @@ type Props = {
   onSettingsOpen?: () => void
   sessionStatus?: string
   atMs?: number
+  /** Live-only session badge text, e.g. "SILVERSTONE · RACE". */
+  sessionName?: string | null
 }
 
-export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus, atMs }: Props) {
+export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
-  const anyLayer = (mode === 'replay' && (projection || winProb)) || level === 'beginner'
+  const anyLayer = projection || winProb || level === 'beginner'
   return (
     <div className="top">
       <div className="ident">
@@ -63,7 +65,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
       ) : (
         <div className="sess">
           <b>LIVE</b>
-          <i>Near-live · F1 feed</i>
+          <i>{sessionName ? `${sessionName} · ` : 'Near-live · '}F1 feed</i>
         </div>
       )}
 
@@ -122,26 +124,22 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
                     >PRO</button>
                   </div>
                 </div>
-                {mode === 'replay' && (
-                  <>
-                    <button
-                      type="button"
-                      className={`layer-row layer-toggle${projection ? ' on' : ''}`}
-                      onClick={() => onProjection(!projection)}
-                    >
-                      <span className="layer-name">PROJECTION</span>
-                      <span className="layer-state">{projection ? 'ON' : 'OFF'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`layer-row layer-toggle${winProb ? ' on' : ''}`}
-                      onClick={() => onWinProb(!winProb)}
-                    >
-                      <span className="layer-name">WIN %</span>
-                      <span className="layer-state">{winProb ? 'ON' : 'OFF'}</span>
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  className={`layer-row layer-toggle${projection ? ' on' : ''}`}
+                  onClick={() => onProjection(!projection)}
+                >
+                  <span className="layer-name">PROJECTION</span>
+                  <span className="layer-state">{projection ? 'ON' : 'OFF'}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`layer-row layer-toggle${winProb ? ' on' : ''}`}
+                  onClick={() => onWinProb(!winProb)}
+                >
+                  <span className="layer-name">WIN %</span>
+                  <span className="layer-state">{winProb ? 'ON' : 'OFF'}</span>
+                </button>
               </div>
             </>
           )}

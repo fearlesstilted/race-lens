@@ -136,8 +136,23 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     def to_ms(posix: float) -> int:
         return max(0, round((posix - t0) * 1000))
 
+    # Session badge text ("SILVERSTONE · RACE"): SessionInfo is a keyframe
+    # (full history resent on every re-parse), so the first occurrence in the
+    # file is stable across polls once the feed has connected.
+    session_name: str | None = None
+    for cat, payload, _ in rows:
+        if cat == "SessionInfo":
+            location = (payload.get("Meeting") or {}).get("Location")
+            name = payload.get("Name")
+            if location and name:
+                session_name = f"{location} · {name}".upper()
+            break
+
     sid = session_id
-    events: list[Event] = [event(sid, "SessionStarted", 0, source="f1live")]
+    initial_payload: dict[str, Any] = {}
+    if session_name:
+        initial_payload["session_name"] = session_name
+    events: list[Event] = [event(sid, "SessionStarted", 0, source="f1live", **initial_payload)]
 
     num_to_abbr: dict[str, str] = {}
     # per-driver last seen values, to emit only real transitions

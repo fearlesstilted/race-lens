@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -43,11 +43,10 @@ export type TrackData = { session_id: string; viewbox: [number, number]; points:
 export const getTrack = (sessionId: string) =>
   json<TrackData>(`/api/sessions/${encodeURIComponent(sessionId)}/track`)
 
-// ── Predictive endpoints (replay only; live forecast not implemented) ─────────
+// ── Predictive endpoints (replay) ──────────────────────────────────────────────
 //
-// NOTE: These endpoints are session-scoped (/sessions/{id}/…) and only
-// available in replay mode.  In live mode (DataSource kind='live') the
-// PROJECTION toggle is hidden so these are never called.
+// NOTE: These endpoints are session-scoped (/sessions/{id}/…), for replay mode.
+// Live mode uses the /api/live/* mirrors below instead (same response shapes).
 
 export const getForecast = (sessionId: string, atMs: number, laps = 10) =>
   json<Forecast>(
@@ -129,6 +128,23 @@ export const getLiveFeed = async (limit = 30, lang = 'en'): Promise<FeedResponse
   if (Array.isArray(raw)) return { items: raw }
   return raw
 }
+
+// ── Live mirrors of the predictive endpoints ────────────────────────────────────
+//
+// Same response shapes as the session-scoped ones above, fed by the live
+// runner's current state instead of a replay snapshot at at_ms.
+
+export const getLiveForecast = (laps = 10) =>
+  json<Forecast>(`/api/live/forecast?laps=${laps}`)
+
+export const getLiveWinProb = () =>
+  json<WinProb>('/api/live/win-prob')
+
+export const getLiveBattles = () =>
+  json<BattlesResponse>('/api/live/battles')
+
+export const getLiveSimulatePit = (driver: string) =>
+  json<PitSim>(`/api/live/simulate-pit?driver=${encodeURIComponent(driver)}`)
 
 // ── Live lobby ────────────────────────────────────────────────────────────────
 

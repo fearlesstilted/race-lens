@@ -1,20 +1,27 @@
 /**
  * WinProbGraph — broadcast-style win-probability chart.
  *
- * Shows the history of win probability for the top-5 drivers from session
- * start up to `atMs` (spoiler-free).  Lines are drawn as SVG polylines;
- * no chart library required.
+ * Replay: shows the history of win probability for the top-5 drivers from
+ * session start up to `atMs` (spoiler-free), via GET
+ * /api/sessions/{id}/win-prob-series?until_ms=&samples=20.
  *
- * Data source: GET /api/sessions/{id}/win-prob-series?until_ms=&samples=20
+ * Live (`live` prop): there is no history endpoint — instead each throttle
+ * tick polls the single-point /api/live/win-prob mirror and appends to a
+ * locally-accumulated rolling series, building the chart up as the session
+ * progresses.
+ *
+ * Lines are drawn as SVG polylines; no chart library required.
  */
 import { useEffect, useRef, useState } from 'react'
-import { getWinProbSeries } from '../../api/client'
+import { getLiveWinProb, getWinProbSeries } from '../../api/client'
 import type { WinProbSeriesPoint } from '../../api/types'
 import { teamColor } from './teamColors'
 
 type Props = {
-  sessionId: string
+  sessionId?: string | null
   atMs: number
+  /** Live mode: accumulate from /api/live/win-prob instead of a replay series fetch. */
+  live?: boolean
 }
 
 const W = 480
@@ -23,6 +30,7 @@ const PAD = { top: 10, right: 52, bottom: 18, left: 34 }
 const INNER_W = W - PAD.left - PAD.right
 const INNER_H = H - PAD.top - PAD.bottom
 const SAMPLES = 20
+const MAX_LIVE_POINTS = 60
 const Y_TICKS = [0, 25, 50, 75, 100]
 // ponytail: throttle the (heavy) series fetch — atMs ticks every frame during play.
 const THROTTLE_MS = 1500
@@ -37,36 +45,56 @@ function scaleY(prob: number): number {
   return PAD.top + INNER_H - prob * INNER_H
 }
 
-export function WinProbGraph({ sessionId, atMs }: Props) {
+function top5FromSeries(pts: WinProbSeriesPoint[]): string[] {
+  const maxProb: Record<string, number> = {}
+  for (const pt of pts) {
+    for (const [d, p] of Object.entries(pt.probs)) {
+      if ((maxProb[d] ?? 0) < p) maxProb[d] = p
+    }
+  }
+  return Object.entries(maxProb)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([d]) => d)
+}
+
+export function WinProbGraph({ sessionId, atMs, live }: Props) {
   const [series, setSeries] = useState<WinProbSeriesPoint[]>([])
   const [drivers, setDrivers] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const lastFetch = useRef(0)
+  const liveSeriesRef = useRef<WinProbSeriesPoint[]>([])
+
+  // Reset the accumulated live series when (re)entering live mode.
+  useEffect(() => {
+    if (live) liveSeriesRef.current = []
+  }, [live])
 
   useEffect(() => {
-    if (atMs === 0) return
+    if (!live && atMs === 0) return
     let cancelled = false
 
     const run = () => {
       lastFetch.current = Date.now()
       setLoading(true)
-      getWinProbSeries(sessionId, atMs, SAMPLES)
+      const req = live
+        ? getLiveWinProb().then((wp) => {
+            const last = liveSeriesRef.current[liveSeriesRef.current.length - 1]
+            if (!last || last.at_ms !== wp.at_ms) {
+              liveSeriesRef.current = [...liveSeriesRef.current, { at_ms: wp.at_ms, probs: wp.win_prob }]
+                .slice(-MAX_LIVE_POINTS)
+            }
+            return liveSeriesRef.current
+          })
+        : sessionId
+          ? getWinProbSeries(sessionId, atMs, SAMPLES)
+          : Promise.resolve<WinProbSeriesPoint[]>([])
+
+      req
         .then((pts) => {
           if (cancelled) return
           setSeries(pts)
-
-          // Determine top-5 drivers by maximum prob at any point in series
-          const maxProb: Record<string, number> = {}
-          for (const pt of pts) {
-            for (const [d, p] of Object.entries(pt.probs)) {
-              if ((maxProb[d] ?? 0) < p) maxProb[d] = p
-            }
-          }
-          const top5 = Object.entries(maxProb)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
-            .map(([d]) => d)
-          setDrivers(top5)
+          setDrivers(top5FromSeries(pts))
           setLoading(false)
         })
         .catch(() => {
@@ -81,7 +109,7 @@ export function WinProbGraph({ sessionId, atMs }: Props) {
     }
     const t = setTimeout(run, THROTTLE_MS - elapsed)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [sessionId, atMs])
+  }, [sessionId, atMs, live])
 
   const n = series.length
 

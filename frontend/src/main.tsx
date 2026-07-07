@@ -93,17 +93,15 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
           </div>
         </div>
 
-        {mode === 'replay' && (
-          <div className="settings-group">
-            <div className="settings-group-label">OVERLAYS</div>
-            <div className="tog-group" style={{ marginBottom: 8 }}>
-              <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PROJECTION</button>
-            </div>
-            <div className="tog-group">
-              <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>WIN %</button>
-            </div>
+        <div className="settings-group">
+          <div className="settings-group-label">OVERLAYS</div>
+          <div className="tog-group" style={{ marginBottom: 8 }}>
+            <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PROJECTION</button>
           </div>
-        )}
+          <div className="tog-group">
+            <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>WIN %</button>
+          </div>
+        </div>
 
         {/* HIGHLIGHTS and DOTD — shown in drawer on mobile/tablet (<1024px) */}
         {mode === 'replay' && sessionId && onSeek && (
@@ -355,6 +353,7 @@ function App() {
         onSettingsOpen={() => setSettingsOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
+        sessionName={mode === 'live' ? state?.session_name ?? null : null}
       />
 
       {mode === 'live' && !isLiveActive && (
@@ -443,8 +442,8 @@ function App() {
           <div className="ctr-bottom">
             <CenterTabs
               activeTab={centerTab}
-              showForecast={mode === 'replay' && projection}
-              showWinProb={mode === 'replay' && winProb}
+              showForecast={projection && (mode === 'replay' ? !!sessionId : isLiveActive)}
+              showWinProb={winProb && (mode === 'replay' ? !!sessionId : isLiveActive)}
               showStrategy={mode === 'replay' && !!sessionId}
               onTab={setCenterTab}
             />
@@ -453,11 +452,15 @@ function App() {
               {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
                 <StintTimeline sessionId={sessionId} order={state?.classification} />
               )}
-              {centerTab === 'FORECAST' && mode === 'replay' && projection && sessionId && (
-                <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+              {centerTab === 'FORECAST' && projection && (
+                mode === 'replay'
+                  ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+                  : isLiveActive && <ForecastStrip live atMs={replay.atMs} />
               )}
-              {centerTab === 'WIN%' && mode === 'replay' && winProb && sessionId && (
-                <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
+              {centerTab === 'WIN%' && winProb && (
+                mode === 'replay'
+                  ? sessionId && <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
+                  : isLiveActive && <WinProbGraph live atMs={replay.atMs} />
               )}
             </div>
           </div>
@@ -471,6 +474,7 @@ function App() {
               selectedIds={selectedIds}
               drivers={state?.drivers ?? {}}
               sessionId={mode === 'replay' ? sessionId : null}
+              live={mode === 'live' && isLiveActive}
               atMs={replay.atMs}
             />
           </div>

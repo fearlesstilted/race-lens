@@ -31,6 +31,11 @@ class LiveRunner:
         1.5 s — polling faster than the source refresh cadence is pointless.
     """
 
+    # Auto-stop: once a fetched snapshot shows the session finished, keep
+    # polling (post-race messages/classification still trickle in) for this
+    # long, then stop itself — see _finish_seen_at / _loop.
+    AUTO_STOP_DELAY_S: float = 300.0
+
     def __init__(
         self,
         fetch_events: Callable[[], list[Event]],
@@ -49,6 +54,17 @@ class LiveRunner:
         self._new_last_poll: int = 0
         self._consecutive_failures: int = 0
         self._last_poll_unix: float | None = None
+
+        # Wall-clock time.time() when a "finished" SessionStatusChanged was
+        # first observed in a fetched snapshot. None until then. Drives the
+        # auto-stop countdown in _loop.
+        self._finish_seen_at: float | None = None
+        # True once the loop has stopped ITSELF via that countdown — distinct
+        # from is_running=False, which can also mean "not started yet" or
+        # "task cancelled/finished for some other reason" (e.g. an explicit
+        # .stop() call). api.py uses this flag (not is_running) to decide
+        # whether to also reap the now-orphaned capture subprocess.
+        self._auto_stopped: bool = False
 
         # Engine (None until first successful poll)
         self.engine: ReplayEngine | None = None
@@ -73,6 +89,11 @@ class LiveRunner:
     def is_running(self) -> bool:
         """True if the background polling task exists and has not finished."""
         return self._task is not None and not self._task.done()
+
+    @property
+    def auto_stopped(self) -> bool:
+        """True once the loop has stopped itself (finished + AUTO_STOP_DELAY_S)."""
+        return self._auto_stopped
 
     @property
     def polls(self) -> int:
@@ -128,6 +149,14 @@ class LiveRunner:
         if self._all:
             self.engine = ReplayEngine(self._all.values())
 
+        # First sighting of a "finished" status starts the auto-stop countdown
+        # (checked once per poll in _loop, no extra thread/timer needed).
+        if self._finish_seen_at is None and any(
+            e.type == "SessionStatusChanged" and e.payload.get("status") == "finished"
+            for e in events
+        ):
+            self._finish_seen_at = time.time()
+
         self._consecutive_failures = 0
         self._new_last_poll = new_count
         self._polls += 1
@@ -138,4 +167,11 @@ class LiveRunner:
     async def _loop(self) -> None:
         while True:
             await asyncio.to_thread(self._poll_once)
+            if (
+                self._finish_seen_at is not None
+                and time.time() - self._finish_seen_at >= self.AUTO_STOP_DELAY_S
+            ):
+                self._auto_stopped = True
+                self.stop()
+                return
             await asyncio.sleep(self._interval)

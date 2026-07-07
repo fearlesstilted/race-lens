@@ -67,6 +67,8 @@ export type RaceState = {
   at_ms: number
   lap: number
   session_status: string
+  /** Live-only badge text, e.g. "SILVERSTONE · RACE" (null in replay / before SessionInfo arrives). */
+  session_name?: string | null
   status_since_ms: number
   total_laps: number | null
   classification: string[]
