@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCommentary, getFeed, getMarkers, getTimeline } from '../../api/client'
-import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, Timeline } from '../../api/types'
+import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, RecentPass, Timeline } from '../../api/types'
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
 import type { PositionsData } from '../../lib/liveGaps'
@@ -20,6 +20,8 @@ export type ReplayModel = {
   state: RaceState | null
   insights: Insight[]
   battles: Battle[]
+  /** Overtakes in the last ~20s of session time — drives the on-map overtake flash. */
+  recentPasses: RecentPass[]
   feed: FeedItem[]
   commentary: CommentaryItem[]
   timeline: Timeline | null
@@ -64,6 +66,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [state, setState] = useState<RaceState | null>(null)
   const [insights, setInsights] = useState<Insight[]>([])
   const [battles, setBattles] = useState<Battle[]>([])
+  const [recentPasses, setRecentPasses] = useState<RecentPass[]>([])
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [commentary, setCommentary] = useState<CommentaryItem[]>([])
   const [timeline, setTimeline] = useState<Timeline | null>(null)
@@ -79,7 +82,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [markers, setMarkers] = useState<RaceMarker[]>([])
 
   const set = useMemo<ReplaySetters>(() => ({
-    setState, setInsights, setBattles, setFeed, setCommentary,
+    setState, setInsights, setBattles, setRecentPasses, setFeed, setCommentary,
     setAtMs, setLoading, setError, setFeedError, setPlaying,
   }), [])
 
@@ -109,6 +112,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     setState(null)
     setInsights([])
     setBattles([])
+    setRecentPasses([])
     setFeed([])
     setCommentary([])
     setTimeline(null)
@@ -190,6 +194,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       closeStream()
       setPlaying(false)
       setAtMs(nextAtMs)
+      setRecentPasses([]) // stream-only data — stale once we jump off the live frame sequence
       window.setTimeout(() => {
         void loadSnapshot(nextAtMs, lang, level)
       }, SCRUB_DEBOUNCE_MS)
@@ -235,7 +240,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       : null
 
   return {
-    state, insights, battles, feed, commentary, timeline, markers,
+    state, insights, battles, recentPasses, feed, commentary, timeline, markers,
     playing, speed, frameMs, atMs, loading, error, feedError,
     lang, level, positionsData,
     greenFlag, greenFlagText, neutralizationStartMs,

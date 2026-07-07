@@ -19,6 +19,15 @@ function fmtLastLap(ms: number | null): string {
   return `${m}:${String(s).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
 }
 
+/** Gained/lost since start: grid_position (baseline) vs current position (rank). */
+function gridDeltaBadge(row: DriverRow): { text: string; cls: 'up' | 'down' | 'flat' } | null {
+  if (row.grid_position == null || row.position == null) return null
+  const delta = row.grid_position - row.position
+  if (delta > 0) return { text: `▲${delta}`, cls: 'up' }
+  if (delta < 0) return { text: `▼${Math.abs(delta)}`, cls: 'down' }
+  return { text: '•', cls: 'flat' }
+}
+
 /** Pace trend: compare last_lap_ms vs mean of recent_laps_ms (fallback: best_lap_ms). */
 function paceTrend(row: DriverRow): 'up' | 'down' | null {
   const last = row.last_lap_ms
@@ -243,6 +252,8 @@ export const TimingTower = React.memo(function TimingTower({
             ? <span className="pace-trend down" title="vs own recent pace">▼</span>
             : <span className="pace-trend" />
 
+        const deltaBadge = isRetired ? null : gridDeltaBadge(row)
+
         return (
           <div
             key={row.id}
@@ -264,7 +275,17 @@ export const TimingTower = React.memo(function TimingTower({
             onClick={() => onSelectDriver(row.id)}
             style={{ cursor: 'pointer' }}
           >
-            <span className="pos">{isRetired ? '—' : (row.position ?? '—')}</span>
+            <span className="pos-wrap">
+              <span className="pos">{isRetired ? '—' : (row.position ?? '—')}</span>
+              {deltaBadge && (
+                <span
+                  className={`grid-delta grid-delta-${deltaBadge.cls}`}
+                  title="Change vs starting position"
+                >
+                  {deltaBadge.text}
+                </span>
+              )}
+            </span>
             <span className="tbar" style={{ background: color }} />
             <span className="code">
               {row.id}

@@ -89,6 +89,20 @@ def test_determinism_under_shuffle():
             assert engine.state_hash(t) == baseline.state_hash(t)
 
 
+def test_grid_position_baseline_survives_position_changes():
+    """grid_position = first-known PositionChanged value; later swaps must not
+    overwrite it (mid-join recordings intentionally baseline off the earliest
+    seen position, not a true grid slot)."""
+    s = ReplayEngine(mini_race()).state_at(300_000)
+    # Grid order from mini_race(): VER=1, LEC=2, NOR=3.
+    assert s["drivers"]["VER"]["grid_position"] == 1
+    assert s["drivers"]["LEC"]["grid_position"] == 2
+    assert s["drivers"]["NOR"]["grid_position"] == 3
+    # LEC pitted and swapped with NOR at 136s — position moved, grid_position stayed.
+    assert s["drivers"]["LEC"]["position"] == 3
+    assert s["drivers"]["NOR"]["position"] == 2
+
+
 def test_duplicate_events_dropped():
     events = mini_race()
     noisy = events + events[5:12]  # replay a chunk, as a flaky live feed would

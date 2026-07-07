@@ -12,7 +12,7 @@ import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -35,6 +35,7 @@ from racelens.forecast.projection import project_order
 from racelens.forecast.what_if import VALID_SCENARIOS, what_if
 from racelens.forecast.win_prob import win_probability
 from racelens.insights.battles import detect_battles
+from racelens.insights.passes import Pass, detect_passes
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
 from racelens.live.signalr import SignalRCapture, make_signalr_fetch
@@ -151,6 +152,21 @@ def _attach_frame(state: dict, session_id: str | None = None) -> dict:
     return state
 
 
+# Overtake-attention window: a pass stays "recent" (flashed on the map) for
+# this many ms of session time after it happened.
+RECENT_PASS_WINDOW_MS = 20_000
+
+
+def _recent_passes(passes: list[Pass], cur_ms: int, window_ms: int = RECENT_PASS_WINDOW_MS) -> list[dict]:
+    """Passes with at_ms in (cur_ms - window_ms, cur_ms] as plain dicts for the frame."""
+    lo = cur_ms - window_ms
+    return [
+        {"ahead": p.ahead, "behind": p.behind, "kind": p.kind, "at_ms": p.at_ms}
+        for p in passes
+        if lo < p.at_ms <= cur_ms
+    ]
+
+
 def _race_end_ms(eng: ReplayEngine) -> int:
     """End of on-track action = chequered flag (or last lap), NOT the last event.
 
@@ -245,6 +261,8 @@ async def stream(
         raise HTTPException(422, "speed and tick_ms must be positive")
     eng = _engine(session_id)
     end_ms = _race_end_ms(eng)
+    # Fixed event list for a replay connection — compute passes once, filter per tick.
+    passes = detect_passes(eng.events)
 
     async def gen():
         t = from_ms
@@ -253,6 +271,7 @@ async def stream(
             state = _attach_frame(eng.state_at(cur), session_id)
             state["active_insights"] = detect_all(state)
             state["commentary"] = render_all(state["active_insights"], lang, level)
+            state["recent_passes"] = _recent_passes(passes, cur)
             yield f"data: {json.dumps(state)}\n\n"
             if cur >= end_ms:
                 break
@@ -341,6 +360,10 @@ async def live_stream(
         raise HTTPException(404, "No live session active")
 
     async def gen():
+        # Passes cache: recomputed only when the live engine's event count grows
+        # (a fresh detect_passes() pass over the whole event list each poll would
+        # be wasted work — most ticks see no new events between polls).
+        passes_cache: dict[str, Any] = {"count": -1, "passes": []}
         while True:
             if _live is None or not _live.is_running:
                 # Runner stopped — signal end to the client and close the stream.
@@ -350,9 +373,15 @@ async def live_stream(
                 # Runner alive but no data yet — send empty heartbeat and keep waiting.
                 yield "data: {}\n\n"
             else:
+                events = _live.engine.events
+                if len(events) != passes_cache["count"]:
+                    passes_cache["passes"] = detect_passes(events)
+                    passes_cache["count"] = len(events)
                 state = _attach_frame(_live.state_now())
                 state["active_insights"] = detect_all(state)
                 state["commentary"] = render_all(state["active_insights"], lang, level)
+                state["recent_passes"] = _recent_passes(passes_cache["passes"], state["at_ms"])
+                state["battles"] = detect_battles(state)
                 yield f"data: {json.dumps(state)}\n\n"
             await asyncio.sleep(tick_s)
 

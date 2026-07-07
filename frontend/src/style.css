@@ -594,6 +594,27 @@ body {
   background: var(--red);
   color: #fff;
 }
+/* Gained/lost-since-start badge — pinned to the pos cell's corner, doesn't
+   touch the tower's column grid (see .trow grid-template-columns above). */
+.pos-wrap {
+  position: relative;
+  height: 100%;
+}
+.grid-delta {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  font: 700 8px var(--cond);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: var(--bg);
+  pointer-events: none;
+}
+.grid-delta-up { color: #39b54a; }
+.grid-delta-down { color: var(--red); }
+.grid-delta-flat { color: var(--dim); }
 .tbar {
   height: min(26px, 100%);
 }
@@ -2414,10 +2435,25 @@ body {
   .forecast-row { animation: rl-fade .2s ease-out both; }
   /* Fastest-lap dot quietly pulses. */
   .fl-dot { animation: rl-pulse 1.6s ease-in-out infinite; }
+  /* Overtake attention ring: sonar-ping pulse on the driver who just passed. */
+  .overtake-ring { animation: rl-overtake-ping 1s ease-out 3; }
 }
 @keyframes rl-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes rl-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes rl-overtake-ping {
+  0%   { transform: scale(1); opacity: 0.95; }
+  70%  { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+/* Overtake ring, always present in the DOM for OVERTAKE_FLASH_MS; the keyframe
+   animation above (gated behind prefers-reduced-motion: no-preference) does the
+   pulsing — under reduced motion it just renders as a brief static ring. */
+.overtake-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
 
 /* ── Tyre strategy timeline ─────────────────────────────────────── */
 .stints {

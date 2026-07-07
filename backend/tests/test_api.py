@@ -120,6 +120,48 @@ def test_stream_simulated_live(client):
     assert len(last_state["commentary"]) == len(last_state["active_insights"])
 
 
+def test_stream_carries_recent_passes_in_window(tmp_path, monkeypatch):
+    """A stream frame must carry recent_passes for on-track passes whose at_ms
+    falls in (cur-20_000, cur], and drop them once the window has elapsed."""
+    import json
+
+    import racelens.api as api
+    from racelens.events.models import dump_jsonl, event
+
+    sid = "passrace"
+    evs = [
+        event(sid, "SessionStarted", 0, total_laps=3),
+        event(sid, "PositionChanged", 0, "A", position=2),
+        event(sid, "PositionChanged", 0, "B", position=1),
+        event(sid, "LapCompleted", 90_000, "A", lap=1, lap_time_ms=90_000),
+        # On-track pass: A retakes B at 200s (mirrors test_passes.py's pattern).
+        event(sid, "PositionChanged", 200_000, "A", position=1),
+        event(sid, "PositionChanged", 200_000, "B", position=2),
+        event(sid, "SessionStatusChanged", 260_000, status="finished"),
+    ]
+    (tmp_path / f"{sid}.jsonl").write_text(dump_jsonl(evs), encoding="utf-8")
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    client = TestClient(api.app)
+
+    chunks = []
+    with client.stream(
+        "GET",
+        f"/api/sessions/{sid}/stream",
+        params={"speed": 100_000, "from_ms": 200_000, "tick_ms": 25_000},
+    ) as r:
+        for line in r.iter_lines():
+            if line.startswith("data:"):
+                chunks.append(json.loads(line.removeprefix("data:")))
+
+    # cur=200_000: the pass just happened — inside the (180_000, 200_000] window.
+    assert chunks[0]["recent_passes"] == [
+        {"ahead": "A", "behind": "B", "kind": "ON_TRACK", "at_ms": 200_000},
+    ]
+    # cur=225_000: still within 20s? no — window is (205_000, 225_000], pass is gone.
+    at_225 = next(c for c in chunks if c.get("at_ms") == 225_000)
+    assert at_225["recent_passes"] == []
+
+
 def test_stream_speed_zero_returns_422(client):
     r = client.get(
         "/api/sessions/2024_mini_race/stream",

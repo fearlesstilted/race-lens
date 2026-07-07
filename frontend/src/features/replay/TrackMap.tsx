@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
-import type { Battle, DriverState } from '../../api/types'
+import type { Battle, DriverState, RecentPass } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
 import { compoundColor, normalizeCompound, teamColor } from './teamColors'
@@ -26,7 +26,12 @@ type Props = {
   projection?: boolean
   /** Active battles for on-map highlights */
   battles?: Battle[]
+  /** Overtakes in the last ~20s of session time — drives the on-map overtake flash. */
+  recentPasses?: RecentPass[]
 }
+
+/** How long the overtake flash ring stays on a driver after their pass. */
+const OVERTAKE_FLASH_MS = 3_000
 
 /** Advance a fractional lap position forward by ghostSec seconds. */
 function advanceGhostFrac(frac: number, ghostSec: number, lapMs: number): number {
@@ -74,10 +79,54 @@ const GHOST_AHEAD_S = 30
 
 export const TrackMap = React.memo(function TrackMap({
   sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, neutralizationStartMs,
-  selectedIds = [], positionsData, projection = false, battles = [],
+  selectedIds = [], positionsData, projection = false, battles = [], recentPasses = [],
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
+
+  // Overtake flash: a white ring pulses on the `ahead` driver for OVERTAKE_FLASH_MS
+  // after their pass. Keyed by ahead+at_ms so each pass event triggers the flash
+  // exactly once, even though the same recentPasses entry arrives on every frame
+  // for ~20s (the backend's attention window).
+  const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set())
+  const seenPassKeysRef = useRef<Set<string>>(new Set())
+  const flashTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    for (const p of recentPasses) {
+      const key = `${p.ahead}:${p.at_ms}`
+      if (seenPassKeysRef.current.has(key)) continue
+      seenPassKeysRef.current.add(key)
+
+      setFlashingIds((prev) => {
+        if (prev.has(p.ahead)) return prev
+        const next = new Set(prev)
+        next.add(p.ahead)
+        return next
+      })
+
+      const existingTimer = flashTimersRef.current.get(p.ahead)
+      if (existingTimer) clearTimeout(existingTimer)
+      const timer = setTimeout(() => {
+        setFlashingIds((prev) => {
+          if (!prev.has(p.ahead)) return prev
+          const next = new Set(prev)
+          next.delete(p.ahead)
+          return next
+        })
+        flashTimersRef.current.delete(p.ahead)
+      }, OVERTAKE_FLASH_MS)
+      flashTimersRef.current.set(p.ahead, timer)
+    }
+  }, [recentPasses])
+
+  // Clear any pending flash timers on unmount so they never fire against a dead component.
+  useEffect(() => {
+    const timers = flashTimersRef.current
+    return () => {
+      for (const t of timers.values()) clearTimeout(t)
+    }
+  }, [])
 
   const { pathRef, registerCar, currentFracRef, driverLapMsRef, pelotonMedianRef } = useTrackAnimation({
     atMs, playing, playbackSpeed, drivers, classification, sessionStatus, positionsData,
@@ -313,6 +362,7 @@ export const TrackMap = React.memo(function TrackMap({
             const r = isSelected ? 9 : 7
             const showLabel = isSelected || isTop3
             const inBattle = battles.some(b => b.chaser_id === driverId || b.leader_id === driverId)
+            const isFlashing = flashingIds.has(driverId)
             const tyreCompound = drivers[driverId]?.tyre_compound
             const ringColor = normalizeCompound(tyreCompound) ? compoundColor(tyreCompound) : null
             return (
@@ -322,6 +372,16 @@ export const TrackMap = React.memo(function TrackMap({
                 transform="translate(0,0)"
                 opacity={isDimmed ? 0.5 : 1}
               >
+                {/* Overtake flash — white pulsing ring on the driver who just passed */}
+                {isFlashing && (
+                  <circle
+                    className="overtake-ring"
+                    r={r + 8}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                  />
+                )}
                 {/* Battle glow ring */}
                 {inBattle && (
                   <circle r={r + 5} fill="none" stroke="#f2a900" strokeWidth={1.2} opacity={0.7} />

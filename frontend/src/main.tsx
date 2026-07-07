@@ -436,6 +436,7 @@ function App() {
             positionsData={effectivePositionsData}
             projection={mode === 'replay' && projection}
             battles={replay.battles}
+            recentPasses={replay.recentPasses}
           />
           {/* Center always keeps map + tabs — selecting drivers must never hide
               forecast/win%. Driver focus moves to the right column instead. */}

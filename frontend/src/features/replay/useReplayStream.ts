@@ -66,7 +66,9 @@ export function useReplayStream(
             .then((r) => set.setCommentary(r.items)).catch(() => undefined)
         } else {
           // Live mode has no session_id to scope by — feed comes from the live
-          // engine's own event log. Battles/commentary stay replay-only.
+          // engine's own event log. Commentary stays replay-only. Battles are
+          // embedded directly in every live frame (see onmessage) — no REST
+          // round-trip needed, so they are NOT fetched here.
           void getLiveFeed(30, nextLang)
             .then((r) => { set.setFeed(r.items); set.setFeedError(null) })
             .catch((err: unknown) => set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
@@ -86,6 +88,14 @@ export function useReplayStream(
         set.setAtMs(nextState.at_ms)
         set.setState(nextState)
         set.setInsights(nextState.active_insights ?? [])
+        // recent_passes drives the on-map overtake flash — pushed every frame
+        // (not throttled) so the flash triggers promptly, same as insights.
+        set.setRecentPasses(nextState.recent_passes ?? [])
+        if (!sessionId) {
+          // Live: the backend embeds battles in every frame — read them straight
+          // off the frame instead of a throttled REST round-trip (replay path below).
+          set.setBattles(nextState.battles ?? [])
+        }
         // Only the network side-data is throttled (leading + trailing).
         pendingRef.current = nextState
         const elapsed = performance.now() - lastDataRef.current

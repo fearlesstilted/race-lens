@@ -16,6 +16,8 @@ export type DriverState = {
   position: number | null
   /** 1-based ordering truth (= classification index). Render this; never re-sort. */
   rank: number | null
+  /** Baseline position = first-known PositionChanged value (grid, or join-time for mid-join recordings). */
+  grid_position: number | null
   laps_completed: number
   last_lap_ms: number | null
   best_lap_ms: number | null
@@ -52,6 +54,14 @@ export type Insight = {
   evidence: Record<string, number | string | boolean | null>
 }
 
+/** One overtake event within the "recent" attention window (see RaceState.recent_passes). */
+export type RecentPass = {
+  ahead: string
+  behind: string
+  kind: string
+  at_ms: number
+}
+
 export type RaceState = {
   session_id: string | null
   at_ms: number
@@ -67,6 +77,10 @@ export type RaceState = {
   viewbox?: [number, number] | null
   /** "replay" (positions.json telemetry) or "live". */
   frame_source?: string
+  /** Passes with at_ms in the last ~20s of session time — drives the on-map overtake flash. */
+  recent_passes?: RecentPass[]
+  /** Live-only: battles embedded directly in the stream frame (replay fetches via /battles). */
+  battles?: Battle[]
 }
 
 export type InsightsResponse = {

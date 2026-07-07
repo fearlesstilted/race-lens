@@ -25,6 +25,7 @@ def _new_driver() -> dict[str, Any]:
     return {
         "position": None,
         "rank": None,         # 1-based ordering truth (= classification index), set per frame
+        "grid_position": None,  # baseline = first-known position (grid, or mid-join lap for late starts)
         "laps_completed": 0,
         "last_lap_ms": None,
         "best_lap_ms": None,
@@ -182,7 +183,13 @@ class ReplayEngine:
             state["lap"] = max(state["lap"], e.lap or 0)
 
         elif e.type == "PositionChanged":
-            self._driver(state, e.driver_id)["position"] = p.get("position")
+            d = self._driver(state, e.driver_id)
+            d["position"] = p.get("position")
+            if d["grid_position"] is None:
+                # First known position = baseline. For a mid-join recording that
+                # starts a few laps in, this is intentionally the position at
+                # join time, not the true grid slot — best available baseline.
+                d["grid_position"] = p.get("position")
 
         elif e.type == "GapUpdated":
             self._driver(state, e.driver_id)["gap_s"] = p.get("gap_s")
