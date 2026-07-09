@@ -1,3 +1,13 @@
+---
+title: Race Lens
+emoji: 🏎️
+colorFrom: red
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Race Lens
 
 [![CI](https://github.com/fearlesstilted/race-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/fearlesstilted/race-lens/actions/workflows/ci.yml)

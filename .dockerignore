@@ -1,0 +1,11 @@
+**/node_modules
+frontend/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+backend/fastf1_cache
+backend/fixtures/_capture_*
+backend/fixtures/_radio_cache
+.git
+design-export
+design-sketches

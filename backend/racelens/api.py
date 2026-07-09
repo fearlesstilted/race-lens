@@ -502,6 +502,15 @@ async def live_simulate_pit(driver: str = Query(...)) -> dict:
     return simulate_pit(state, driver, _live_session_id or "")
 
 
+# ── Static frontend (single-container deploys: HF Spaces, VPS) ────────────────
+# Mounted at "/" AFTER all API routes, so /api/* keeps precedence. In dev the
+# vite server proxies instead and this mount simply never engages (no dist).
+_DIST = Path(
+    os.environ.get("RACELENS_DIST")
+    or Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+)
+
+
 @app.post("/api/replays/download")
 def download_replay(
     year: int = Query(...),
@@ -789,3 +798,11 @@ def stints(session_id: str) -> dict:
         "total_laps": total_laps,
         "stints": stint_timeline(eng.events, total_laps),
     }
+
+
+# The static mount lives at the bottom of the module so every API route above
+# is already registered and wins the match (see _DIST comment up top).
+if _DIST.is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="frontend")
