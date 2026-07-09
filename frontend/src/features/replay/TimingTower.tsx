@@ -19,13 +19,14 @@ function fmtLastLap(ms: number | null): string {
   return `${m}:${String(s).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
 }
 
-/** Gained/lost since start: grid_position (baseline) vs current position (rank). */
-function gridDeltaBadge(row: DriverRow): { text: string; cls: 'up' | 'down' | 'flat' } | null {
+/** Gained/lost since start: grid_position (baseline) vs current position (rank).
+    Zero delta renders nothing — a badge on every row is noise, not signal. */
+function gridDeltaBadge(row: DriverRow): { text: string; cls: 'up' | 'down' } | null {
   if (row.grid_position == null || row.position == null) return null
   const delta = row.grid_position - row.position
   if (delta > 0) return { text: `▲${delta}`, cls: 'up' }
   if (delta < 0) return { text: `▼${Math.abs(delta)}`, cls: 'down' }
-  return { text: '•', cls: 'flat' }
+  return null
 }
 
 /** Pace trend: compare last_lap_ms vs mean of recent_laps_ms (fallback: best_lap_ms). */

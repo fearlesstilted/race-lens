@@ -594,27 +594,25 @@ body {
   background: var(--red);
   color: #fff;
 }
-/* Gained/lost-since-start badge — pinned to the pos cell's corner, doesn't
-   touch the tower's column grid (see .trow grid-template-columns above). */
+/* Gained/lost-since-start badge — stacked UNDER the pos box inside its cell,
+   normal flow (no overlay eating the box). Rows too short to fit it just clip
+   it away via the .trow overflow:hidden — graceful, never overlaps digits. */
 .pos-wrap {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
   height: 100%;
 }
 .grid-delta {
-  position: absolute;
-  top: -5px;
-  right: -4px;
-  font: 700 8px var(--cond);
+  font: 700 7px var(--cond);
   letter-spacing: 0.02em;
-  line-height: 1;
-  padding: 1px 2px;
-  border-radius: 2px;
-  background: var(--bg);
+  line-height: 8px;
+  text-align: center;
   pointer-events: none;
 }
 .grid-delta-up { color: #39b54a; }
 .grid-delta-down { color: var(--red); }
-.grid-delta-flat { color: var(--dim); }
 .tbar {
   height: min(26px, 100%);
 }
