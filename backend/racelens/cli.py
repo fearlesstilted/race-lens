@@ -146,6 +146,60 @@ def _cmd_track_progress(args: argparse.Namespace) -> None:
     print(f"track-progress: {covered}/{len(pos['progress'])} drivers → {pos_path}", file=sys.stderr)
 
 
+def _cmd_radio_fetch(args: argparse.Namespace) -> None:
+    """Merge OpenF1 team-radio clips into an existing fixture (archive sessions).
+
+    Time anchor: earliest lap-1 date_start = lights-out = the fixture's t=0
+    (both the openf1 and fastf1 adapters anchor there).
+    """
+    from racelens.adapters.openf1_adapter import (
+        _build_driver_map, _compute_t0, _get, _parse_iso, find_session,
+    )
+    from racelens.events.models import event
+
+    path = Path(args.fixture)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = json.loads(lines[0])
+    sid = first["session_id"]
+    have_urls = {
+        json.loads(ln).get("payload", {}).get("audio_url")
+        for ln in lines
+    } - {None}
+    # Per-driver lap timeline from the fixture itself, for radio lap numbers.
+    lap_marks: dict[str, list[tuple[int, int]]] = {}
+    for ln in lines:
+        e = json.loads(ln)
+        if e["type"] == "LapCompleted" and e.get("driver_id") and e.get("lap") is not None:
+            lap_marks.setdefault(e["driver_id"], []).append((e["session_time_ms"], e["lap"]))
+
+    key = find_session(args.year, args.country)
+    t0 = _compute_t0(_get("/laps", {"session_key": key, "lap_number": 1}))
+    if t0 is None:
+        raise SystemExit("radio-fetch: no lap-1 anchor from OpenF1")
+    driver_map = _build_driver_map(_get("/drivers", {"session_key": key}))
+
+    added = 0
+    for row in _get("/team_radio", {"session_key": key}):
+        url, dn = row.get("recording_url"), row.get("driver_number")
+        ts = _parse_iso(row.get("date"))
+        if not url or ts is None or url in have_urls:
+            continue
+        t_ms = round((ts - t0) * 1000)
+        if t_ms < 0:
+            continue  # pre-race garbage
+        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
+        marks = lap_marks.get(drv or "", [])
+        lap = next((lp + 1 for tm, lp in reversed(marks) if tm <= t_ms), 1)
+        ev = event(sid, "RaceControlMessage", t_ms, drv, lap=lap,
+                   category="Radio", message=f"RADIO: {drv}", audio_url=url)
+        lines.append(ev.model_dump_json(exclude_none=True))
+        added += 1
+
+    lines.sort(key=lambda ln: (json.loads(ln)["session_time_ms"], json.loads(ln)["event_id"]))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"radio-fetch: +{added} radio events → {path}", file=sys.stderr)
+
+
 def _cmd_radio_transcribe(args: argparse.Namespace) -> None:
     from racelens.radio.transcribe import enrich_fixture
 
@@ -246,6 +300,14 @@ def main() -> None:
     p_prog.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
     p_prog.add_argument("session_id", help="fixture session id, e.g. monaco_2024_race")
     p_prog.set_defaults(func=_cmd_track_progress)
+
+    p_rfetch = sub.add_parser(
+        "radio-fetch", help="merge OpenF1 team-radio clips into an archive fixture"
+    )
+    p_rfetch.add_argument("fixture", help="replay fixture .jsonl")
+    p_rfetch.add_argument("year", type=int)
+    p_rfetch.add_argument("country", help='Grand Prix country/circuit, e.g. "Monaco"')
+    p_rfetch.set_defaults(func=_cmd_radio_fetch)
 
     p_radio = sub.add_parser(
         "radio-transcribe", help="whisper-transcribe a fixture's team-radio clips in place"

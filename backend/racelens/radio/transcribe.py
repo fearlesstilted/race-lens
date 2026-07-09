@@ -84,9 +84,8 @@ def enrich_fixture(path: Path) -> int:
     import json
 
     lines = path.read_text(encoding="utf-8").splitlines()
-    out: list[str] = []
     done = 0
-    for ln in lines:
+    for i, ln in enumerate(lines):
         e = json.loads(ln)
         p = e.get("payload", {})
         url = p.get("audio_url")
@@ -95,10 +94,9 @@ def enrich_fixture(path: Path) -> int:
             if text:
                 p["transcript"] = text
                 done += 1
+                lines[i] = json.dumps(e, ensure_ascii=False, separators=(",", ":"))
+                # Write after every clip: a killed run keeps its progress and a
+                # re-run resumes from the first missing transcript.
+                path.write_text("\n".join(lines) + "\n", encoding="utf-8")
                 print(f"  {e.get('driver_id')}: {text[:70]}", file=sys.stderr)
-            out.append(json.dumps(e, ensure_ascii=False, separators=(",", ":")))
-        else:
-            out.append(ln)
-    if done:
-        path.write_text("\n".join(out) + "\n", encoding="utf-8")
     return done
