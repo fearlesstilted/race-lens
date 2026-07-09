@@ -58,6 +58,14 @@ _live_session_id: Optional[str] = None
 _start_lock: asyncio.Lock = asyncio.Lock()
 
 
+@lru_cache(maxsize=1)
+def _radio_worker():
+    """Lazy singleton: whisper model loads only when live radio actually shows up."""
+    from racelens.radio.transcribe import TranscriptWorker
+
+    return TranscriptWorker()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -427,7 +435,16 @@ async def live_feed(lang: str = "en", limit: int = 30) -> list:
     if _live is None or _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
     until_ms = _live.engine.events[-1].session_time_ms
-    return render_feed(_live.engine.events, until_ms, lang=lang, limit=limit)
+    items = render_feed(_live.engine.events, until_ms, lang=lang, limit=limit)
+    # Whisper transcripts: queued on first sight, mixed in once the background
+    # worker is done (text appears in the feed ~a minute after the clip).
+    for item in items:
+        url = item.get("audio_url")
+        if url and not item.get("transcript"):
+            text = _radio_worker().get(url)
+            if text:
+                item["transcript"] = text
+    return items
 
 
 @app.post("/api/live/stop")

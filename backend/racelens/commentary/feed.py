@@ -93,6 +93,7 @@ def render_feed(
         text: str | None = None
         driver_id: str | None = e.driver_id
         audio_url: str | None = None
+        transcript: str | None = None
 
         if e.type == "SessionStarted":
             text = "Свет погас — старт!" if lang == "ru" else "Lights out — race start!"
@@ -170,6 +171,7 @@ def render_feed(
             text = e.payload.get("message", "")
             driver_id = e.driver_id
             audio_url = e.payload.get("audio_url")
+            transcript = e.payload.get("transcript")
 
         elif e.type == "RaceControlMessage":
             msg = e.payload.get("message", "")
@@ -222,6 +224,8 @@ def render_feed(
         }
         if audio_url:
             item["audio_url"] = audio_url
+        if transcript:
+            item["transcript"] = transcript
         items.append(item)
 
     # Overtakes / undercuts — detected from raw PositionChanged, not events

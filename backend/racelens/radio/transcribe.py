@@ -1,0 +1,104 @@
+"""Team-radio transcription: faster-whisper medium-int8 on CPU.
+
+Model choice is the 2026-07-07 spike verdict on 20 real Silverstone clips:
+medium-int8 ≈ 12 s/clip on 8 cores and read cleaner than large-v3-int8
+(which hallucinated on noisy clips). ~20 clips per race — the pace works
+for live too (a clip's text lands in the feed within a minute).
+
+Two consumers:
+  * CLI `radio-transcribe <fixture>` — enrich replay fixtures in place;
+  * TranscriptWorker — background thread for live mode (never blocks polls).
+
+faster-whisper is an optional dependency ([whisper]); without it transcribe()
+returns None and the worker stays idle instead of crashing the API.
+"""
+from __future__ import annotations
+
+import sys
+import tempfile
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+from pathlib import Path
+
+MODEL_NAME = "medium"  # spike winner; large-v3-int8 was slower AND noisier
+
+
+@lru_cache(maxsize=1)
+def _model():
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        return None
+    return WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
+
+
+def transcribe(url: str) -> str | None:
+    """Download one radio clip and transcribe it. None on any failure."""
+    model = _model()
+    if model is None:
+        return None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3") as tmp:
+            with urllib.request.urlopen(url, timeout=30) as resp:
+                tmp.write(resp.read())
+            tmp.flush()
+            segments, _ = model.transcribe(tmp.name, language="en", vad_filter=True)
+            text = " ".join(s.text.strip() for s in segments).strip()
+        return text or None
+    except Exception as exc:  # network/codec hiccups must not kill the caller
+        print(f"radio transcribe failed for {url}: {exc}", file=sys.stderr)
+        return None
+
+
+class TranscriptWorker:
+    """Live-mode transcript cache: one background thread, in-memory results.
+
+    get() never blocks — unknown urls are queued and return None until the
+    worker finishes them. ponytail: in-memory only; the post-race fixture
+    enrichment (CLI) is the durable path.
+    """
+
+    def __init__(self) -> None:
+        self._cache: dict[str, str | None] = {}  # url -> text (None = queued/failed)
+        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="radio-whisper")
+
+    def get(self, url: str) -> str | None:
+        if url not in self._cache:
+            self._cache[url] = None
+            self._pool.submit(self._work, url)
+        return self._cache[url]
+
+    def _work(self, url: str) -> None:
+        text = transcribe(url)
+        if text:
+            self._cache[url] = text
+
+
+def enrich_fixture(path: Path) -> int:
+    """Add payload["transcript"] to radio events of a fixture jsonl, in place.
+
+    Skips events that already carry a transcript, so re-runs only fill gaps.
+    Returns the number of transcripts written.
+    """
+    import json
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    out: list[str] = []
+    done = 0
+    for ln in lines:
+        e = json.loads(ln)
+        p = e.get("payload", {})
+        url = p.get("audio_url")
+        if p.get("category") == "Radio" and url and not p.get("transcript"):
+            text = transcribe(url)
+            if text:
+                p["transcript"] = text
+                done += 1
+                print(f"  {e.get('driver_id')}: {text[:70]}", file=sys.stderr)
+            out.append(json.dumps(e, ensure_ascii=False, separators=(",", ":")))
+        else:
+            out.append(ln)
+    if done:
+        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return done

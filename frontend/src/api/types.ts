@@ -97,6 +97,8 @@ export type FeedItem = {
   kind: string // 'status' | 'fastest_lap' | 'pit' | 'info' | ...
   tag?: 'PIT' | 'FLAG' | 'FASTEST' | 'FINISH' | 'PASS' | 'INFO'
   audio_url?: string
+  /** Whisper transcript of the team-radio clip, when available. */
+  transcript?: string
 }
 
 export type FeedResponse = {

@@ -67,6 +67,7 @@ const FeedRow = React.memo(function FeedRow({
           </button>
         )}
         {item.text}
+        {item.transcript && <span className="ev-transcript">“{item.transcript}”</span>}
       </span>
     </div>
   )

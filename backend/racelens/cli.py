@@ -146,6 +146,13 @@ def _cmd_track_progress(args: argparse.Namespace) -> None:
     print(f"track-progress: {covered}/{len(pos['progress'])} drivers → {pos_path}", file=sys.stderr)
 
 
+def _cmd_radio_transcribe(args: argparse.Namespace) -> None:
+    from racelens.radio.transcribe import enrich_fixture
+
+    done = enrich_fixture(Path(args.fixture))
+    print(f"radio-transcribe: {done} transcripts → {args.fixture}", file=sys.stderr)
+
+
 def _cmd_state(args: argparse.Namespace) -> None:
     from racelens.events.models import load_jsonl
     from racelens.replay.engine import ReplayEngine
@@ -239,6 +246,12 @@ def main() -> None:
     p_prog.add_argument("session", nargs="?", default="R", help="R / Q / FP1 ...")
     p_prog.add_argument("session_id", help="fixture session id, e.g. monaco_2024_race")
     p_prog.set_defaults(func=_cmd_track_progress)
+
+    p_radio = sub.add_parser(
+        "radio-transcribe", help="whisper-transcribe a fixture's team-radio clips in place"
+    )
+    p_radio.add_argument("fixture", help="replay fixture .jsonl with audio_url radio events")
+    p_radio.set_defaults(func=_cmd_radio_transcribe)
 
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
