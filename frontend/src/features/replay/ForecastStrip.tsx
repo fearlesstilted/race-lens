@@ -1,5 +1,5 @@
 /**
- * ForecastStrip — shows PROJECTED FINISH (+10 LAPS) order with delta positions.
+ * ForecastStrip — shows an experimental short-horizon pace outlook.
  * Only rendered when PROJECTION is on and a sessionId (replay) or `live` (live
  * mode, via the /api/live/forecast mirror) is available.
  */
@@ -31,18 +31,19 @@ export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs
   const lastFetch = useRef(0)
 
   useEffect(() => {
+    let cancelled = false
     const run = () => {
       lastFetch.current = Date.now()
       const req = live ? getLiveForecast(10) : sessionId ? getForecast(sessionId, atMs, 10) : null
-      req?.then(setForecast).catch(() => undefined)
+      req?.then((value) => { if (!cancelled) setForecast(value) }).catch(() => undefined)
     }
     const elapsed = Date.now() - lastFetch.current
     if (elapsed >= THROTTLE_MS) {
       run()
-      return
+      return () => { cancelled = true }
     }
     const t = setTimeout(run, THROTTLE_MS - elapsed)
-    return () => clearTimeout(t)
+    return () => { cancelled = true; clearTimeout(t) }
   }, [sessionId, atMs, live])
 
   if (!forecast) return null
@@ -51,7 +52,9 @@ export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs
 
   return (
     <div className="forecast-strip">
-      <div className="forecast-label">PROJECTED FINISH +{forecast.laps_ahead} LAPS</div>
+      <div className="forecast-label">
+        PACE OUTLOOK · +{forecast.effective_laps ?? forecast.laps_ahead} LAPS · UNCALIBRATED
+      </div>
       <div className="forecast-rows">
         {top.map((driverId, i) => {
           const proj = forecast.projected[driverId]

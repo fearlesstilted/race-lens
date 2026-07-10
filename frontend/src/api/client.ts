@@ -1,4 +1,4 @@
-import type { BattlesResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, Capabilities, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path)
@@ -9,6 +9,7 @@ const json = async <T>(path: string): Promise<T> => {
 }
 
 export const listSessions = () => json<SessionSummary[]>('/api/sessions')
+export const getCapabilities = () => json<Capabilities>('/api/capabilities')
 
 export const getTimeline = (sessionId: string) =>
   json<Timeline>(`/api/sessions/${encodeURIComponent(sessionId)}/timeline`)
@@ -79,9 +80,10 @@ export const getMarkers = (sessionId: string, untilMs?: number) =>
     `/api/sessions/${encodeURIComponent(sessionId)}/markers${untilMs !== undefined ? `?until_ms=${untilMs}` : ''}`,
   )
 
-export const getHighlights = (sessionId: string, topN = 8) =>
+export const getHighlights = (sessionId: string, topN = 8, untilMs?: number) =>
   json<HighlightsResponse>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/highlights?top_n=${topN}`,
+    `/api/sessions/${encodeURIComponent(sessionId)}/highlights?top_n=${topN}` +
+    (untilMs !== undefined ? `&until_ms=${Math.max(0, Math.round(untilMs))}` : ''),
   )
 
 export const getDriverOfDay = (sessionId: string, atMs?: number) =>

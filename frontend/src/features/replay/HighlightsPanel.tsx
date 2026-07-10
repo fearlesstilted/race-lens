@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getHighlights } from '../../api/client'
 import type { Highlight, HighlightsResponse } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
@@ -9,6 +9,7 @@ type Lang = 'en' | 'ru'
 type Props = {
   sessionId: string
   lang?: Lang
+  untilMs?: number
   onSeek: (ms: number) => void
 }
 
@@ -42,19 +43,19 @@ const KIND_COLOR: Record<string, string> = {
   UNDERCUT: '#00d2be',
 }
 
-export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {
+export function HighlightsPanel({ sessionId, lang = 'en', untilMs, onSeek }: Props) {
   const [open, setOpen] = useState(false)
+  const [cutoffMs, setCutoffMs] = useState<number | undefined>(undefined)
   const [playing, setPlaying] = useState(false)
   const playRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const playIdxRef = useRef(0)
 
-  const { data, loading } = useAsync<HighlightsResponse>(() => getHighlights(sessionId, 8), [sessionId], open)
-  const highlights: Highlight[] = data?.highlights ?? []
-
-  // Stop playback when closed or session changes
-  useEffect(() => {
-    stopPlay()
-  }, [sessionId])
+  const { data, loading } = useAsync<HighlightsResponse>(
+    () => getHighlights(sessionId, 8, cutoffMs),
+    [sessionId, cutoffMs],
+    open,
+  )
+  const highlights: Highlight[] = useMemo(() => data?.highlights ?? [], [data])
 
   const stopPlay = useCallback(() => {
     if (playRef.current) clearTimeout(playRef.current)
@@ -62,6 +63,11 @@ export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {
     setPlaying(false)
     playIdxRef.current = 0
   }, [])
+
+  // Stop playback when closed or session changes
+  useEffect(() => {
+    stopPlay()
+  }, [sessionId, stopPlay])
 
   const startPlay = useCallback(() => {
     if (highlights.length === 0) return
@@ -84,7 +90,15 @@ export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {
     return () => { if (playRef.current) clearTimeout(playRef.current) }
   }, [])
 
-  const toggle = () => setOpen((v) => !v)
+  const toggle = () => {
+    if (open) {
+      stopPlay()
+      setOpen(false)
+      return
+    }
+    setCutoffMs(untilMs)
+    setOpen(true)
+  }
 
   return (
     <div className="hl-wrap">
@@ -100,7 +114,7 @@ export function HighlightsPanel({ sessionId, lang = 'en', onSeek }: Props) {
       {open && (
         <div className="hl-panel">
           <div className="hl-header">
-            <span className="hl-title">RACE IN 60 SECONDS</span>
+            <span className="hl-title">HIGHLIGHTS SO FAR</span>
             {!playing ? (
               <button
                 type="button"

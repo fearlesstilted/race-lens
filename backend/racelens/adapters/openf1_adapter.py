@@ -634,6 +634,7 @@ class OpenF1IncrementalIngester:
 
         # Latest date seen per time-series endpoint (for date>= filter)
         self._latest: dict[str, str | None] = {ep: None for ep in _TIMESERIES_ENDPOINTS}
+        self._seen_rows: dict[str, set[str]] = {ep: set() for ep in _TIMESERIES_ENDPOINTS}
 
     def _update_latest(self, endpoint: str, new_rows: list[dict]) -> None:
         """Update the latest-date bookmark for *endpoint* from *new_rows*."""
@@ -676,9 +677,16 @@ class OpenF1IncrementalIngester:
         ):
             new_rows = self._fetch_timeseries(endpoint)
             if new_rows:
-                # Append new rows; update bookmark
-                getattr(self, store_attr).extend(new_rows)
-                self._update_latest(endpoint, new_rows)
+                seen = self._seen_rows[endpoint]
+                unique_rows = []
+                for row in new_rows:
+                    key = json.dumps(row, sort_keys=True, separators=(",", ":"), default=str)
+                    if key not in seen:
+                        seen.add(key)
+                        unique_rows.append(row)
+                if unique_rows:
+                    getattr(self, store_attr).extend(unique_rows)
+                    self._update_latest(endpoint, unique_rows)
 
         self._initialized = True
 

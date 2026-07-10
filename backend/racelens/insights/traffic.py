@@ -25,6 +25,8 @@ def detect_traffic_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
 
     for ahead_id, behind_id in itertools.pairwise(order):
         ahead, behind = drivers[ahead_id], drivers[behind_id]
+        if ahead.get("retired") or behind.get("retired"):
+            continue
         interval = behind["interval_s"]
         if interval is None or interval > INTERVAL_THRESHOLD_S:
             continue
@@ -42,7 +44,7 @@ def detect_traffic_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
             type_=f"TRAFFIC_RISK_{severity.upper()}",
             driver_ids=[behind_id, ahead_id],
             severity=severity,
-            confidence="high" if behind["laps_completed"] >= 2 else "medium",
+            confidence="medium",
             evidence={
                 "interval_s": interval,
                 "pace_delta_ms": pace_delta_ms,

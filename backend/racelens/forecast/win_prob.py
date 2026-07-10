@@ -1,4 +1,4 @@
-"""Win probability model.
+"""Uncalibrated gap-pressure score.
 
 Transparent, deterministic, no ML.
 
@@ -14,11 +14,11 @@ A Gaussian kernel converts current gaps into raw scores:
     P_raw_i = exp(-(gap_i / sigma_s)^2 / 2)
 
 Scores are normalised to sum = 1.  The race leader (gap=0) always gets the
-maximum.  As laps_remaining → 0, sigma → 0 → leader probability → 1.
+maximum. As laps_remaining → 0, sigma → 0 and the score concentrates on the leader.
 Retired drivers receive P = 0 and are excluded from normalisation.
 
 This produces a smooth, reactive curve: early in the race multiple drivers
-share probability; late the leader converges toward ~95-100%.  Pit stops and
+share the score; late it concentrates on the leader. Pit stops and
 lead changes cause visible dips/spikes.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ DEFAULT_LAPS_REMAINING: int = 25
 
 
 def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) -> dict:
-    """Return win probabilities for all drivers.
+    """Return normalized gap-pressure scores for all drivers.
 
     Parameters
     ----------
@@ -85,7 +85,10 @@ def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) 
         info = drivers_dict.get(driver_id, {})
         if info.get("retired"):
             continue
-        gap_s: float = float(info.get("gap_s") or 0.0)
+        gap = info.get("gap_s")
+        if gap is None:
+            continue
+        gap_s = float(gap)
         raw[driver_id] = math.exp(-((gap_s / sigma_s) ** 2) / 2.0)
 
     total = sum(raw.values())
@@ -102,13 +105,19 @@ def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) 
     for d in retired:
         win_prob[d] = 0.0
 
-    # Leader = driver with gap_s == 0 (position 1), or first in classification
+    # Leader = official P1, then an explicit zero-gap fallback.
     leader: str | None = None
     for driver_id in classification:
         info = drivers_dict.get(driver_id, {})
-        if not info.get("retired") and (info.get("gap_s") or 0.0) == 0.0:
+        if not info.get("retired") and info.get("position") == 1:
             leader = driver_id
             break
+    if leader is None:
+        for driver_id in classification:
+            info = drivers_dict.get(driver_id, {})
+            if not info.get("retired") and info.get("gap_s") == 0.0:
+                leader = driver_id
+                break
     if leader is None and classification:
         leader = classification[0]
 
@@ -117,7 +126,10 @@ def win_probability(state: Any, session_id: str, laps_ahead: int | None = None) 
     return {
         "at_ms": at_ms,
         "laps_remaining": laps_remaining,
+        "model": "gap_pressure_v1",
+        "calibrated": False,
         "win_prob": win_prob,
+        "win_score": win_prob,
         "leader": leader,
         "top": [{"driver": d, "prob": p} for d, p in top],
     }

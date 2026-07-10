@@ -54,6 +54,8 @@ class LiveRunner:
         self._new_last_poll: int = 0
         self._consecutive_failures: int = 0
         self._last_poll_unix: float | None = None
+        self._last_new_event_unix: float | None = None
+        self._last_error: str | None = None
 
         # Wall-clock time.time() when a "finished" SessionStatusChanged was
         # first observed in a fetched snapshot. None until then. Drives the
@@ -100,7 +102,23 @@ class LiveRunner:
         return self._polls
 
     def status(self) -> dict[str, Any]:
-        if self._consecutive_failures >= 5:
+        stale_after = max(30.0, self._interval * 3)
+        no_new_for = (
+            time.time() - self._last_new_event_unix
+            if self._last_new_event_unix is not None else None
+        )
+        session_running = False
+        if self.engine is not None and self.engine.events:
+            for event in reversed(self.engine.events):
+                if event.type == "SessionStatusChanged":
+                    session_running = event.payload.get("status") == "started"
+                    break
+                if event.type == "SessionStarted":
+                    session_running = True
+                    break
+        if self._consecutive_failures >= 5 or (self._polls >= 3 and self.engine is None) or (
+            session_running and no_new_for is not None and no_new_for > stale_after
+        ):
             dq = "stalled"
         elif self._consecutive_failures >= 2:
             dq = "degraded"
@@ -112,6 +130,8 @@ class LiveRunner:
             "new_last_poll": self._new_last_poll,
             "consecutive_failures": self._consecutive_failures,
             "last_poll_unix": self._last_poll_unix,
+            "last_new_event_unix": self._last_new_event_unix,
+            "last_error": self._last_error,
             "data_quality": dq,
         }
 
@@ -130,11 +150,12 @@ class LiveRunner:
         """Execute one poll cycle synchronously.  Errors increment failure counter."""
         try:
             events = self._fetch()
-        except Exception:
+        except Exception as exc:
             self._consecutive_failures += 1
             self._polls += 1
             self._last_poll_unix = time.time()
             self._new_last_poll = 0
+            self._last_error = f"{type(exc).__name__}: {exc}"
             return
 
         new_count = 0
@@ -148,6 +169,8 @@ class LiveRunner:
 
         if self._all:
             self.engine = ReplayEngine(self._all.values())
+        if new_count:
+            self._last_new_event_unix = time.time()
 
         # First sighting of a "finished" status starts the auto-stop countdown
         # (checked once per poll in _loop, no extra thread/timer needed).
@@ -158,6 +181,7 @@ class LiveRunner:
             self._finish_seen_at = time.time()
 
         self._consecutive_failures = 0
+        self._last_error = None
         self._new_last_poll = new_count
         self._polls += 1
         self._last_poll_unix = time.time()

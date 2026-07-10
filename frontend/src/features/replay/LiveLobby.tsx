@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getLiveSessions, liveStatus } from '../../api/client'
+import { getLiveSessions } from '../../api/client'
 import type { LiveSessionInfo, LiveSource } from '../../api/client'
 import { TrackMap } from './TrackMap'
 
@@ -8,7 +8,8 @@ import { TrackMap } from './TrackMap'
 type LobbyPhase = 'LOBBY' | 'SESSIONS' | 'COUNTDOWN' | 'LIVE'
 
 type Props = {
-  onStart: (year: number, country: string, sessionName: string, source: LiveSource) => void
+  signalrAvailable: boolean
+  onStart: (year: number, country: string, sessionName: string, source: LiveSource) => Promise<void>
   onStop: () => void
 }
 
@@ -37,14 +38,14 @@ function localTimeLabel(iso: string): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function LiveLobby({ onStart, onStop }: Props) {
+export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
   const [phase, setPhase] = useState<LobbyPhase>('LOBBY')
 
   // LOBBY inputs
   const [year, setYear] = useState(2026)
   const [country, setCountry] = useState('Austria')
   // signalr = free official F1 live-timing feed (default); openf1 realtime is paid.
-  const [source, setSource] = useState<LiveSource>('signalr')
+  const [source, setSource] = useState<LiveSource>(signalrAvailable ? 'signalr' : 'openf1')
   // signalr only: FastF1 session name — no OpenF1 discovery involved.
   const [sessionName, setSessionName] = useState('Race')
   const [loadBusy, setLoadBusy] = useState(false)
@@ -57,13 +58,11 @@ export function LiveLobby({ onStart, onStop }: Props) {
   const [countdownTarget, setCountdownTarget] = useState<LiveSessionInfo | null>(null)
   const [remainMs, setRemainMs] = useState(0)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Clear intervals on unmount
   useEffect(() => {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current)
-      if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [])
 
@@ -84,18 +83,27 @@ export function LiveLobby({ onStart, onStop }: Props) {
 
   // F1 FEED path: connect straight to the official SignalR feed — no OpenF1
   // discovery (which 401/502s on race days), no session list, just start.
-  const handleDirectStart = useCallback(() => {
+  const startSession = useCallback(async (name: string, nextSource: LiveSource) => {
     if (!country.trim()) { setLoadErr('Enter the Grand Prix name, e.g. Silverstone'); return }
+    setLoadBusy(true)
     setLoadErr(null)
-    setPhase('LIVE')
-    onStart(year, country.trim(), sessionName.trim() || 'Race', 'signalr')
-  }, [year, country, sessionName, onStart])
+    try {
+      await onStart(year, country.trim(), name, nextSource)
+      setPhase('LIVE')
+    } catch (error) {
+      setLoadErr(error instanceof Error ? error.message : 'Failed to start live session')
+    } finally {
+      setLoadBusy(false)
+    }
+  }, [year, country, onStart])
+
+  const handleDirectStart = useCallback(() => {
+    void startSession(sessionName.trim() || 'Race', 'signalr')
+  }, [sessionName, startSession])
 
   const handleSessionClick = useCallback((session: LiveSessionInfo) => {
     if (session.started) {
-      // Immediately start live stream
-      setPhase('LIVE')
-      onStart(year, country.trim(), session.session_name, source)
+      void startSession(session.session_name, source)
     } else {
       // Enter countdown
       setCountdownTarget(session)
@@ -103,7 +111,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
       setRemainMs(Math.max(0, target - Date.now()))
       setPhase('COUNTDOWN')
     }
-  }, [year, country, source, onStart])
+  }, [source, startSession])
 
   // Countdown tick + live-start polling
   useEffect(() => {
@@ -117,33 +125,17 @@ export function LiveLobby({ onStart, onStop }: Props) {
     tick()
     countdownRef.current = setInterval(tick, 1000)
 
-    // Poll /api/live/status every 15 s to auto-transition to LIVE when data arrives
-    const poll = () => {
-      liveStatus()
-        .then((s) => {
-          // events_total isn't in liveStatus, but poll_count > 0 and is_running means data is flowing
-          if (s.is_running && s.poll_count > 0 && s.last_poll_ok) {
-            setPhase('LIVE')
-            onStart(year, country.trim(), countdownTarget.session_name, source)
-          }
-        })
-        .catch(() => undefined)
-    }
-    pollRef.current = setInterval(poll, 15000)
-
     return () => {
       if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     }
-  }, [phase, countdownTarget, year, country, source, onStart])
+  }, [phase, countdownTarget])
 
   // Also auto-start when countdown hits zero
   useEffect(() => {
     if (phase === 'COUNTDOWN' && remainMs === 0 && countdownTarget) {
-      setPhase('LIVE')
-      onStart(year, country.trim(), countdownTarget.session_name, source)
+      void startSession(countdownTarget.session_name, source)
     }
-  }, [remainMs, phase, countdownTarget, year, country, source, onStart])
+  }, [remainMs, phase, countdownTarget, source, startSession])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -183,8 +175,8 @@ export function LiveLobby({ onStart, onStop }: Props) {
                 style={{ width: '7rem' }}
                 onKeyDown={(e) => e.key === 'Enter' && handleDirectStart()}
               />
-              <button className="b primary" type="button" onClick={handleDirectStart}>
-                START
+              <button className="b primary" type="button" onClick={handleDirectStart} disabled={loadBusy}>
+                {loadBusy ? '...' : 'START'}
               </button>
             </>
           ) : (
@@ -197,6 +189,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
               type="button"
               className={`tog${source === 'signalr' ? ' tog-on' : ''}`}
               onClick={() => setSource('signalr')}
+              disabled={!signalrAvailable}
               title="Official F1 live-timing feed — free, direct connect"
             >
               F1 FEED
@@ -239,6 +232,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
               type="button"
               className={`b${s.started ? ' primary' : ''}`}
               onClick={() => handleSessionClick(s)}
+              disabled={loadBusy}
               title={s.started ? `Started at ${localTimeLabel(s.date_start)}` : `Starts at ${localTimeLabel(s.date_start)}`}
             >
               {s.session_name}
@@ -288,7 +282,7 @@ export function LiveLobby({ onStart, onStop }: Props) {
             <button className="b danger" type="button" onClick={() => { setPhase('LOBBY'); onStop() }}>STOP</button>
           </div>
           <div style={{ marginTop: '0.75rem', color: '#555', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
-            POLLING FOR LIVE DATA EVERY 15 S
+            LIVE CAPTURE STARTS AT THE SCHEDULED TIME
           </div>
         </div>
       </div>

@@ -28,6 +28,8 @@ def detect_undercut_risk(state: dict[str, Any]) -> list[dict[str, Any]]:
 
     for ahead_id, behind_id in itertools.pairwise(order):
         ahead, behind = drivers[ahead_id], drivers[behind_id]
+        if ahead.get("retired") or behind.get("retired"):
+            continue
         interval = behind["interval_s"]
         if interval is None or interval > STRIKE_RANGE_S:
             continue

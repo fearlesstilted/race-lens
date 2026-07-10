@@ -9,9 +9,9 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from racelens.events.models import event
-from racelens.live.runner import LiveRunner
-from tests.test_replay import mini_race, SID
+from racelens.events.models import event  # noqa: E402
+from racelens.live.runner import LiveRunner  # noqa: E402
+from tests.test_replay import mini_race, SID  # noqa: E402
 
 
 def _big_race(n_laps: int = 60, n_drivers: int = 20) -> list:
@@ -198,6 +198,13 @@ def test_empty_poll_does_not_raise():
     assert runner.polls == 1
     assert runner.status()["events_total"] == 0
     assert runner.engine is None
+
+
+def test_repeated_empty_polls_become_stalled():
+    runner = LiveRunner(lambda: [], poll_interval_s=5.0)
+    for _ in range(3):
+        runner._poll_once()
+    assert runner.status()["data_quality"] == "stalled"
 
 
 def test_state_now_before_data_returns_error_dict():

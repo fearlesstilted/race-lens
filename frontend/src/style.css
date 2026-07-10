@@ -156,6 +156,11 @@ body {
               background-color .15s ease, transform .08s ease;
 }
 .tog:active { transform: translateY(1px); }
+.tog:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
 .tog:first-child {
   border-right: none;
 }
@@ -1555,9 +1560,10 @@ body {
   .col-center .ev-scroll {
     display: none;
   }
-  /* ctr-bottom and tabs: show on tablet, but collapse to minimal height */
+  /* Keep the feed and optional analysis tabs reachable on tablet. */
   .col-center .ctr-bottom {
-    display: none;
+    display: flex;
+    max-height: 22vh;
   }
   /* Insights col auto width on tablet */
   .col-insights {
@@ -2063,6 +2069,11 @@ body {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #3a3a44 transparent;
+}
+@media (hover: none) {
+  .ctr-pane .ev-scroll {
+    overflow-y: auto;
+  }
 }
 /* Override: hide the old col-center ev-scroll rules for ctr-pane */
 .col-center .ctr-bottom .ev-scroll {

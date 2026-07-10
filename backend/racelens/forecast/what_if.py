@@ -1,11 +1,9 @@
-"""What-If counterfactual race-finish forecast.
+"""What-if strategy sensitivity experiment.
 
-Projects the race order to the end using project_order logic,
-then re-projects with a modified driver state to answer:
+Compares the pace outlook with a modified driver state to answer:
   - "baseline"    : what does project_order predict for the rest?
   - "pit_now"     : driver pits now (pit_loss + fresh tyre gain) vs. others at baseline.
   - "stay_out"    : driver skips their stop — degradation penalty compounds.
-  - "no_safety_car": approximate baseline (no gap-compression modelled for MVP).
 
 All outputs are deterministic; no ML, no randomness.
 """
@@ -23,7 +21,7 @@ FRESH_TYRE_GAIN_MS_PER_LAP: float = 400.0
 # Extra degradation per lap added when "stay_out" (worn-tyre penalty, ms/lap).
 STAY_OUT_DEG_PENALTY_MS_PER_LAP: float = 200.0
 
-VALID_SCENARIOS = {"baseline", "pit_now", "stay_out", "no_safety_car"}
+VALID_SCENARIOS = {"baseline", "pit_now", "stay_out"}
 
 
 def _laps_remaining(state: dict) -> int:
@@ -59,22 +57,22 @@ def _build_summary(
             d, b, s = movers[0]
             delta = b - s
             sign = f"+{delta}" if delta > 0 else str(delta)
-            en = f"{d} finishes P{s} instead of P{b} ({sign}) · {scenario}"
-            ru = f"{d} финишировал бы P{s} вместо P{b} ({sign}) · {scenario}"
+            en = f"Sensitivity moves {d} from P{b} to P{s} ({sign}) · {scenario}"
+            ru = f"Сценарий сдвигает {d} с P{b} на P{s} ({sign}) · {scenario}"
         else:
-            en = f"No position changes predicted · {scenario}"
-            ru = f"Изменений позиций не ожидается · {scenario}"
+            en = f"No position changes in this sensitivity · {scenario}"
+            ru = f"В этом сценарии позиции не меняются · {scenario}"
         return en, ru
 
     b_pos = (baseline_order.index(driver) + 1) if driver in baseline_order else None
     s_pos = (scenario_order.index(driver) + 1) if driver in scenario_order else None
     if b_pos is None or s_pos is None:
-        return f"{driver} not in projection", f"{driver} не в прогнозе"
+        return f"{driver} not in pace outlook", f"{driver} отсутствует в расчёте темпа"
 
     delta = b_pos - s_pos  # positive = gained
     sign = f"+{delta}" if delta > 0 else str(delta)
-    en = f"{driver} finishes P{s_pos} instead of P{b_pos} ({sign})"
-    ru = f"{driver} финишировал бы P{s_pos} вместо P{b_pos} ({sign})"
+    en = f"Sensitivity moves {driver} from P{b_pos} to P{s_pos} ({sign})"
+    ru = f"Сценарий сдвигает {driver} с P{b_pos} на P{s_pos} ({sign})"
     return en, ru
 
 
@@ -84,7 +82,7 @@ def what_if(
     scenario: str,
     driver: str | None = None,
 ) -> dict[str, Any]:
-    """Compute a what-if counterfactual finish projection.
+    """Compute an uncalibrated what-if sensitivity comparison.
 
     Parameters
     ----------
@@ -132,7 +130,10 @@ def what_if(
             raise ValueError(f"Driver '{driver}' not found or retired in state")
 
         # Apply pit loss: increase gap_s by pit_loss_s (driver drops back)
-        current_gap_s: float = drv_info.get("gap_s") or 0.0
+        current_gap = drv_info.get("gap_s")
+        if current_gap is None and drv_info.get("position") != 1:
+            raise ValueError(f"Gap data unavailable for '{driver}'")
+        current_gap_s = float(current_gap or 0.0)
         drv_info["gap_s"] = current_gap_s + pit_loss_s
 
         # Fresh tyre: reset tyre_age to 0, add pace bonus by reducing recent_laps_ms
@@ -170,16 +171,6 @@ def what_if(
         )
         scenario_order = _project_finish(mod_state, laps_rem)
 
-    elif scenario == "no_safety_car":
-        # MVP approximation: baseline without SC gap-compression modelling.
-        # A true no-SC simulation would require re-running the whole race; for now
-        # we return baseline and note the approximation.
-        scenario_order = baseline_order[:]
-        assumptions.append(
-            "no_safety_car: approximate — gap-compression effect of SC not modelled; "
-            "result equals baseline (MVP)"
-        )
-
     else:
         scenario_order = baseline_order[:]
 
@@ -203,6 +194,8 @@ def what_if(
     en, ru = _build_summary(driver, baseline_order, scenario_order, scenario)
 
     return {
+        "model": "strategy_sensitivity_v1",
+        "calibrated": False,
         "scenario": scenario,
         "driver": driver,
         "baseline_order": baseline_order,

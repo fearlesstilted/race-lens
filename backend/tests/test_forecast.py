@@ -111,15 +111,16 @@ def test_project_order_skips_retired():
     assert "RET" not in result["projected"]
 
 
-def test_project_order_skips_no_lap_data():
+def test_project_order_preserves_current_place_without_lap_data():
     state = _mk_state({
         "VER": {"position": 1, "gap_s": 0.0, "last_lap_ms": 78_000, "recent_laps_ms": [78_000, 78_000]},
         "NEW": {"position": 2, "gap_s": 5.0, "last_lap_ms": None, "recent_laps_ms": []},
     })
     result = project_order(state, laps_ahead=5)
-    # NEW has no lap data → skipped gracefully; VER still projects
+    # Unknown pace must not make a classified driver disappear.
     assert "VER" in result["projected"]
-    assert "NEW" not in result["projected"]
+    assert result["projected_order"] == ["VER", "NEW"]
+    assert result["projected"]["NEW"]["projected_gap_s"] is None
 
 
 def test_project_order_empty_state():
@@ -220,7 +221,16 @@ def test_simulate_pit_retired_driver_returns_error():
         "RET": {"position": None, "gap_s": 50.0, "retired": True},
     })
     result = simulate_pit(state, "RET", "spain_2024_race")
-    assert "error" in result["evidence"]
+    assert result["error"] == "driver not found or retired"
+
+
+def test_simulate_pit_missing_gap_is_not_treated_as_leader():
+    state = _mk_state({
+        "VER": {"position": 1, "gap_s": 0.0, "last_lap_ms": 78_000},
+        "NOR": {"position": 2, "gap_s": None, "last_lap_ms": 78_100},
+    })
+    result = simulate_pit(state, "NOR", "spain_2024_race")
+    assert result["error"] == "gap data unavailable"
 
 
 def test_simulate_pit_track_pit_loss_used():
@@ -343,6 +353,11 @@ def test_track_params_prefix_match():
     p = track_params("spain_2024_race")
     assert p["pit_loss_s"] == 21.0
     assert p["overtake_difficulty"] == 0.55
+
+
+def test_track_params_matches_internal_session_order():
+    from racelens.forecast.tracks import track_params
+    assert track_params("2024_spain_r")["overtake_difficulty"] == 0.55
 
 
 def test_track_params_fallback():

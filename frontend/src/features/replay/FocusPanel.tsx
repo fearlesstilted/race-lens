@@ -91,7 +91,7 @@ function WhatIfCard({ result, lang }: { result: WhatIf; lang?: string }) {
           ))}
         </div>
       )}
-      <div className="what-if-note">projection · approximate</div>
+      <div className="what-if-note">strategy sensitivity · uncalibrated</div>
     </div>
   )
 }
@@ -175,6 +175,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
             {pitBusy ? '…' : 'PIT NOW'}
           </button>
           {pitSim && !pitSim.error && pitSim.evidence && <PitSimCard ev={pitSim.evidence} />}
+          {pitSim?.error && <span className="live-err">{pitSim.error}</span>}
         </div>
       )}
       {sessionId && (

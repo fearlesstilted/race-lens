@@ -25,6 +25,8 @@ def detect_degradation(state: dict[str, Any]) -> list[dict[str, Any]]:
     insights = []
 
     for drv_id, d in drivers.items():
+        if d.get("retired"):
+            continue
         laps = d.get("recent_laps_ms", [])
         if len(laps) != 3:  # 3 == RECENT_LAPS_WINDOW in racelens/replay/engine.py
             continue
@@ -46,7 +48,7 @@ def detect_degradation(state: dict[str, Any]) -> list[dict[str, Any]]:
             type_="DEGRADATION_TREND_DETECTED",
             driver_ids=[drv_id],
             severity=severity,
-            confidence="high",
+            confidence="medium",
             evidence={"laps_ms": laps, "drift_ms": drift, "tyre_age_laps": age},
             state=state,
         ))

@@ -242,18 +242,28 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             # increments as a DICT of patches. Accept both, else starting
             # compounds are lost on mid-join and TYR stays empty until a stop.
             if isinstance(stints, dict):
-                stint_iter = stints.values()
+                ordered = [
+                    stints[key]
+                    for key in sorted(
+                        stints,
+                        key=lambda key: (0, int(key)) if str(key).isdigit() else (1, str(key)),
+                    )
+                ]
             elif isinstance(stints, list):
-                stint_iter = stints
+                ordered = stints
             else:
                 continue
-            for stint in stint_iter:
-                if isinstance(stint, dict) and stint.get("Compound"):
-                    events.append(event(
-                        sid, "TyreStintUpdated", t_ms, drv(str(num)),
-                        compound=str(stint["Compound"]).capitalize(),
-                        age_laps=int(stint.get("TotalLaps") or 0),
-                    ))
+            current = next(
+                (stint for stint in reversed(ordered)
+                 if isinstance(stint, dict) and stint.get("Compound")),
+                None,
+            )
+            if current:
+                events.append(event(
+                    sid, "TyreStintUpdated", t_ms, drv(str(num)), source="f1live",
+                    compound=str(current["Compound"]).capitalize(),
+                    age_laps=int(current.get("TotalLaps") or 0),
+                ))
 
     # Pass 1: driver names from ALL DriverList payloads (keyframes included),
     # so events emitted from early lines already carry abbreviations.

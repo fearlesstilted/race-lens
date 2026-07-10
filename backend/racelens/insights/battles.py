@@ -33,6 +33,8 @@ def detect_battles(state: dict[str, Any]) -> list[dict[str, Any]]:
         attacker = drivers.get(attacker_id)
         if defender is None or attacker is None:
             continue
+        if defender.get("retired") or attacker.get("retired"):
+            continue
         if defender.get("in_pit", False) or attacker.get("in_pit", False):
             continue
 

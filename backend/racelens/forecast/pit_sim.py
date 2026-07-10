@@ -53,11 +53,18 @@ def simulate_pit(state: Any, driver: str, session_id: str) -> dict:
     if info is None or info.get("retired"):
         return {
             "driver": driver,
-            "confidence": "model",
-            "evidence": {"error": "driver not found or retired"},
+            "confidence": "unavailable",
+            "error": "driver not found or retired",
         }
 
-    current_gap_s: float = info.get("gap_s") or 0.0
+    current_gap = info.get("gap_s")
+    if current_gap is None and info.get("position") != 1:
+        return {
+            "driver": driver,
+            "confidence": "unavailable",
+            "error": "gap data unavailable",
+        }
+    current_gap_s = float(current_gap or 0.0)
     rejoin_gap_s: float = current_gap_s + pit_loss_s
 
     # Find where driver re-joins: first car whose gap_s > rejoin_gap_s
@@ -70,7 +77,7 @@ def simulate_pit(state: Any, driver: str, session_id: str) -> dict:
 
     rejoin_pos: int = 1
     for _, rival_info in active:
-        if (rival_info.get("gap_s") or 0.0) < rejoin_gap_s:
+        if float(rival_info["gap_s"]) < rejoin_gap_s:
             rejoin_pos += 1
 
     # Key rival: the car immediately ahead right now (smallest positive interval)

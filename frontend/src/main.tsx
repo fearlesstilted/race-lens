@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { listSessions, liveStart, liveStatus, liveStop } from './api/client'
+import { getCapabilities, listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
@@ -43,6 +43,7 @@ type DrawerProps = {
   lang: string
   level: string
   mode: string
+  liveAvailable: boolean
   projection: boolean
   winProb: boolean
   onLang: (l: 'en' | 'ru') => void
@@ -60,7 +61,7 @@ type DrawerProps = {
   atMs?: number
 }
 
-function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang, sessionStatus, lap, totalLaps, atMs }: DrawerProps) {
+function SettingsDrawer({ open, onClose, lang, level, mode, liveAvailable, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang, sessionStatus, lap, totalLaps, atMs }: DrawerProps) {
   return (
     <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="settings-backdrop" onClick={onClose} />
@@ -74,7 +75,7 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
           <div className="settings-group-label">MODE</div>
           <div className="tog-group">
             <button type="button" className={`tog${mode === 'replay' ? ' tog-on' : ''}`} onClick={() => { onModeChange('replay'); onClose() }}>REPLAY</button>
-            <button type="button" className={`tog${mode === 'live' ? ' tog-on' : ''}`} onClick={() => { onModeChange('live'); onClose() }}>LIVE</button>
+            <button type="button" className={`tog${mode === 'live' ? ' tog-on' : ''}`} disabled={!liveAvailable} onClick={() => { onModeChange('live'); onClose() }}>LIVE</button>
           </div>
         </div>
 
@@ -97,10 +98,10 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
         <div className="settings-group">
           <div className="settings-group-label">OVERLAYS</div>
           <div className="tog-group" style={{ marginBottom: 8 }}>
-            <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PROJECTION</button>
+            <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PACE OUTLOOK</button>
           </div>
           <div className="tog-group">
-            <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>WIN %</button>
+            <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>GAP SCORE</button>
           </div>
         </div>
 
@@ -109,7 +110,7 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
           <div className="settings-group drawer-panels-group">
             <div className="settings-group-label">HIGHLIGHTS &amp; DOTD</div>
             <div className="drawer-panels-inner">
-              <HighlightsPanel sessionId={sessionId} lang={drawerLang} onSeek={(ms) => { onSeek(ms); onClose() }} />
+              <HighlightsPanel sessionId={sessionId} lang={drawerLang} untilMs={atMs} onSeek={(ms) => { onSeek(ms); onClose() }} />
               <DriverOfDayPanel sessionId={sessionId} lang={drawerLang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
             </div>
           </div>
@@ -121,7 +122,7 @@ function SettingsDrawer({ open, onClose, lang, level, mode, projection, winProb,
 
 // ── Center bottom segment tabs ────────────────────────────────────────────────
 
-type CenterTab = 'FEED' | 'FORECAST' | 'WIN%' | 'STRATEGY'
+type CenterTab = 'FEED' | 'PACE' | 'GAP' | 'STRATEGY'
 
 type CenterTabsProps = {
   activeTab: CenterTab
@@ -134,8 +135,8 @@ type CenterTabsProps = {
 function CenterTabs({ activeTab, showForecast, showWinProb, showStrategy, onTab }: CenterTabsProps) {
   const tabs: CenterTab[] = ['FEED']
   if (showStrategy) tabs.push('STRATEGY')
-  if (showForecast) tabs.push('FORECAST')
-  if (showWinProb) tabs.push('WIN%')
+  if (showForecast) tabs.push('PACE')
+  if (showWinProb) tabs.push('GAP')
   if (tabs.length <= 1) return null
   return (
     <div className="ctr-tabs">
@@ -166,6 +167,8 @@ function App() {
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
+  const [liveAvailable, setLiveAvailable] = useState(false)
+  const [signalrAvailable, setSignalrAvailable] = useState(false)
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -179,6 +182,12 @@ function App() {
   const [voice, setVoice] = useState(false)
   // Center bottom segment tab
   const [centerTab, setCenterTab] = useState<CenterTab>('FEED')
+
+  useEffect(() => {
+    if ((centerTab === 'PACE' && !projection) || (centerTab === 'GAP' && !winProb)) {
+      setCenterTab('FEED')
+    }
+  }, [centerTab, projection, winProb])
 
   // Build DataSource from current mode
   const source = useMemo<DataSource | null>(() => {
@@ -204,6 +213,18 @@ function App() {
         if (cancelled) return
         setSessionError(err instanceof Error ? err.message : 'Could not load sessions')
       })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getCapabilities()
+      .then((value) => {
+        if (cancelled) return
+        setLiveAvailable(!value.readonly)
+        setSignalrAvailable(value.signalr_available)
+      })
+      .catch(() => undefined)
     return () => { cancelled = true }
   }, [])
 
@@ -259,6 +280,7 @@ function App() {
 
   const handleModeSwitch = (next: AppMode) => {
     if (next === mode) return
+    if (next === 'live' && !liveAvailable) return
     replay.pause()
     setMode(next)
     setIsLiveActive(false)
@@ -321,6 +343,7 @@ function App() {
         lang={replay.lang}
         level={replay.level}
         mode={mode}
+        liveAvailable={liveAvailable}
         projection={projection}
         winProb={winProb}
         onLang={replay.setLang}
@@ -345,6 +368,7 @@ function App() {
         lang={replay.lang}
         level={replay.level}
         mode={mode}
+        liveAvailable={liveAvailable}
         projection={projection}
         winProb={winProb}
         voice={voice}
@@ -364,13 +388,10 @@ function App() {
 
       {mode === 'live' && !isLiveActive && (
         <LiveLobby
+          signalrAvailable={signalrAvailable}
           onStart={async (y, c, sessionName, source) => {
-            try {
-              await liveStart(y, c, sessionName, 2, source)
-              setIsLiveActive(true)
-            } catch {
-              // error is surfaced inside LiveLobby via the live/start call failure
-            }
+            await liveStart(y, c, sessionName, 12, source)
+            setIsLiveActive(true)
           }}
           onStop={() => { setIsLiveActive(false); setLiveStatusData(null) }}
         />
@@ -400,8 +421,8 @@ function App() {
         greenFlag={replay.greenFlag}
         greenFlagText={replay.greenFlagText}
       />
-      {replay.feedError && (
-        <div className="feed-error">{replay.feedError}</div>
+      {(replay.error || replay.feedError) && (
+        <div className="feed-error">{replay.error || replay.feedError}</div>
       )}
 
       {/* Mobile tab bar — CSS shows only on <768px */}
@@ -458,12 +479,12 @@ function App() {
               {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
                 <StintTimeline sessionId={sessionId} order={state?.classification} />
               )}
-              {centerTab === 'FORECAST' && projection && (
+              {centerTab === 'PACE' && projection && (
                 mode === 'replay'
                   ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
                   : isLiveActive && <ForecastStrip live atMs={replay.atMs} />
               )}
-              {centerTab === 'WIN%' && winProb && (
+              {centerTab === 'GAP' && winProb && (
                 mode === 'replay'
                   ? sessionId && <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
                   : isLiveActive && <WinProbGraph live atMs={replay.atMs} />

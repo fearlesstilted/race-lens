@@ -154,7 +154,7 @@ function clusterMarkers(
 
 export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, markers = [], lang = 'en', canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
-    try { return localStorage.getItem(SPOILER_KEY) === '1' } catch { return false }
+    try { return localStorage.getItem(SPOILER_KEY) !== '0' } catch { return true }
   })
   const railRef = useRef<HTMLDivElement>(null)
 
@@ -201,6 +201,19 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
       return next
     })
   }, [])
+
+  const handleRailKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!timeline || !canScrub) return
+    const step = Math.max(1000, Math.round(duration / 100))
+    let next = atMs
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next -= step
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += step
+    else if (event.key === 'Home') next = startMs
+    else if (event.key === 'End') next = endMs
+    else return
+    event.preventDefault()
+    onScrub(Math.min(endMs, Math.max(startMs, next)))
+  }, [atMs, canScrub, duration, endMs, onScrub, startMs, timeline])
 
   // Clock is race-relative: 0:00 at lights-out. During the formation lap
   // (before lights-out) show a label instead of a time.
@@ -259,7 +272,18 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
         })}
       </div>
       {/* Timeline rail */}
-      <div className={`rail${canScrub ? '' : ' rail-disabled'}`} ref={railRef} onClick={handleRailClick}>
+      <div
+        className={`rail${canScrub ? '' : ' rail-disabled'}`}
+        ref={railRef}
+        onClick={handleRailClick}
+        onKeyDown={handleRailKeyDown}
+        role="slider"
+        tabIndex={canScrub ? 0 : -1}
+        aria-label="Replay position"
+        aria-valuemin={startMs}
+        aria-valuemax={endMs}
+        aria-valuenow={atMs}
+      >
         <div className="line" />
         <div
           className="played"
@@ -315,6 +339,14 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
               key={`m-${cluster.pct.toFixed(3)}`}
               title={tipText}
               onClick={handleMarkerClick}
+              onKeyDown={(event) => {
+                if ((event.key === 'Enter' || event.key === ' ') && canScrub) {
+                  event.preventDefault()
+                  onScrub(primary.at_ms)
+                }
+              }}
+              role="button"
+              tabIndex={canScrub ? 0 : -1}
               className={markerCls}
               style={{
                 left: `${cluster.pct}%`,
@@ -405,9 +437,21 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
                 {s}×
               </button>
             ))}
-            <div className="sp" role="button" tabIndex={0} onClick={toggleSpoiler} onKeyDown={(e) => e.key === 'Enter' && toggleSpoiler()}>
+            <div
+              className="sp"
+              role="switch"
+              aria-checked={spoilerFree}
+              tabIndex={0}
+              onClick={toggleSpoiler}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  toggleSpoiler()
+                }
+              }}
+            >
               SPOILER-FREE
-              <span className={`sw${spoilerFree ? ' sw-on' : ''}`} aria-checked={spoilerFree} role="switch" />
+              <span className={`sw${spoilerFree ? ' sw-on' : ''}`} />
             </div>
             <span className="clock">
               <small>SESSION</small>

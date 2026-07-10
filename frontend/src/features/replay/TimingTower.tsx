@@ -274,6 +274,16 @@ export const TimingTower = React.memo(function TimingTower({
               .filter(Boolean)
               .join(' ')}
             onClick={() => onSelectDriver(row.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelectDriver(row.id)
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isSelected}
+            aria-label={`${row.id}, position ${row.position ?? 'unknown'}`}
             style={{ cursor: 'pointer' }}
           >
             <span className="pos-wrap">

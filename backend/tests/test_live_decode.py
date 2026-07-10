@@ -13,6 +13,11 @@ TRACK = json.loads(
 )
 
 
+# ponytail: round-trip tests validate our format HYPOTHESIS against our own
+# encoder (headerless deflate, corroborated by fastf1's parser — but not by a
+# real byte from the wire: 0 Position.z lines in all anonymous captures).
+# First authed live capture (Spa FP1) must land a real line here as a fixture
+# and this file switches to decoding THAT. Until then: green ≠ proven.
 def test_roundtrip() -> None:
     data = {
         "Position": [

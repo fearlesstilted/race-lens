@@ -66,6 +66,29 @@ def test_state_after_pit_stop():
     assert s["lap"] == 1                   # nobody finished lap 2 yet
 
 
+def test_pit_out_resets_recent_stint_pace():
+    before = ReplayEngine(mini_race()).state_at(120_000)
+    after = ReplayEngine(mini_race()).state_at(140_000)
+    assert before["drivers"]["LEC"]["recent_laps_ms"] == [79_000]
+    assert after["drivers"]["LEC"]["recent_laps_ms"] == []
+
+
+def test_classified_leader_gap_is_always_zero():
+    events = [
+        event(SID, "SessionStarted", 0, total_laps=1),
+        event(SID, "PositionChanged", 0, "A", position=1),
+        event(SID, "PositionChanged", 0, "B", position=2),
+        event(SID, "PositionChanged", 10_000, "A", position=2),
+        event(SID, "PositionChanged", 10_000, "B", position=1),
+        event(SID, "GapUpdated", 10_000, "B", gap_s=94.7),
+    ]
+    state = ReplayEngine(events).state_at(10_000)
+    leader = state["classification"][0]
+    assert leader == "B"
+    assert state["drivers"][leader]["gap_s"] == 0.0
+    assert state["drivers"][leader]["interval_s"] is None
+
+
 def test_state_at_finish():
     s = ReplayEngine(mini_race()).state_at(300_000)
     assert s["session_status"] == "finished"

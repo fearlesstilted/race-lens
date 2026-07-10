@@ -1,5 +1,11 @@
 export type SessionSummary = {
   session_id: string
+  source: string
+}
+
+export type Capabilities = {
+  readonly: boolean
+  signalr_available: boolean
 }
 
 export type Timeline = {
@@ -130,7 +136,7 @@ export type CommentaryResponse = {
 // ── Predictive / forecast types ───────────────────────────────────────────────
 
 export type ForecastDriver = {
-  projected_gap_s: number
+  projected_gap_s: number | null
   current_pos: number
   projected_pos: number
   delta_pos: number
@@ -139,6 +145,9 @@ export type ForecastDriver = {
 export type Forecast = {
   at_ms: number
   laps_ahead: number
+  effective_laps?: number
+  model?: string
+  calibrated?: boolean
   projected_order: string[]
   projected: Record<string, ForecastDriver>
 }
@@ -155,7 +164,7 @@ export type PitSimEvidence = {
 export type PitSim = {
   driver: string
   confidence: string
-  evidence: PitSimEvidence
+  evidence?: PitSimEvidence
   error?: string
 }
 
@@ -163,6 +172,8 @@ export type Overtake = {
   ahead: string
   behind: string
   probability: number
+  attack_score?: number
+  calibrated?: boolean
   factors: Record<string, number | string | boolean>
   error?: string
 }
@@ -175,6 +186,8 @@ export type WinProb = {
   at_ms: number
   laps_remaining: number
   win_prob: Record<string, number>
+  win_score?: Record<string, number>
+  calibrated?: boolean
   leader: string | null
   top: WinProbEntry[]
 }
@@ -266,6 +279,8 @@ export type WhatIf = {
   summary_text_en: string
   summary_text_ru: string
   assumptions: string[]
+  model?: string
+  calibrated?: boolean
 }
 
 // ── Tyre strategy ─────────────────────────────────────────────────────────────

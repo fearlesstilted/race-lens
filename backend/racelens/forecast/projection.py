@@ -1,13 +1,12 @@
 """Lap-time projection model.
 
-Projects future race order based on current pace, tyre degradation trend,
-and fuel load reduction. All inputs come from RaceState; no external data required.
+Produces a short-horizon pace outlook from current gaps and recent clean laps.
+It is deterministic and intentionally labelled uncalibrated.
 
 Model:
-  base_ms          = mean of clean recent_laps_ms (fallback: last_lap_ms)
-  tyre_deg_ms_lap  = slope of clean recent_laps_ms over last 3 laps (clamped 0–500 ms/lap)
-  fuel_gain_ms_lap = FUEL_EFFECT_MS / total_laps (car gets lighter each lap)
-  projected_lap(n) = base_ms + tyre_deg_ms_lap*n - fuel_gain_ms_lap*n
+  pace_ms          = median of clean recent_laps_ms (fallback: last_lap_ms)
+  pace_delta_ms    = clamp(pace_ms - field_median, ±1000ms)
+  score_ms         = current_gap_ms + 0.1 * pace_delta_ms * min(laps_ahead, 10)
 
 Outlier filtering:
   LAP_OUTLIER_FACTOR = 1.15 — laps more than 15% above the median are treated as
@@ -20,8 +19,10 @@ from __future__ import annotations
 import statistics
 from typing import Any
 
-FUEL_EFFECT_MS: float = 30.0  # ms gained over full race distance (car lightens)
 LAP_OUTLIER_FACTOR: float = 1.15  # laps >15% above median are pit/out/yellow-flag laps
+MODEL_HORIZON_LAPS = 10
+PACE_SHRINKAGE = 0.1
+MAX_PACE_DELTA_MS = 1_000.0
 
 
 def _clean_laps(laps: list[float]) -> list[float]:
@@ -82,9 +83,7 @@ def project_order(state: Any, laps_ahead: int = 10) -> dict:
     """
     classification = state["classification"] if isinstance(state, dict) else (state.classification or {})
     drivers = state["drivers"] if isinstance(state, dict) else {}
-    total_laps: int = (state["total_laps"] if isinstance(state, dict) else state.total_laps) or 1
     at_ms: int = state["at_ms"] if isinstance(state, dict) else state.at_ms
-    fuel_gain_per_lap_ms: float = FUEL_EFFECT_MS / total_laps
 
     # Build classification dict: support both list (engine output) and dict
     if isinstance(classification, list):
@@ -94,7 +93,10 @@ def project_order(state: Any, laps_ahead: int = 10) -> dict:
     else:
         cls_dict = classification
 
-    projections: dict[str, float] = {}  # driver → projected cumulative gap ms
+    pace: dict[str, float] = {}
+    current_gap_ms: dict[str, float] = {}
+    current_order = [d for d in classification if d in cls_dict] if isinstance(classification, list) else list(cls_dict)
+    unchanged: list[str] = []
 
     for driver_id, info in cls_dict.items():
         if info.get("retired"):
@@ -105,45 +107,56 @@ def project_order(state: Any, laps_ahead: int = 10) -> dict:
 
         if len(recent) >= 2:
             clean = _clean_laps(recent)
-            base_ms = sum(clean) / len(clean)
+            base_ms = statistics.median(clean)
         elif last is not None:
             base_ms = last
             clean = []
         else:
-            continue  # not enough data
+            unchanged.append(driver_id)
+            continue
+        gap = info.get("gap_s")
+        if gap is None:
+            unchanged.append(driver_id)
+            continue
+        pace[driver_id] = base_ms
+        current_gap_ms[driver_id] = float(gap) * 1000.0
 
-        deg_ms_lap = _tyre_deg(clean) if len(clean) >= 2 else (_tyre_deg(recent) if recent else 0.0)
-        current_gap_ms = (info.get("gap_s") or 0.0) * 1000.0
-
-        # Accumulate projected lap times relative to lap 0 (now)
-        accumulated_delta_ms = 0.0
-        for n in range(1, laps_ahead + 1):
-            lap_ms = base_ms + deg_ms_lap * n - fuel_gain_per_lap_ms * n
-            accumulated_delta_ms += lap_ms
-
-        projections[driver_id] = current_gap_ms + accumulated_delta_ms
-
-    if not projections:
+    if not pace:
         return {
             "at_ms": at_ms,
             "laps_ahead": laps_ahead,
+            "effective_laps": min(laps_ahead, MODEL_HORIZON_LAPS),
+            "model": "recent_pace_shrunk_v2",
+            "calibrated": False,
             "projected_order": [],
             "projected": {},
         }
 
-    # Sort by accumulated time (lower = further ahead)
-    sorted_drivers = sorted(projections, key=lambda d: projections[d])
-    leader_time = projections[sorted_drivers[0]]
+    field_median = statistics.median(pace.values())
+    effective_laps = min(laps_ahead, MODEL_HORIZON_LAPS)
+    scores = {
+        driver_id: current_gap_ms[driver_id]
+        + max(-MAX_PACE_DELTA_MS, min(MAX_PACE_DELTA_MS, lap_ms - field_median))
+        * effective_laps
+        * PACE_SHRINKAGE
+        for driver_id, lap_ms in pace.items()
+    }
+    sorted_drivers = sorted(scores, key=lambda d: (scores[d], current_order.index(d)))
+    for driver_id in unchanged:
+        current_index = current_order.index(driver_id)
+        sorted_drivers.insert(min(current_index, len(sorted_drivers)), driver_id)
+    leader_time = min(scores.values())
 
     current_positions: dict[str, int] = {
         d: info.get("position", 99)
         for d, info in cls_dict.items()
-        if not info.get("retired") and d in projections
+        if not info.get("retired") and d in sorted_drivers
     }
 
     result: dict[str, Any] = {}
     for proj_pos, driver_id in enumerate(sorted_drivers, start=1):
-        gap_s = round((projections[driver_id] - leader_time) / 1000.0, 3)
+        score = scores.get(driver_id)
+        gap_s = round((score - leader_time) / 1000.0, 3) if score is not None else None
         cur_pos = current_positions.get(driver_id, proj_pos)
         result[driver_id] = {
             "projected_gap_s": gap_s,
@@ -155,6 +168,9 @@ def project_order(state: Any, laps_ahead: int = 10) -> dict:
     return {
         "at_ms": at_ms,
         "laps_ahead": laps_ahead,
+        "effective_laps": effective_laps,
+        "model": "recent_pace_shrunk_v2",
+        "calibrated": False,
         "projected_order": sorted_drivers,
         "projected": result,
     }

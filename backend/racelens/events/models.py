@@ -9,7 +9,7 @@ import hashlib
 import json
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Raw events — produced by adapters
 EVENT_TYPES = {
@@ -34,7 +34,7 @@ class Event(BaseModel):
     event_id: str
     session_id: str
     type: str
-    session_time_ms: int
+    session_time_ms: int = Field(ge=0)
     lap: Optional[int] = None
     driver_id: Optional[str] = None
     source: str = "fixture"
@@ -44,6 +44,13 @@ class Event(BaseModel):
     # late-arriving events can revise state without breaking determinism.
     ingest_seq: Optional[int] = None
     payload: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        if value not in EVENT_TYPES:
+            raise ValueError(f"unknown event type: {value}")
+        return value
 
 
 def make_event_id(

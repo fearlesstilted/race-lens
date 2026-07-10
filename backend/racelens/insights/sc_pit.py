@@ -18,6 +18,8 @@ MIN_TYRE_AGE_LAPS = 8  # fresher than this → stop not strategically interestin
 def detect_sc_pit(state: dict[str, Any]) -> list[dict[str, Any]]:
     if state.get("session_status") != "safety_car":
         return []
+    if state.get("total_laps") and state["total_laps"] - state.get("lap", 0) < 3:
+        return []
 
     drivers = state["drivers"]
     order = state["classification"]
@@ -25,7 +27,7 @@ def detect_sc_pit(state: dict[str, Any]) -> list[dict[str, Any]]:
 
     for drv in order:
         d = drivers[drv]
-        if d["in_pit"]:
+        if d["in_pit"] or d.get("retired"):
             continue
         age = d.get("tyre_age_laps")
         if age is None or age < MIN_TYRE_AGE_LAPS:
@@ -36,7 +38,7 @@ def detect_sc_pit(state: dict[str, Any]) -> list[dict[str, Any]]:
             type_="SC_PIT_WINDOW",
             driver_ids=[drv],
             severity="high",
-            confidence="high",
+            confidence="medium",
             evidence={"tyre_age_laps": age, "position": pos},
             state=state,
         ))

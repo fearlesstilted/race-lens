@@ -18,7 +18,9 @@ def client(tmp_path, monkeypatch):
 
 
 def test_sessions_and_state(client):
-    assert client.get("/api/sessions").json() == [{"session_id": "2024_mini_race"}]
+    assert client.get("/api/sessions").json() == [
+        {"session_id": "2024_mini_race", "source": "fixture"},
+    ]
 
     s = client.get("/api/sessions/2024_mini_race/state", params={"at_ms": 140_000}).json()
     assert s["classification"] == ["VER", "NOR", "LEC"]
@@ -42,8 +44,8 @@ def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
 
     c = TestClient(api.app)
     assert c.get("/api/sessions").json() == [
-        {"session_id": "zzz_demo"},
-        {"session_id": "aaa_no_map"},
+        {"session_id": "zzz_demo", "source": "fixture"},
+        {"session_id": "aaa_no_map", "source": "fixture"},
     ]
 
 
@@ -104,7 +106,7 @@ def test_stream_simulated_live(client):
     with client.stream(
         "GET",
         "/api/sessions/2024_mini_race/stream",
-        params={"speed": 100_000, "from_ms": 245_000, "tick_ms": 2_000},
+        params={"speed": 100, "from_ms": 245_000, "tick_ms": 2_000},
     ) as r:
         for line in r.iter_lines():
             if line.startswith("data:"):
@@ -147,7 +149,7 @@ def test_stream_carries_recent_passes_in_window(tmp_path, monkeypatch):
     with client.stream(
         "GET",
         f"/api/sessions/{sid}/stream",
-        params={"speed": 100_000, "from_ms": 200_000, "tick_ms": 25_000},
+        params={"speed": 100, "from_ms": 200_000, "tick_ms": 10_000},
     ) as r:
         for line in r.iter_lines():
             if line.startswith("data:"):
@@ -157,9 +159,9 @@ def test_stream_carries_recent_passes_in_window(tmp_path, monkeypatch):
     assert chunks[0]["recent_passes"] == [
         {"ahead": "A", "behind": "B", "kind": "ON_TRACK", "at_ms": 200_000},
     ]
-    # cur=225_000: still within 20s? no — window is (205_000, 225_000], pass is gone.
-    at_225 = next(c for c in chunks if c.get("at_ms") == 225_000)
-    assert at_225["recent_passes"] == []
+    # cur=230_000: still within 20s? no — window is (210_000, 230_000], pass is gone.
+    at_230 = next(c for c in chunks if c.get("at_ms") == 230_000)
+    assert at_230["recent_passes"] == []
 
 
 def test_stream_speed_zero_returns_422(client):

@@ -184,7 +184,7 @@ const InsightCard = React.memo(function InsightCard({
       )}
       {text && <p>{text}</p>}
       {overtakePct !== null && overtakePct !== undefined && (
-        <div className="ins-overtake">OVERTAKE NEXT LAP: {Math.round(overtakePct * 100)}%</div>
+        <div className="ins-overtake">ATTACK SCORE: {Math.round(overtakePct * 100)}</div>
       )}
       {data.length > 0 && (
         <div className="data">

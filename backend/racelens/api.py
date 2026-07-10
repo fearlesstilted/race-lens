@@ -3,12 +3,14 @@
     uvicorn racelens.api:app --reload
 
 Sessions are .jsonl files in RACELENS_FIXTURES (default: ./fixtures).
-Spoiler-free by construction: every response is built only from events
-at or before the requested timestamp.
+Timestamp-scoped state and insight responses use no future events. Endpoints
+without a cutoff, such as full-race highlights, are explicitly opt-in.
 """
 import asyncio
+import importlib.util
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -42,6 +44,7 @@ from racelens.live.signalr import SignalRCapture, make_signalr_fetch
 from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
+READONLY = os.environ.get("RACELENS_READONLY", "").lower() in {"1", "true", "yes"}
 
 # Global live runner — None when no live session is active.
 _live: Optional[LiveRunner] = None
@@ -76,6 +79,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Race Lens", version="0.1.0", lifespan=lifespan)
+
+
+def _require_writable() -> None:
+    if READONLY:
+        raise HTTPException(403, "This deployment is read-only")
+
+
+def _safe_slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+    if not slug:
+        raise HTTPException(422, "country and session must contain letters or digits")
+    return slug
 
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
@@ -114,7 +129,7 @@ def _engine(session_id: str) -> ReplayEngine:
 
 
 @lru_cache(maxsize=4)
-def _positions_data_cached(session_id: str, fixtures_dir: str) -> dict | None:
+def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> dict | None:
     path = Path(fixtures_dir) / f"{session_id}.positions.json"
     if not path.is_file():
         return None
@@ -123,7 +138,9 @@ def _positions_data_cached(session_id: str, fixtures_dir: str) -> dict | None:
 
 def _positions_data(session_id: str) -> dict | None:
     """Thin wrapper so the cache key includes FIXTURES_DIR (see _engine)."""
-    return _positions_data_cached(session_id, str(FIXTURES_DIR))
+    path = FIXTURES_DIR / f"{session_id}.positions.json"
+    mtime = path.stat().st_mtime if path.is_file() else 0.0
+    return _positions_data_cached(session_id, str(FIXTURES_DIR), mtime)
 
 
 def _attach_frame(state: dict, session_id: str | None = None) -> dict:
@@ -210,7 +227,15 @@ def _clamp_at_ms(at_ms: int) -> int:
 
 @app.get("/api/ping")
 def ping():
-    return {"status": "ok"} #keepalive ping for render demo page 
+    return {"status": "ok"}
+
+
+@app.get("/api/capabilities")
+def capabilities() -> dict:
+    return {
+        "readonly": READONLY,
+        "signalr_available": importlib.util.find_spec("fastf1") is not None,
+    }
 
 
 @app.get("/api/sessions")
@@ -224,7 +249,14 @@ def list_sessions() -> list[dict]:
         ),
     )
     for f in files:
-        out.append({"session_id": f.stem})
+        source = "unknown"
+        try:
+            with f.open(encoding="utf-8") as handle:
+                first = next(line for line in handle if line.strip())
+            source = str(json.loads(first).get("source") or "unknown")
+        except (OSError, StopIteration, json.JSONDecodeError):
+            pass
+        out.append({"session_id": f.stem, "source": source})
     return out
 
 
@@ -261,7 +293,10 @@ def commentary(session_id: str, at_ms: int = Query(), lang: str = "en", level: s
 
 @app.get("/api/sessions/{session_id}/stream")
 async def stream(
-    session_id: str, speed: float = 10.0, from_ms: int = 0, tick_ms: int = 1000,
+    session_id: str,
+    speed: float = Query(default=10.0, ge=0.1, le=100.0),
+    from_ms: int = 0,
+    tick_ms: int = Query(default=1000, ge=250, le=10_000),
     lang: str = "en", level: str = "pro",
 ) -> StreamingResponse:
     """Simulated live: replay the session as an SSE stream of states.
@@ -270,8 +305,6 @@ async def stream(
     Each message carries full state + active insights, so the frontend
     treats replay and live identically.
     """
-    if speed <= 0 or tick_ms <= 0:
-        raise HTTPException(422, "speed and tick_ms must be positive")
     eng = _engine(session_id)
     end_ms = _race_end_ms(eng)
     # Fixed event list for a replay connection — compute passes once, filter per tick.
@@ -300,10 +333,10 @@ async def stream(
 
 @app.post("/api/live/start")
 async def live_start(
-    year: int = Query(...),
-    country: str = Query(...),
-    session: str = Query(default="Race"),
-    poll_s: float = Query(default=12.0, gt=0),
+    year: int = Query(..., ge=1950, le=2100),
+    country: str = Query(..., min_length=1, max_length=80),
+    session: str = Query(default="Race", min_length=1, max_length=40),
+    poll_s: float = Query(default=12.0, ge=6.0, le=60.0),
     source: str = Query(default="openf1", pattern="^(openf1|signalr)$"),
     auth: int = Query(default=0),
 ) -> dict:
@@ -318,6 +351,7 @@ async def live_start(
     into a replay fixture even if live mode misbehaves.
     """
     global _live, _capture, _live_session_id
+    _require_writable()
     async with _start_lock:
         if _live is not None and _live.is_running:
             raise HTTPException(409, "A live session is already running. Stop it first.")
@@ -327,12 +361,18 @@ async def live_start(
         _live_session_id = None
 
         if source == "signalr":
-            feed_path = FIXTURES_DIR / f"_capture_{year}_{country.lower().replace(' ', '_')}_{session.lower()}.txt"
+            if importlib.util.find_spec("fastf1") is None:
+                raise HTTPException(503, "SignalR live capture requires the fastf1 extra")
+            feed_path = FIXTURES_DIR / f"_capture_{year}_{_safe_slug(country)}_{_safe_slug(session)}.txt"
             # Default no_auth: anonymous feed carries full timing (verified
             # live). auth=1 uses the fastf1 token cache (one-time browser
             # login via scripts/f1_login.py) — unlocks Position.z coordinates.
             _capture = SignalRCapture(feed_path, no_auth=not auth)
-            _capture.start()
+            try:
+                _capture.start()
+            except (OSError, RuntimeError) as exc:
+                _capture = None
+                raise HTTPException(503, f"Could not start SignalR capture: {exc}") from exc
             fetch = make_signalr_fetch(feed_path, year, country, session)
             _live = LiveRunner(fetch, poll_interval_s=max(poll_s, 5.0))
             # Same formula as make_signalr_fetch's internal session_id (signalr.py).
@@ -344,7 +384,7 @@ async def live_start(
             }
 
         try:
-            session_key = find_session(year, country, session)
+            session_key = await asyncio.to_thread(find_session, year, country, session)
         except ValueError as exc:
             raise HTTPException(404, str(exc)) from exc
 
@@ -385,12 +425,15 @@ async def live_status() -> dict:
     status["last_poll_ok"] = status["consecutive_failures"] == 0
     if _capture is not None:
         status["capture_alive"] = _capture.alive
+        if not _capture.alive:
+            status["data_quality"] = "stalled"
+            status["last_poll_ok"] = False
     return status
 
 
 @app.get("/api/live/stream")
 async def live_stream(
-    tick_s: float = Query(default=2.0, gt=0),
+    tick_s: float = Query(default=2.0, ge=0.5, le=30.0),
     lang: str = "en",
     level: str = "pro",
 ) -> StreamingResponse:
@@ -450,6 +493,7 @@ async def live_feed(lang: str = "en", limit: int = 30) -> list:
 @app.post("/api/live/stop")
 async def live_stop() -> dict:
     global _live, _capture, _live_session_id
+    _require_writable()
     if _live is None:
         raise HTTPException(404, "No live session active")
     final_status = _live.status()
@@ -513,9 +557,9 @@ _DIST = Path(
 
 @app.post("/api/replays/download")
 def download_replay(
-    year: int = Query(...),
-    country: str = Query(...),
-    session: str = Query(default="Race"),
+    year: int = Query(..., ge=1950, le=2100),
+    country: str = Query(..., min_length=1, max_length=80),
+    session: str = Query(default="Race", min_length=1, max_length=40),
 ) -> dict:
     """Download a session from OpenF1 and save it as a replay fixture.
 
@@ -527,10 +571,11 @@ def download_replay(
     - 404: session not found in OpenF1 (find_session raised ValueError).
     - 502: OpenF1 unavailable (network or HTTP error).
     """
-    import re
     import urllib.error
 
     from racelens.events.models import dump_jsonl
+
+    _require_writable()
 
     try:
         session_key = find_session(year, country, session)
@@ -546,10 +591,7 @@ def download_replay(
         raise HTTPException(502, f"OpenF1 unavailable: {exc}") from exc
 
     # Build slug: lowercase, normalise non-alphanumeric runs to underscore
-    def _slug(s: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
-
-    slug = f"{_slug(country)}_{year}_{_slug(session)}"
+    slug = f"{_safe_slug(country)}_{year}_{_safe_slug(session)}"
     out_path = FIXTURES_DIR / f"{slug}.jsonl"
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     out_path.write_text(dump_jsonl(events), encoding="utf-8")
@@ -584,7 +626,7 @@ def win_prob(
     session_id: str,
     at_ms: int = Query(),
 ):
-    """Win probability for every driver at a given timestamp."""
+    """Uncalibrated gap-pressure score for every driver at a timestamp."""
     engine = _engine(session_id)
     state = engine.state_at(_clamp_at_ms(at_ms))
     return win_probability(state, session_id)
@@ -596,7 +638,7 @@ def win_prob_series(
     until_ms: int = Query(ge=0),
     samples: int = Query(default=20, ge=2, le=100),
 ):
-    """Win probability series up to until_ms in N evenly-spaced samples.
+    """Gap-pressure score series up to until_ms in N evenly-spaced samples.
 
     Returns [{at_ms, probs: {driver: prob}}] ascending by at_ms.
     """
@@ -649,9 +691,9 @@ def what_if_endpoint(
     scenario: str = Query(...),
     driver: Optional[str] = Query(default=None),
 ):
-    """Counterfactual race-finish projection.
+    """Uncalibrated strategy-sensitivity comparison.
 
-    scenario: baseline | pit_now | stay_out | no_safety_car
+    scenario: baseline | pit_now | stay_out
     driver: required for pit_now / stay_out
     """
     if scenario not in VALID_SCENARIOS:
@@ -731,13 +773,15 @@ def markers(
 def get_highlights(
     session_id: str,
     top_n: int = Query(default=8, ge=1, le=50),
+    until_ms: Optional[int] = Query(default=None),
 ) -> dict:
     """Top-N most dramatic moments of the race, sorted chronologically.
 
     Suitable for a 'race in 60 seconds' highlight reel.
     """
     eng = _engine(session_id)
-    return {"highlights": _highlights(eng.events, eng, top_n=top_n)}
+    visible = eng.events if until_ms is None else [e for e in eng.events if e.session_time_ms <= max(0, until_ms)]
+    return {"highlights": _highlights(visible, ReplayEngine(visible), top_n=top_n) if visible else []}
 
 
 @app.get("/api/sessions/{session_id}/driver-of-day")

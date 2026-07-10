@@ -16,7 +16,7 @@ MAX_TRAIN_SIZE = 8  # larger chains are SC/race-start compression, not a DRS tra
 
 
 def detect_drs_train(state: dict[str, Any]) -> list[dict[str, Any]]:
-    if state["lap"] < 3:
+    if state["lap"] < 3 or state.get("session_status") in {"red_flag", "safety_car", "vsc"}:
         return []
 
     drivers = state["drivers"]
@@ -31,6 +31,8 @@ def detect_drs_train(state: dict[str, Any]) -> list[dict[str, Any]]:
             and interval <= CHAIN_INTERVAL_S
             and not drivers[behind_id]["in_pit"]
             and not drivers[ahead_id]["in_pit"]
+            and not drivers[behind_id].get("retired")
+            and not drivers[ahead_id].get("retired")
         )
         if linked:
             if not chain:
@@ -52,7 +54,7 @@ def _train(state: dict[str, Any], chain: list[str]) -> dict[str, Any]:
         type_="DRS_TRAIN_ACTIVE",
         driver_ids=list(chain),  # head first
         severity="medium" if len(chain) < 5 else "high",
-        confidence="high",
+        confidence="medium",
         evidence={
             "cars": len(chain),
             "head": chain[0],

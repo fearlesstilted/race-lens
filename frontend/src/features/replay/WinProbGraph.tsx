@@ -1,5 +1,5 @@
 /**
- * WinProbGraph — broadcast-style win-probability chart.
+ * WinProbGraph — history of an uncalibrated gap-pressure score.
  *
  * Replay: shows the history of win probability for the top-5 drivers from
  * session start up to `atMs` (spoiler-free), via GET
@@ -115,13 +115,13 @@ export function WinProbGraph({ sessionId, atMs, live }: Props) {
 
   return (
     <div className="win-prob-graph">
-      <div className="win-prob-label">WIN %</div>
+      <div className="win-prob-label">GAP PRESSURE SCORE · UNCALIBRATED</div>
       {loading && <div className="win-prob-loading">…</div>}
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
         className="win-prob-svg"
-        aria-label="Win probability over time"
+        aria-label="Gap pressure score over time"
       >
         {/* Hairline grid */}
         {Y_TICKS.map((t) => {

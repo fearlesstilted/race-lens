@@ -78,7 +78,7 @@ def test_live_start_signalr_wires_runner_and_capture(tmp_path, monkeypatch):
     c = TestClient(api.app)
     r = c.post("/api/live/start", params={
         "year": 2026, "country": "Silverstone", "session": "R",
-        "source": "signalr", "poll_s": 0.05,
+        "source": "signalr", "poll_s": 6,
     })
     assert r.status_code == 200, r.text
     assert r.json()["source"] == "signalr"
@@ -143,7 +143,7 @@ def test_live_feed_returns_items_once_engine_ready(tmp_path, monkeypatch):
     c = TestClient(api.app)
     r = c.post("/api/live/start", params={
         "year": 2026, "country": "Silverstone", "session": "R",
-        "source": "signalr", "poll_s": 0.05,
+        "source": "signalr", "poll_s": 6,
     })
     assert r.status_code == 200, r.text
 

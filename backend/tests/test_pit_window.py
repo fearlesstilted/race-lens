@@ -18,7 +18,7 @@ def test_leader_with_big_gap_has_open_window():
     s = _state({"LEC": (None, 20), "PIA": (25.0, 20), "SAI": (30.0, 20)})
     found = detect_pit_window(s)
     assert [i["driver_ids"] for i in found] == [["LEC"]]
-    assert found[0]["evidence"]["margin_s"] == 5.0
+    assert found[0]["evidence"]["margin_s"] == 4.0
 
 
 def test_close_car_behind_keeps_window_shut():

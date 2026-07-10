@@ -169,20 +169,13 @@ def test_stay_out_deg_in_assumptions():
     assert any("degradation" in a or "stay_out" in a for a in result["assumptions"])
 
 
-# ── no_safety_car ─────────────────────────────────────────────────────────────
+# ── unsupported scenarios ─────────────────────────────────────────────────────
 
 
-def test_no_safety_car_returns_valid_structure():
+def test_no_safety_car_is_rejected_without_safety_car_model():
     state = _simple_state()
-    result = what_if(state, "spain_2024_race", "no_safety_car")
-    assert result["scenario"] == "no_safety_car"
-    assert isinstance(result["scenario_order"], list)
-
-
-def test_no_safety_car_has_approximate_assumption():
-    state = _simple_state()
-    result = what_if(state, "spain_2024_race", "no_safety_car")
-    assert any("approximate" in a or "MVP" in a for a in result["assumptions"])
+    with pytest.raises(ValueError, match="Invalid scenario"):
+        what_if(state, "spain_2024_race", "no_safety_car")
 
 
 # ── invalid inputs ────────────────────────────────────────────────────────────

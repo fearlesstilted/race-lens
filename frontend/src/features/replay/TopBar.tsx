@@ -16,6 +16,7 @@ type Props = {
   lang: Lang
   level: Level
   mode: AppMode
+  liveAvailable: boolean
   projection: boolean
   winProb: boolean
   voice: boolean
@@ -34,7 +35,7 @@ type Props = {
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode, projection, winProb, voice, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, liveAvailable, projection, winProb, voice, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
@@ -62,7 +63,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
           ) : (
             <b>{label.toUpperCase()}</b>
           )}
-          <i>Race · replay · source: FastF1</i>
+          <i>Race · replay · source: {session?.source ?? 'unknown'}</i>
         </div>
       ) : (
         <div className="sess">
@@ -83,6 +84,8 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
             type="button"
             className={`tog${mode === 'live' ? ' tog-on' : ''}`}
             onClick={() => onModeChange('live')}
+            disabled={!liveAvailable}
+            title={liveAvailable ? 'Start a live session' : 'Live capture is disabled on this deployment'}
           >LIVE</button>
         </div>
         {/* Lang toggle — secondary (hidden on tablet/mobile) */}
@@ -131,7 +134,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
                   className={`layer-row layer-toggle${projection ? ' on' : ''}`}
                   onClick={() => onProjection(!projection)}
                 >
-                  <span className="layer-name">PROJECTION</span>
+                  <span className="layer-name">PACE OUTLOOK</span>
                   <span className="layer-state">{projection ? 'ON' : 'OFF'}</span>
                 </button>
                 <button
@@ -139,7 +142,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
                   className={`layer-row layer-toggle${winProb ? ' on' : ''}`}
                   onClick={() => onWinProb(!winProb)}
                 >
-                  <span className="layer-name">WIN %</span>
+                  <span className="layer-name">GAP SCORE</span>
                   <span className="layer-state">{winProb ? 'ON' : 'OFF'}</span>
                 </button>
                 <button
@@ -159,7 +162,7 @@ export function TopBar({ sessionId, sessions, lap, totalLaps, lang, level, mode,
       {/* HIGHLIGHTS and DOTD panels — replay only, hidden on mobile/tablet */}
       {mode === 'replay' && sessionId && onSeek && (
         <div className="top-panels">
-          <HighlightsPanel sessionId={sessionId} lang={lang} onSeek={onSeek} />
+          <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={onSeek} />
           <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
         </div>
       )}

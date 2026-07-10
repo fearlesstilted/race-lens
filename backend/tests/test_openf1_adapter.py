@@ -411,3 +411,12 @@ def test_incremental_ingester_two_batches():
         f"Only in full: {full_ids - incr_ids}\n"
         f"Only in incremental: {incr_ids - full_ids}"
     )
+
+
+def test_incremental_ingester_dedupes_rows_without_dates():
+    ingester = _mod.OpenF1IncrementalIngester(_SESSION_KEY)
+    with patch.object(_mod, "_get", _make_mock_get()):
+        ingester.fetch()
+        first_count = len(ingester._stint_rows)
+        ingester.fetch()
+    assert len(ingester._stint_rows) == first_count

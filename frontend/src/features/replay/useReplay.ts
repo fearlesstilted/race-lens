@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCommentary, getFeed, getMarkers, getTimeline } from '../../api/client'
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, RecentPass, Timeline } from '../../api/types'
 import type { DataSource } from '../../api/dataSource'
@@ -80,6 +80,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [level, setLevelState] = useState<Level>(readLevel)
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [markers, setMarkers] = useState<RaceMarker[]>([])
+  const scrubTimeoutRef = useRef<number | null>(null)
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setRecentPasses, setFeed, setCommentary,
@@ -107,6 +108,10 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   // Source change: reset everything, then load appropriately
   useEffect(() => {
+    if (scrubTimeoutRef.current !== null) {
+      window.clearTimeout(scrubTimeoutRef.current)
+      scrubTimeoutRef.current = null
+    }
     closeStream()
     setPlaying(false)
     setState(null)
@@ -164,6 +169,10 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
     return () => {
       cancelled = true
+      if (scrubTimeoutRef.current !== null) {
+        window.clearTimeout(scrubTimeoutRef.current)
+        scrubTimeoutRef.current = null
+      }
       closeStream()
     }
     // lang/level intentionally NOT in deps — session change resets; lang/level trigger own effect
@@ -195,7 +204,9 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       setPlaying(false)
       setAtMs(nextAtMs)
       setRecentPasses([]) // stream-only data — stale once we jump off the live frame sequence
-      window.setTimeout(() => {
+      if (scrubTimeoutRef.current !== null) window.clearTimeout(scrubTimeoutRef.current)
+      scrubTimeoutRef.current = window.setTimeout(() => {
+        scrubTimeoutRef.current = null
         void loadSnapshot(nextAtMs, lang, level)
       }, SCRUB_DEBOUNCE_MS)
     },

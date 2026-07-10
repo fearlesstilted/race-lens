@@ -13,6 +13,9 @@ COPY backend/ ./backend/
 RUN pip install --no-cache-dir ./backend[api]
 COPY --from=web /app/dist ./frontend/dist
 ENV RACELENS_FIXTURES=/app/backend/fixtures \
-    RACELENS_DIST=/app/frontend/dist
+    RACELENS_DIST=/app/frontend/dist \
+    RACELENS_READONLY=1
+RUN useradd --create-home racelens && chown -R racelens:racelens /app
+USER racelens
 EXPOSE 7860
 CMD ["uvicorn", "racelens.api:app", "--host", "0.0.0.0", "--port", "7860"]

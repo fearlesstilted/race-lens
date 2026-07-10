@@ -68,7 +68,10 @@ def test_live_forecast_mirrors_replay_shape(client):
         r = client.get("/api/live/forecast", params={"laps": 5})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert set(body.keys()) == {"at_ms", "laps_ahead", "projected_order", "projected"}
+        assert set(body.keys()) == {
+            "at_ms", "laps_ahead", "effective_laps", "model", "calibrated",
+            "projected_order", "projected",
+        }
         assert body["laps_ahead"] == 5
         assert isinstance(body["projected_order"], list)
         assert isinstance(body["projected"], dict)
@@ -87,7 +90,10 @@ def test_live_win_prob_mirrors_replay_shape(client):
         r = client.get("/api/live/win-prob")
         assert r.status_code == 200, r.text
         body = r.json()
-        assert set(body.keys()) == {"at_ms", "laps_remaining", "win_prob", "leader", "top"}
+        assert set(body.keys()) == {
+            "at_ms", "laps_remaining", "model", "calibrated", "win_prob",
+            "win_score", "leader", "top",
+        }
         assert isinstance(body["win_prob"], dict)
         assert body["leader"] in body["win_prob"]
     finally:

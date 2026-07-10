@@ -17,8 +17,30 @@ from typing import Any, Iterable
 
 from racelens.events.models import Event
 
-# Number of recent laps tracked per driver — used in insight detectors (clean_air, degradation).
+# Number of recent laps tracked per driver — used by short-horizon insight rules.
 RECENT_LAPS_WINDOW = 3
+
+_EVENT_PRIORITY = {
+    "SessionStarted": 0,
+    "SessionStatusChanged": 10,
+    "PitIn": 20,
+    "PitOut": 21,
+    "LapCompleted": 30,
+    "TyreStintUpdated": 40,
+    "PositionChanged": 50,
+    "GapUpdated": 60,
+    "IntervalUpdated": 61,
+    "RetirementDetected": 70,
+}
+
+
+def _event_sort_key(value: Event) -> tuple[int, int, int, str]:
+    return (
+        value.session_time_ms,
+        _EVENT_PRIORITY.get(value.type, 50),
+        value.ingest_seq if value.ingest_seq is not None else -1,
+        value.event_id,
+    )
 
 
 def _new_driver() -> dict[str, Any]:
@@ -43,9 +65,8 @@ def _new_driver() -> dict[str, Any]:
 class ReplayEngine:
     """Holds a session's normalized events; answers `state_at(t)` queries.
 
-    Events are deduped by event_id and sorted by (session_time_ms, event_id).
-    The sort key includes event_id so simultaneous events apply in a stable
-    order regardless of input order.
+    Events are deduped by event_id and sorted by event time, semantic priority,
+    arrival order (when available), then event_id for deterministic fallback.
     """
 
     def __init__(self, events: Iterable[Event], snapshot_interval: int = 200):
@@ -58,7 +79,7 @@ class ReplayEngine:
                 continue
             seen.add(e.event_id)
             unique.append(e)
-        self.events = sorted(unique, key=lambda e: (e.session_time_ms, e.event_id))
+        self.events = sorted(unique, key=_event_sort_key)
         self.duplicates_dropped = duplicates
         self.session_id = self.events[0].session_id if self.events else None
         self._times = [e.session_time_ms for e in self.events]
@@ -118,8 +139,9 @@ class ReplayEngine:
         else:
             dq["status"] = "good"
 
-        # Mark retired drivers: more than 5 laps behind the leader (only when
-        # leader has completed at least 5 laps — avoids false positives early on).
+        # Historical sources do not expose a reliable retirement transition.
+        # Keep the existing conservative fallback for display classification;
+        # forecast functions independently reject drivers without usable pace.
         leader_laps = max(
             (s["laps_completed"] for s in state["drivers"].values()),
             default=0,
@@ -142,6 +164,10 @@ class ReplayEngine:
         # event-derived, 1-based. The frontend renders this; it never re-sorts.
         for i, drv in enumerate(state["classification"], start=1):
             state["drivers"][drv]["rank"] = i
+        if active:
+            leader = state["drivers"][active[0]]
+            leader["gap_s"] = 0.0
+            leader["interval_s"] = None
         return state
 
     def state_hash(self, at_ms: int) -> str:
@@ -188,6 +214,9 @@ class ReplayEngine:
         elif e.type == "PositionChanged":
             d = self._driver(state, e.driver_id)
             d["position"] = p.get("position")
+            if d["position"] == 1:
+                d["gap_s"] = 0.0
+                d["interval_s"] = None
             if d["grid_position"] is None:
                 # First known position = baseline. For a mid-join recording that
                 # starts a few laps in, this is intentionally the position at
@@ -209,12 +238,21 @@ class ReplayEngine:
             d["pit_count"] += 1
 
         elif e.type == "PitOut":
-            self._driver(state, e.driver_id)["in_pit"] = False
+            d = self._driver(state, e.driver_id)
+            d["in_pit"] = False
+            d["recent_laps_ms"] = []
 
         elif e.type == "TyreStintUpdated":
             d = self._driver(state, e.driver_id)
-            d["tyre_compound"] = p.get("compound")
-            d["tyre_age_laps"] = p.get("age_laps", 0)
+            compound = p.get("compound")
+            age = p.get("age_laps", 0)
+            if d["tyre_compound"] is not None and (
+                compound != d["tyre_compound"]
+                or (d["tyre_age_laps"] is not None and age < d["tyre_age_laps"])
+            ):
+                d["recent_laps_ms"] = []
+            d["tyre_compound"] = compound
+            d["tyre_age_laps"] = age
 
         # RaceControlMessage / WeatherUpdated are carried in the timeline but
         # don't mutate MVP state yet — the insight engine will consume them.

@@ -1,4 +1,4 @@
-"""Overtake probability model.
+"""Uncalibrated attack-pressure score.
 
 Transparent logistic model. Inputs are pace delta, gap, tyre age delta,
 and track overtake difficulty.
@@ -6,12 +6,12 @@ and track overtake difficulty.
 Weights (documented):
   W_PACE =  2.0   pace delta 1 s/lap → meaningful but not decisive advantage
   W_GAP  = -2.5   1 s gap is hard to close in one lap
-  W_TYRE =  0.8   tyre age diff of 10 laps gives a noticeable edge
+  W_TYRE =  0.08  tyre age diff of 10 laps gives a noticeable edge
   W_DIFF = -1.0   full difficulty (1.0) suppresses probability noticeably
   BIAS   =  1.5   baseline offset so a neutral DRS-fight (0.3 s gap, equal pace,
                   medium track) lands around P≈0.5 rather than 0
 
-Calibration target:
+Shape target (not empirical calibration):
   equal pace + 0.3 s gap + same tyres + medium track → P ≈ 0.4–0.6
   1.0 s gap with equal pace → noticeably lower
   clear pace advantage of attacker → P well above 0.5
@@ -25,7 +25,7 @@ from racelens.forecast.tracks import track_params
 
 W_PACE: float = 2.0
 W_GAP: float = -2.5
-W_TYRE: float = 0.8
+W_TYRE: float = 0.08
 W_DIFF: float = -1.0
 BIAS: float = 1.5
 
@@ -43,14 +43,14 @@ def overtake_probability(
     behind_id: str,
     session_id: str,
 ) -> dict:
-    """Estimate probability that *behind_id* overtakes *ahead_id* this lap.
+    """Score the attack pressure from *behind_id* on *ahead_id*.
 
     Returns
     -------
     {
         "ahead": str,
         "behind": str,
-        "probability": float,   # rounded to 2 dp, in [0, 1]
+        "attack_score": float,  # rounded to 2 dp, in [0, 1]
         "factors": {
             "pace_delta_s": float,       # behind - ahead last lap (positive = behind faster)
             "interval_s": float,
@@ -80,6 +80,8 @@ def overtake_probability(
 
     ahead_info = cls_dict.get(ahead_id, {})
     behind_info = cls_dict.get(behind_id, {})
+    if behind_info.get("position") != ahead_info.get("position", 0) + 1:
+        return {"error": "drivers must be adjacent with behind directly behind ahead"}
 
     ahead_last: float | None = ahead_info.get("last_lap_ms")
     behind_last: float | None = behind_info.get("last_lap_ms")
@@ -90,7 +92,10 @@ def overtake_probability(
     else:
         pace_delta_s = 0.0
 
-    interval_s: float = behind_info.get("interval_s") or 999.0
+    interval = behind_info.get("interval_s")
+    if interval is None:
+        return {"error": "interval data unavailable"}
+    interval_s = float(interval)
     ahead_age: float = ahead_info.get("tyre_age_laps") or 0.0
     behind_age: float = behind_info.get("tyre_age_laps") or 0.0
     tyre_age_delta = ahead_age - behind_age  # positive = ahead more degraded
@@ -109,6 +114,8 @@ def overtake_probability(
         "ahead": ahead_id,
         "behind": behind_id,
         "probability": probability,
+        "attack_score": probability,
+        "calibrated": False,
         "factors": {
             "pace_delta_s": round(pace_delta_s, 3),
             "interval_s": round(interval_s, 3),

@@ -1,6 +1,6 @@
 """Track-specific parameters for forecast models.
 
-Values are typical empirical estimates from official F1 data and public timing analysis:
+Values are rough configurable defaults, not measured guarantees:
 - pit_loss_s: total time lost in pit lane (entry + stationary + exit) vs. racing through
 - overtake_difficulty: 0.0 = easy overtakes (high-speed straights), 1.0 = nearly impossible (Monaco walls)
 """
@@ -29,11 +29,12 @@ _DEFAULT_PARAMS: dict = {"pit_loss_s": 21.0, "overtake_difficulty": 0.60}
 def track_params(session_id: str) -> dict:
     """Return track parameters for the given session_id.
 
-    Matches by prefix — e.g. 'spain_2024_race' → 'spain' entry.
+    Matches a track token anywhere in the identifier, so both
+    ``spain_2024_race`` and ``2024_spain_r`` resolve correctly.
     Falls back to defaults if no match found.
     """
     sid = session_id.lower()
     for key, params in TRACK_PARAMS.items():
-        if sid.startswith(key):
+        if key in sid:
             return params
     return _DEFAULT_PARAMS.copy()
