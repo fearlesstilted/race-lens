@@ -75,7 +75,7 @@ export const TimingTower = React.memo(function TimingTower({
   const peekDeltas = () => {
     setDeltaPeek(true)
     if (deltaPeekTimer.current) clearTimeout(deltaPeekTimer.current)
-    deltaPeekTimer.current = setTimeout(() => setDeltaPeek(false), 2600)
+    deltaPeekTimer.current = setTimeout(() => setDeltaPeek(false), 3200)
   }
   useEffect(() => () => {
     if (deltaPeekTimer.current) clearTimeout(deltaPeekTimer.current)
@@ -216,14 +216,18 @@ export const TimingTower = React.memo(function TimingTower({
       className="col col-timing"
       style={{ '--row-count': rowCount } as React.CSSProperties}
     >
-      <div className="label">TIMING</div>
+      <div className="label label-row">
+        TIMING
+        <button
+          type="button"
+          className={`delta-btn${deltaPeek ? ' on' : ''}`}
+          title="Positions gained/lost since the start"
+          onClick={peekDeltas}
+        >▲▼ GAINED/LOST</button>
+      </div>
       {/* Column headers */}
       <div className="trow-hdr">
-        <span
-          className="hdr-pos-btn"
-          title="Click: show positions gained/lost since start"
-          onClick={peekDeltas}
-        >POS±</span>
+        <span>POS</span>
         <span />
         <span>DRV</span>
         <span title="Tyre compound">TYR</span>
@@ -304,17 +308,7 @@ export const TimingTower = React.memo(function TimingTower({
             aria-label={`${row.id}, position ${row.position ?? 'unknown'}`}
             style={{ cursor: 'pointer' }}
           >
-            <span className="pos-wrap">
-              <span className="pos">{isRetired ? '—' : (row.position ?? '—')}</span>
-              {deltaBadge && (
-                <span
-                  className={`grid-delta grid-delta-${deltaBadge.cls}`}
-                  title="Change vs starting position"
-                >
-                  {deltaBadge.text}
-                </span>
-              )}
-            </span>
+            <span className="pos">{isRetired ? '—' : (row.position ?? '—')}</span>
             <span className="tbar" style={{ background: color }} />
             <span className="code">
               {row.id}
@@ -326,16 +320,18 @@ export const TimingTower = React.memo(function TimingTower({
             <span className={`col-age tyre-age${!isRetired && row.tyre_age_laps != null && row.tyre_age_laps <= 2 ? ' fresh' : ''}`}>
               {isRetired ? '' : (row.tyre_age_laps ?? '—')}
             </span>
-            {deltaPeek ? (
-              <span className={`last-lap delta-peek${deltaBadge ? ` delta-peek-${deltaBadge.cls}` : ''}`}>
-                {isRetired ? '—' : (deltaBadge ? deltaBadge.text : '=')}
-              </span>
-            ) : (
-              <span className="last-lap">
+            <span className="last-lap last-swap">
+              <span className={`swap-layer${deltaPeek ? ' swap-hidden' : ''}`}>
                 {isRetired ? '—' : fmtLastLap(row.last_lap_ms)}
                 {hasFastestLap && !isRetired && <span className="fl-dot" title="Fastest lap">●</span>}
               </span>
-            )}
+              <span
+                className={`swap-layer swap-delta${deltaPeek ? '' : ' swap-hidden'}${deltaBadge ? ` ${deltaBadge.cls}` : ''}`}
+                aria-hidden={!deltaPeek}
+              >
+                {isRetired ? '—' : (deltaBadge ? deltaBadge.text : '=')}
+              </span>
+            </span>
             {trendEl}
             {gapDisplay}
             {intDisplay}

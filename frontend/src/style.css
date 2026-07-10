@@ -599,42 +599,44 @@ body {
   background: var(--red);
   color: #fff;
 }
-/* Gained/lost-since-start badge — stacked UNDER the pos box inside its cell,
-   normal flow (no overlay eating the box). Rows too short to fit it just clip
-   it away via the .trow overflow:hidden — graceful, never overlaps digits. */
-.pos-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  height: 100%;
+/* Gained/lost peek — the GAINED/LOST button cross-fades the LAST column into
+   big ▲/▼ deltas vs the start, then fades back on its own. */
+.label-row {
+  justify-content: space-between;
+  gap: 8px;
 }
-.grid-delta {
-  font: 700 7px var(--cond);
-  letter-spacing: 0.02em;
-  line-height: 8px;
-  text-align: center;
+.delta-btn {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  background: #ffffff10;
+  border: 1px solid #ffffff22;
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 200ms ease, background 200ms ease;
+}
+.delta-btn:hover { color: #fff; background: #ffffff1e; }
+.delta-btn.on { color: #fff; background: #00d2be33; border-color: #00d2be66; }
+.last-swap { position: relative; }
+.swap-layer {
+  transition: opacity 420ms ease;
+  opacity: 1;
+}
+.swap-hidden { opacity: 0; }
+.swap-delta {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  font: 700 14px var(--cond);
+  color: var(--dim);
   pointer-events: none;
 }
-.grid-delta-up { color: #39b54a; }
-.grid-delta-down { color: var(--red); }
-
-/* Gained/lost peek: POS± header click swaps LAST column into big deltas */
-.hdr-pos-btn { cursor: pointer; user-select: none; }
-.hdr-pos-btn:hover { color: #fff; }
-.delta-peek {
-  font: 700 13px var(--cond);
-  color: var(--dim);
-  animation: rl-delta-in 160ms ease-out;
-}
-.delta-peek-up { color: #39b54a; }
-.delta-peek-down { color: var(--red); }
-@keyframes rl-delta-in {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: none; }
-}
+.swap-delta.up { color: #39b54a; }
+.swap-delta.down { color: var(--red); }
 @media (prefers-reduced-motion: reduce) {
-  .delta-peek { animation: none; }
+  .swap-layer { transition: none; }
 }
 .tbar {
   height: min(26px, 100%);
@@ -1325,13 +1327,13 @@ body {
   letter-spacing: 0.04em;
 }
 .focus-lap-delta {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   font-variant-numeric: tabular-nums;
 }
 .focus-lap-delta.up   { color: #39b54a; }
 .focus-lap-delta.down { color: var(--red); }
 .focus-int {
-  font: 600 11px var(--cond);
+  font: 600 12px var(--cond);
   color: var(--dim);
   letter-spacing: 0.06em;
 }
@@ -1407,7 +1409,7 @@ body {
   letter-spacing: 0.04em;
 }
 .h2h-lap-delta {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   font-variant-numeric: tabular-nums;
 }
 .h2h-lap-delta.up   { color: #39b54a; }
@@ -1441,7 +1443,7 @@ body {
   gap: 1px;
 }
 .h2h-delta-label {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.2em;
   color: var(--dim);
 }
@@ -1471,7 +1473,7 @@ body {
 
 /* ── PIT LAP annotation next to lap time ─────────────────────── */
 .focus-pitlap-ann {
-  font: 700 10px/1 var(--cond);
+  font: 700 11px/1 var(--cond);
   letter-spacing: 0.14em;
   color: var(--amber);
   margin-top: 1px;
