@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Battle, DriverState } from '../../api/types'
 import { teamColor } from './teamColors'
 
@@ -66,6 +66,20 @@ export const TimingTower = React.memo(function TimingTower({
   }, [battles])
 
   const rowCount = rows.length || 1
+
+  // Gained/lost peek: clicking the POS header swaps the LAST column into big
+  // ▲/▼ grid-deltas for a moment, then reverts — the always-on badge under the
+  // position number is too small to actually read.
+  const [deltaPeek, setDeltaPeek] = useState(false)
+  const deltaPeekTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const peekDeltas = () => {
+    setDeltaPeek(true)
+    if (deltaPeekTimer.current) clearTimeout(deltaPeekTimer.current)
+    deltaPeekTimer.current = setTimeout(() => setDeltaPeek(false), 2600)
+  }
+  useEffect(() => () => {
+    if (deltaPeekTimer.current) clearTimeout(deltaPeekTimer.current)
+  }, [])
 
   // ── Fastest lap across peloton ────────────────────────────────
   const fastestLapHolder = useMemo(() => {
@@ -205,12 +219,16 @@ export const TimingTower = React.memo(function TimingTower({
       <div className="label">TIMING</div>
       {/* Column headers */}
       <div className="trow-hdr">
-        <span>POS</span>
+        <span
+          className="hdr-pos-btn"
+          title="Click: show positions gained/lost since start"
+          onClick={peekDeltas}
+        >POS±</span>
         <span />
         <span>DRV</span>
         <span title="Tyre compound">TYR</span>
         <span className="col-age" title="Tyre age laps">AGE</span>
-        <span title="Last lap time">LAST</span>
+        <span title="Last lap time">{deltaPeek ? '±START' : 'LAST'}</span>
         <span />
         <span title="Gap to leader">GAP</span>
         <span className="col-int" title="Gap to car ahead">INT</span>
@@ -308,10 +326,16 @@ export const TimingTower = React.memo(function TimingTower({
             <span className={`col-age tyre-age${!isRetired && row.tyre_age_laps != null && row.tyre_age_laps <= 2 ? ' fresh' : ''}`}>
               {isRetired ? '' : (row.tyre_age_laps ?? '—')}
             </span>
-            <span className="last-lap">
-              {isRetired ? '—' : fmtLastLap(row.last_lap_ms)}
-              {hasFastestLap && !isRetired && <span className="fl-dot" title="Fastest lap">●</span>}
-            </span>
+            {deltaPeek ? (
+              <span className={`last-lap delta-peek${deltaBadge ? ` delta-peek-${deltaBadge.cls}` : ''}`}>
+                {isRetired ? '—' : (deltaBadge ? deltaBadge.text : '=')}
+              </span>
+            ) : (
+              <span className="last-lap">
+                {isRetired ? '—' : fmtLastLap(row.last_lap_ms)}
+                {hasFastestLap && !isRetired && <span className="fl-dot" title="Fastest lap">●</span>}
+              </span>
+            )}
             {trendEl}
             {gapDisplay}
             {intDisplay}
