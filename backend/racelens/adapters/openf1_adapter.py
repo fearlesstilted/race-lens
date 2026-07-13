@@ -370,10 +370,12 @@ def _stints_to_events(
         # If lap_start == 1, t = 0 (pre-race); otherwise find it from laps
         if lap_start == 1:
             t_ms = 0
+        elif lap_start is None:
+            continue
         else:
             # Find the LapCompleted for previous lap from lap_rows for this driver
-            t_ms = 0
-            ref_lap = (lap_start or 1) - 1
+            t_ms = None
+            ref_lap = lap_start - 1
             for lr in lap_rows:
                 if (lr.get("driver_number") == dn and lr.get("lap_number") == ref_lap):
                     ds = _parse_iso(lr.get("date_start"))
@@ -382,6 +384,8 @@ def _stints_to_events(
                         with contextlib.suppress(TypeError, ValueError):
                             t_ms = to_ms(ds + float(dur))
                     break
+            if t_ms is None:
+                continue
 
         events.append(mk(sid, "TyreStintUpdated", t_ms, drv,
                          lap=int(lap_start) if lap_start else None,
@@ -520,9 +524,11 @@ def _rows_to_events(
     events: list[Event] = [mk(sid, "SessionStarted", 0)]
 
     t0_posix = _compute_t0(lap_rows)
+    if t0_posix is None:
+        return events
 
     def to_ms(posix: float) -> int:
-        return max(0, round((posix - (t0_posix or 0)) * 1000))
+        return max(0, round((posix - t0_posix) * 1000))
 
     events.extend(_laps_to_events(lap_rows, driver_map, sid, to_ms, mk))
     events.extend(_position_to_events(pos_rows, driver_map, sid, to_ms, mk))
@@ -608,7 +614,7 @@ class OpenF1IncrementalIngester:
     Design:
     - First call: full fetch (equivalent to ingest_openf1).
     - Subsequent calls: for each time-series endpoint, only request rows with
-      ``date>`` the latest date seen so far; static endpoints (/drivers,
+      ``date>=`` the latest date seen so far; static endpoints (/drivers,
       /sessions) are fetched once and reused.
     - Raw rows are accumulated across polls.  Each call re-runs the full
       _rows_to_events() transform over ALL accumulated rows so the replay
@@ -648,13 +654,14 @@ class OpenF1IncrementalIngester:
                 self._latest[endpoint] = latest
 
     def _fetch_timeseries(self, endpoint: str) -> list[dict]:
-        """Fetch rows for a time-series endpoint, using date> filter after first call."""
+        """Fetch rows for a time-series endpoint, including the last-seen boundary."""
         params: dict[str, Any] = {"session_key": self._session_key}
         prev_latest = self._latest.get(endpoint)
         if self._initialized and prev_latest is not None:
             # OpenF1 accepts "date>=" as a literal param key name.
-            # Use strictly-greater-than to avoid re-fetching the last row.
-            params["date>"] = prev_latest
+            # Include the boundary: a new row can share the latest timestamp.
+            # _seen_rows removes the already-fetched boundary rows.
+            params["date>="] = prev_latest
         return _get(endpoint, params) or []
 
     def fetch(self) -> list[Event]:

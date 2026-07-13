@@ -136,6 +136,11 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     def to_ms(posix: float) -> int:
         return max(0, round((posix - t0) * 1000))
 
+    join_ms = next(
+        (to_ms(ts) for _, _, raw_ts in rows if (ts := _parse_iso(raw_ts)) is not None),
+        None,
+    )
+
     # Session badge text ("SILVERSTONE · RACE"): SessionInfo is a keyframe
     # (full history resent on every re-parse), so the first occurrence in the
     # file is stable across polls once the feed has connected.
@@ -162,7 +167,6 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     last_lap_ms: dict[str, int | None] = {}
     retired: set[str] = set()
     last_status: str | None = None  # dedupe SessionStatus vs RCM-derived statuses
-    join_ms: int | None = None  # keyframe events land at the join moment
     session_path: str | None = None  # SessionInfo "Path", to build absolute radio audio_url
 
     def emit_status(status: str, t_ms: int) -> None:
@@ -281,8 +285,6 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             t_ms = join_ms if join_ms is not None else 0
         else:
             t_ms = to_ms(t_posix)
-            if join_ms is None:
-                join_ms = t_ms
 
         if cat == "SessionInfo":
             path = payload.get("Path")

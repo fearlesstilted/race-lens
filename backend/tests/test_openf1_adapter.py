@@ -320,14 +320,14 @@ def test_find_session_404_via_api():
 # ── Incremental ingester tests ────────────────────────────────────────────────
 
 def test_incremental_ingester_two_batches():
-    """Second batch only requests date> filter; final events equal full-fetch events.
+    """Second batch includes the date boundary; final events equal full-fetch events.
 
     Setup:
     - Batch 1: laps 1 only (3 drivers), positions/pits/intervals/rc from T0 only.
     - Batch 2: laps 2 only (3 drivers), remaining rows after T0.
     The mock simulates the real API: on the second call it returns only the new rows
-    (as OpenF1 would after filtering by date>).  The incremental ingester must:
-    1. Include a date> param on the second /laps (and other time-series) call.
+    (as OpenF1 would after filtering by date>=).  The incremental ingester must:
+    1. Include a date>= param on the second /laps (and other time-series) call.
     2. Not re-fetch /drivers or /sessions.
     3. Produce the same events as a full ingest over all rows combined.
     """
@@ -381,12 +381,12 @@ def test_incremental_ingester_two_batches():
         call_log.clear()
         events_incremental = ingester.fetch()  # batch 2
 
-    # After batch 2, the /laps call must have included a date> filter
+    # After batch 2, the /laps call must include the last-seen boundary.
     laps_calls_batch2 = [(path, params) for path, params in call_log if path == "/laps"]
     assert laps_calls_batch2, "Expected at least one /laps call in batch 2"
     _, laps_params = laps_calls_batch2[0]
-    assert "date>" in laps_params, (
-        f"Second /laps fetch must include date> filter; got params={laps_params}"
+    assert "date>=" in laps_params, (
+        f"Second /laps fetch must include date>= filter; got params={laps_params}"
     )
 
     # Static endpoints (/drivers, /sessions) must NOT be fetched again in batch 2
@@ -420,3 +420,51 @@ def test_incremental_ingester_dedupes_rows_without_dates():
         first_count = len(ingester._stint_rows)
         ingester.fetch()
     assert len(ingester._stint_rows) == first_count
+
+
+def test_incremental_ingester_keeps_new_row_at_latest_timestamp():
+    first = {"driver_number": 1, "position": 1, "date": _T0}
+    second = {"driver_number": 16, "position": 2, "date": _T0}
+    position_calls = 0
+    second_params = {}
+
+    def mock_get(path, params=None):
+        nonlocal position_calls, second_params
+        if path == "/sessions":
+            return _SESSIONS
+        if path == "/drivers":
+            return _DRIVERS
+        if path == "/laps":
+            return [r for r in _LAPS if r["lap_number"] == 1]
+        if path == "/position":
+            position_calls += 1
+            if position_calls == 2:
+                second_params = dict(params or {})
+                return [first, second]
+            return [first]
+        return []
+
+    ingester = _mod.OpenF1IncrementalIngester(_SESSION_KEY)
+    with patch.object(_mod, "_get", mock_get):
+        ingester.fetch()
+        ingester.fetch()
+
+    assert second_params["date>="] == _T0
+    assert ingester._pos_rows == [first, second]
+
+
+def test_rows_without_lap1_anchor_do_not_use_unix_epoch():
+    events = _ingest({"/laps": []})
+    assert [(e.type, e.session_time_ms) for e in events] == [("SessionStarted", 0)]
+
+
+def test_later_stint_without_previous_lap_anchor_is_deferred():
+    orphan_stint = {
+        "driver_number": 16,
+        "lap_start": 4,
+        "lap_end": 5,
+        "compound": "HARD",
+        "tyre_age_at_start": 0,
+    }
+    events = _ingest({"/stints": [orphan_stint]})
+    assert not [e for e in events if e.type == "TyreStintUpdated"]

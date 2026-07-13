@@ -86,3 +86,21 @@ def test_session_name_absent_when_no_session_info(tmp_path):
     events = ingest_f1live(_write_feed(tmp_path), session_id="test")
     state = ReplayEngine(events).state_at(0)
     assert state["session_name"] is None
+
+
+def test_keyframe_is_anchored_to_first_live_timestamp(tmp_path):
+    lines = [
+        "['SessionData', {\"StatusSeries\": [{\"SessionStatus\": \"Started\", "
+        "\"Utc\": \"2026-07-05T15:00:00.000Z\"}]}, '']",
+        "['DriverList', {'44': {'Tla': 'HAM'}}, '']",
+        "['TimingAppData', {'Lines': {'44': {'Stints': "
+        "[{'Compound': 'MEDIUM', 'TotalLaps': 3}]}}}, '']",
+        "['TimingData', {'Lines': {'44': {'Position': '1'}}}, "
+        "'2026-07-05T15:05:00.000Z']",
+    ]
+    feed = tmp_path / "midjoin.txt"
+    feed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    events = ingest_f1live(str(feed), session_id="test")
+    tyre = next(e for e in events if e.type == "TyreStintUpdated")
+    assert tyre.session_time_ms == 300_000
