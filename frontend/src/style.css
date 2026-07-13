@@ -718,8 +718,6 @@ body {
   width: 100%;
   height: 100%;
   display: block;
-  transform: scale(1.12);
-  transform-origin: center;
 }
 .map .note {
   position: absolute;
