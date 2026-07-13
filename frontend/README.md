@@ -1,30 +1,28 @@
-# Race Lens Frontend
+# Race Lens frontend
 
-Vite + React timing monitor for replaying a static Race Lens JSONL event timeline.
+React + TypeScript broadcast UI for the Race Lens replay and near-live API.
 
-## Local Data
+The browser does not parse local JSONL fixtures. It requests reconstructed
+state from FastAPI, subscribes to SSE streams, and renders the timing tower,
+track map, race feed, insights, highlights, and experimental strategy views.
 
-Generate the Monaco fixture from the backend:
+## Development
 
-```bash
-cd ../backend
-python -m racelens.cli ingest 2024 Monaco R -o fixtures/monaco_2024_race.jsonl
-```
-
-Expose it to Vite:
+Start the backend on port `8000`, then:
 
 ```bash
-mkdir -p public/fixtures
-cp ../backend/fixtures/monaco_2024_race.jsonl public/fixtures/
-```
-
-## Run
-
-```bash
-npm install
+npm ci
 npm run dev
 ```
 
-The frontend currently reconstructs replay state in the browser from JSONL. Once the FastAPI
-`/state` endpoint is ready, replace the local replay call with API reads and keep the same table
-state shape.
+Open http://localhost:5173. Vite proxies `/api` to
+`http://localhost:8000`; set `RACELENS_API_TARGET` to use another backend.
+
+## Checks
+
+```bash
+npm run build
+npm run lint
+```
+
+The API contract is defined by the backend at http://localhost:8000/docs.
