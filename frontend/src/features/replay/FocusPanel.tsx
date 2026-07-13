@@ -141,7 +141,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
         <span className={`focus-tyre ty ${compound}`}>
           {compound}<span className="age">{driver.tyre_age_laps ?? '—'}</span>
         </span>
-        <span className="focus-pits" style={{ fontSize: 13 }}>{driver.pit_count ?? 0}×PIT</span>
+        <span className="focus-pits" style={{ fontSize: 17 }}>{driver.pit_count ?? 0}×PIT</span>
       </div>
       <div className="focus-laps">
         {laps.length === 0 && <span className="focus-lap-cell dim">—</span>}

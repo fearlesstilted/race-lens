@@ -141,8 +141,8 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
 
   if (phase === 'LOBBY') {
     return (
-      <div className="live-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', padding: '0.75rem 1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <div className="live-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <input
             className="live-input"
             type="number"
@@ -205,7 +205,7 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
           </div>
         </div>
         {source === 'signalr' && (
-          <span style={{ color: '#666', fontSize: '0.65rem', letterSpacing: '0.08em' }}>
+          <span style={{ color: '#666', fontSize: '0.9rem', letterSpacing: '0.08em' }}>
             прямое подключение к официальному F1 live timing — подключайся ДО старта сессии
           </span>
         )}
@@ -216,16 +216,16 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
 
   if (phase === 'SESSIONS') {
     return (
-      <div className="live-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', padding: '0.75rem 1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontStyle: 'italic', fontWeight: 700, letterSpacing: '0.08em', color: '#888', fontSize: '0.75rem' }}>
+      <div className="live-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontStyle: 'italic', fontWeight: 700, letterSpacing: '0.08em', color: '#888', fontSize: '1rem' }}>
             {year} {country.toUpperCase()}
           </span>
-          <button className="b" type="button" onClick={() => setPhase('LOBBY')} style={{ fontSize: '0.7rem' }}>
+          <button className="b" type="button" onClick={() => setPhase('LOBBY')} style={{ fontSize: '0.95rem' }}>
             BACK
           </button>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
           {sessions.map((s) => (
             <button
               key={s.session_key}
@@ -236,7 +236,7 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
               title={s.started ? `Started at ${localTimeLabel(s.date_start)}` : `Starts at ${localTimeLabel(s.date_start)}`}
             >
               {s.session_name}
-              <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 400, opacity: 0.7 }}>
+              <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 400, opacity: 0.7 }}>
                 {localTimeLabel(s.date_start)}{s.started ? '' : ' (scheduled)'}
               </span>
             </button>
@@ -270,17 +270,17 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
           fontFamily: "'Barlow Condensed', sans-serif",
           fontStyle: 'italic',
         }}>
-          <div style={{ color: '#888', fontSize: '0.75rem', letterSpacing: '0.15em', marginBottom: '0.5rem' }}>
+          <div style={{ color: '#888', fontSize: '1rem', letterSpacing: '0.15em', marginBottom: '0.375rem' }}>
             {countdownTarget.session_name.toUpperCase()} STARTS IN
           </div>
-          <div style={{ color: '#fff', fontSize: '3rem', fontWeight: 900, letterSpacing: '0.06em', lineHeight: 1 }}>
+          <div style={{ color: '#fff', fontSize: '3.25rem', fontWeight: 900, letterSpacing: '0.06em', lineHeight: 1 }}>
             {formatCountdown(remainMs)}
           </div>
-          <div style={{ marginTop: '1.25rem', display: 'flex', gap: '0.75rem' }}>
+          <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
             <button className="b" type="button" onClick={() => setPhase('SESSIONS')}>BACK</button>
             <button className="b danger" type="button" onClick={() => { setPhase('LOBBY'); onStop() }}>STOP</button>
           </div>
-          <div style={{ marginTop: '0.75rem', color: '#555', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
+          <div style={{ marginTop: '0.5rem', color: '#555', fontSize: '0.9rem', letterSpacing: '0.1em' }}>
             LIVE CAPTURE STARTS AT THE SCHEDULED TIME
           </div>
         </div>
