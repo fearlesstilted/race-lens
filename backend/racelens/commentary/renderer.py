@@ -1,9 +1,4 @@
-"""Deterministic commentary: insight → human text (PLAN.md §13).
-
-No AI, no NLP — every insight type has a template per (lang, level), filled
-from the insight's evidence. An optional LLM polish layer can come later;
-it would sit on top of this, never replace it.
-"""
+"""Deterministic commentary rendered from insight evidence and templates."""
 from __future__ import annotations
 
 from typing import Any

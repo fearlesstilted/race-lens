@@ -55,8 +55,8 @@ class TranscriptWorker:
     """Live-mode transcript cache: one background thread, in-memory results.
 
     get() never blocks — unknown urls are queued and return None until the
-    worker finishes them. ponytail: in-memory only; the post-race fixture
-    enrichment (CLI) is the durable path.
+    worker finishes them. The cache is intentionally in-memory; post-race
+    fixture enrichment through the CLI is the durable path.
     """
 
     def __init__(self) -> None:

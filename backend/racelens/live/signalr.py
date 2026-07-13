@@ -13,8 +13,8 @@ it would fight uvicorn's event loop, and a feed crash must not kill the API.
 The feed file also doubles as the post-race recording — even if live mode
 fails, `racelens ingest-live` turns it into a replay fixture afterwards.
 
-ponytail: fetch re-parses the WHOLE file every poll — O(n) per poll, ~seconds
-by race end at poll_s>=5. Incremental parsing only if that measurably hurts.
+The fetch re-parses the whole file every poll. Incremental parsing is only
+worth adding if this becomes measurable at the end of a race.
 """
 from __future__ import annotations
 

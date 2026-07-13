@@ -39,7 +39,7 @@ def _cmd_capture_live(args: argparse.Namespace) -> None:
     from fastf1.livetiming.client import SignalRClient
 
     if args.no_auth:
-        # ponytail: fastf1 3.8.3 bug — no_auth passes access_token_factory=None,
+        # fastf1 3.8.3 passes access_token_factory=None when auth is disabled;
         # signalrcore rejects non-callable. Strip the key. Drop when fastf1 fixes.
         from signalrcore.hub_connection_builder import HubConnectionBuilder
 

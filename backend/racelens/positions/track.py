@@ -13,7 +13,7 @@ from typing import Any
 
 # Telemetry kept before lights-out (t=0) so the formation lap / grid forming is
 # visible on the map. ~3 min covers a formation lap; widen if a track needs more.
-# ponytail: fixed window beats trying to detect formation-lap start from the data.
+# A fixed window is more reliable than inferring formation-lap start from telemetry.
 PRE_START_MS = 180_000
 
 SESSION_NAME_MAP = {

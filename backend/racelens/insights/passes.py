@@ -31,7 +31,7 @@ _RETIRE_WINDOW_MS = 30_000
 # is sinking (damage / crawling to the pits), not being raced — suppressed.
 _SINK_COUNT = 3
 _SINK_WINDOW_MS = 120_000
-# ponytail: undercut = X's out-lap advantage jumping Y's stop — X must have a
+# An undercut requires X to have exited the pits shortly before jumping Y's stop:
 # PitOut within ~2 laps before the swap. Time-based; lap-based if tracks vary.
 _UNDERCUT_LOOKBACK_MS = 240_000
 

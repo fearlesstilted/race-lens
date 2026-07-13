@@ -2,12 +2,17 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.agents/
+.codex/
+.planning/
+CLAUDE.md
+GEMINI.md
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
 fastf1_cache/
-# Event fixtures (~1MB each) ARE committed so CI + fresh clones run golden tests.
-# Heavy derived data stays out: raw telemetry (~40MB) and resampled positions (~4MB).
+# Event fixtures are committed so CI and fresh clones can run golden tests.
+# Heavy derived telemetry stays out; Spain positions remain as the ready-to-run demo.
 backend/fixtures/*.positions_raw.jsonl
 backend/fixtures/*.positions.json
 !backend/fixtures/spain_2024_race.positions.json
