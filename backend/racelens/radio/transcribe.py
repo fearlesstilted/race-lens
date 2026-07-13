@@ -44,7 +44,7 @@ def transcribe(url: str) -> str | None:
                 tmp.write(resp.read())
             tmp.flush()
             segments, _ = model.transcribe(tmp.name, language="en", vad_filter=True)
-            text = " ".join(s.text.strip() for s in segments).strip()
+            text = "\n".join(s.text.strip() for s in segments if s.text.strip()).strip()
         return text or None
     except Exception as exc:  # network/codec hiccups must not kill the caller
         print(f"radio transcribe failed for {url}: {exc}", file=sys.stderr)

@@ -67,7 +67,11 @@ const FeedRow = React.memo(function FeedRow({
           </button>
         )}
         {item.text}
-        {item.transcript && <span className="ev-transcript">“{item.transcript}”</span>}
+        {item.transcript && (
+          <span className="ev-transcript">
+            “{item.transcript.replace(/([.!?])\s+/g, '$1\n')}”
+          </span>
+        )}
       </span>
     </div>
   )
