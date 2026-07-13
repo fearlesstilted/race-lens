@@ -167,6 +167,7 @@ function App() {
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
+  const [liveError, setLiveError] = useState<string | null>(null)
   const [liveAvailable, setLiveAvailable] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
 
@@ -174,7 +175,7 @@ function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const prevSessionRef = useRef<string | null>(null)
 
-  // PROJECTION toggle — replay only, persisted in sessionStorage
+  // PROJECTION toggle — replay only
   const [projection, setProjection] = useState(false)
   // WIN % toggle — replay only
   const [winProb, setWinProb] = useState(false)
@@ -246,7 +247,7 @@ function App() {
     const poll = () => {
       liveStatus()
         .then((s) => { if (!cancelled) setLiveStatusData(s) })
-        .catch(() => undefined)
+        .catch(() => { if (!cancelled) setLiveStatusData(null) })
     }
     poll()
     const id = window.setInterval(poll, 5000)
@@ -285,6 +286,9 @@ function App() {
     setMode(next)
     setIsLiveActive(false)
     setLiveStatusData(null)
+    setLiveError(null)
+    setCenterTab('FEED')
+    setSelectedIds([])
   }
 
   const handleSessionChange = (id: string) => {
@@ -390,6 +394,7 @@ function App() {
         <LiveLobby
           signalrAvailable={signalrAvailable}
           onStart={async (y, c, sessionName, source) => {
+            setLiveError(null)
             await liveStart(y, c, sessionName, 12, source)
             setIsLiveActive(true)
           }}
@@ -399,13 +404,19 @@ function App() {
       {mode === 'live' && isLiveActive && (
         <div className="live-bar">
           <LiveStatusPill status={liveStatusData} />
+          {liveError && <span className="live-err">{liveError}</span>}
           <button
             className="b danger"
             type="button"
             onClick={async () => {
-              try { await liveStop() } catch { /* ignore */ }
-              setIsLiveActive(false)
-              setLiveStatusData(null)
+              try {
+                await liveStop()
+                setIsLiveActive(false)
+                setLiveStatusData(null)
+                setLiveError(null)
+              } catch (error) {
+                setLiveError(error instanceof Error ? error.message : 'Failed to stop live session')
+              }
             }}
           >
             STOP
@@ -452,7 +463,6 @@ function App() {
             sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
             atMs={replay.atMs}
             playing={replay.playing}
-            frameMs={replay.frameMs}
             playbackSpeed={replay.speed}
             drivers={state?.drivers ?? {}}
             classification={state?.classification ?? []}
@@ -507,6 +517,7 @@ function App() {
           </div>
         ) : (
           <InsightPanel
+            key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
             insights={replay.insights}
             commentary={replay.commentary}
             selectedIds={selectedIds}
@@ -523,7 +534,6 @@ function App() {
         playing={replay.playing}
         speed={replay.speed}
         frameMs={replay.frameMs}
-        feed={replay.feed}
         markers={replay.markers}
         lang={replay.lang}
         canScrub={replay.canScrub}

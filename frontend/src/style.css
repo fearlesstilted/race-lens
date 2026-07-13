@@ -6,7 +6,6 @@
   --ink: #f4f4f6;
   --dim: #8b8fa3;
   --hair: #ffffff12;
-  --navy: #121a3a;
   --navy2: #1b264f;
   --red: #e8002d;
   --amber: #f2a900;
@@ -676,10 +675,6 @@ body {
 .gap.dim {
   color: var(--dim);
 }
-.gap.amber {
-  color: var(--amber);
-  font-size: 11px;
-}
 .battle-tick {
   position: relative;
 }
@@ -751,14 +746,6 @@ body {
 /* RACE FEED label — matches column label height/style */
 .col-center .ev-scroll > .label {
   flex-shrink: 0;
-}
-/* When focus panel replaces the feed, it should fill remaining space with scroll */
-.col-center .focus-panel,
-.col-center .focus-panel-h2h {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  max-height: none;
 }
 /* Focus now lives in the right column (replaces WHAT TO WATCH on selection). */
 .col-focus {
@@ -1479,18 +1466,6 @@ body {
   margin-top: 1px;
 }
 
-/* ── compact feed strip under focus panel ───────────────────── */
-.ev-scroll-compact {
-  height: 140px;
-  overflow: hidden;
-  border-top: 1px solid var(--hair);
-  flex-shrink: 0;
-}
-.ev-scroll-compact .ev {
-  padding: 6px 22px;
-  font-size: 12px;
-}
-
 /* ── H2H delta labels ─────────────────────────────────────────── */
 .h2h-delta-who {
   font: 600 13px var(--cond);
@@ -2061,9 +2036,9 @@ body {
   transition: color 0.12s, background 0.12s;
 }
 .ctr-tab:last-child { border-right: none; }
-.ctr-tab:hover { color: var(--fg); background: #16161e; }
+.ctr-tab:hover { color: var(--ink); background: #16161e; }
 .ctr-tab.ctr-tab-on {
-  color: var(--fg);
+  color: var(--ink);
   background: #18181f;
   border-bottom: 2px solid var(--amber);
 }
@@ -2418,17 +2393,7 @@ body {
 
 /* ── Timeline markers ───────────────────────────────────────────── */
 /* All marker shapes are SVG-rendered in ReplayDeck.tsx.
-   These classes provide hover lift, pulse for severe events,
-   and consistent sizing tokens. */
-
-/* Sizing tokens used by inline SVG shapes */
-:root {
-  --mk-tri-w: 9px;   /* triangle base width */
-  --mk-tri-h: 8px;   /* triangle height (approx equilateral) */
-  --mk-dot-r: 5px;   /* dot diameter */
-  --mk-line-h: 16px; /* flag-line height */
-  --mk-line-w: 2px;
-}
+   These classes provide hover lift and severe-event emphasis. */
 
 .rail-marker {
   position: absolute;
@@ -2461,7 +2426,7 @@ body {
 /* Broadcast-style polish: cards present, panes crossfade, states ease.
    All gated behind prefers-reduced-motion so it never fights accessibility. */
 @media (prefers-reduced-motion: no-preference) {
-  .tog, .b, .layer-toggle, .mob-tab, .ctr-tab, .seg button, .settings-btn {
+  .tog, .b, .layer-toggle, .mob-tab, .ctr-tab, .settings-btn {
     transition: background-color .15s ease, color .15s ease,
                 border-color .15s ease, box-shadow .15s ease, opacity .15s ease;
   }

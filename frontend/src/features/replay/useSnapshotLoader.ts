@@ -3,7 +3,7 @@
  * critical batch, then feed/battles/commentary as best-effort. Uses a request
  * sequence guard so stale responses never overwrite newer ones.
  */
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { getBattles, getCommentary, getFeed, getInsights, getState } from '../../api/client'
 import type { Insight, RaceState } from '../../api/types'
 import type { Lang, Level } from './replayTypes'
@@ -11,6 +11,10 @@ import type { ReplaySetters } from './replaySetters'
 
 export function useSnapshotLoader(sessionId: string | null, set: ReplaySetters) {
   const requestSeq = useRef(0)
+
+  useLayoutEffect(() => {
+    requestSeq.current++
+  }, [sessionId])
 
   const loadSnapshot = useCallback(
     async (nextAtMs: number, nextLang: Lang, nextLevel: Level) => {
@@ -60,5 +64,5 @@ export function useSnapshotLoader(sessionId: string | null, set: ReplaySetters) 
     [sessionId, set],
   )
 
-  return { loadSnapshot, requestSeq }
+  return { loadSnapshot }
 }

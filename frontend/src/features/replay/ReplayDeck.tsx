@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import type { FeedItem, RaceMarker, Timeline } from '../../api/types'
+import type { RaceMarker, Timeline } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
 
 type Speed = 1 | 5 | 10
@@ -14,7 +14,6 @@ type Props = {
   speed: Speed
   /** Wall-clock ms between stream frames — for cursor transition. */
   frameMs: number
-  feed: FeedItem[]
   markers?: RaceMarker[]
   lang?: Lang
   /** When false (live mode) the scrub rail is disabled and speed controls hidden. */
@@ -35,24 +34,18 @@ type PhaseSegment = {
   label?: string
 }
 
-function buildPhase(feed: FeedItem[], startMs: number, endMs: number): PhaseSegment[] {
+function buildPhase(markers: RaceMarker[], startMs: number, endMs: number): PhaseSegment[] {
   if (endMs <= startMs) return [{ kind: 'green', pct: 100 }]
 
   const statusEvents: { ms: number; kind: PhaseKind; label?: string }[] = [
     { ms: startMs, kind: 'green' },
   ]
 
-  for (const item of feed) {
-    const txt = item.text.toLowerCase()
-    if (item.kind === 'red_flag' || (item.kind === 'status' && txt.includes('red flag'))) {
-      statusEvents.push({ ms: item.at_ms, kind: 'red', label: 'RF' })
-    } else if (txt.includes('virtual safety car') || txt.includes('vsc')) {
-      statusEvents.push({ ms: item.at_ms, kind: 'vsc', label: 'VSC' })
-    } else if (item.kind === 'safety_car' || txt.includes('safety car')) {
-      statusEvents.push({ ms: item.at_ms, kind: 'amber', label: 'SC' })
-    } else if (item.kind === 'green_flag' || txt.includes('green flag') || txt.includes('race resumed')) {
-      statusEvents.push({ ms: item.at_ms, kind: 'green' })
-    }
+  for (const marker of markers) {
+    if (marker.kind === 'RED_FLAG') statusEvents.push({ ms: marker.at_ms, kind: 'red', label: 'RF' })
+    else if (marker.kind === 'VSC') statusEvents.push({ ms: marker.at_ms, kind: 'vsc', label: 'VSC' })
+    else if (marker.kind === 'SAFETY_CAR') statusEvents.push({ ms: marker.at_ms, kind: 'amber', label: 'SC' })
+    else if (marker.kind === 'GREEN') statusEvents.push({ ms: marker.at_ms, kind: 'green' })
   }
 
   statusEvents.sort((a, b) => a.ms - b.ms)
@@ -152,7 +145,7 @@ function clusterMarkers(
   return groups
 }
 
-export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, markers = [], lang = 'en', canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
+export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
     try { return localStorage.getItem(SPOILER_KEY) !== '0' } catch { return true }
   })
@@ -168,8 +161,8 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, feed, mark
 
   const phases = useMemo(() => {
     if (!timeline) return [{ kind: 'green' as const, pct: 100 }]
-    return buildPhase(feed, startMs, endMs)
-  }, [feed, startMs, endMs, timeline])
+    return buildPhase(markers, startMs, endMs)
+  }, [markers, startMs, endMs, timeline])
 
   const lapLabels = useMemo(() => {
     if (!timeline || duration <= 1) return []

@@ -142,9 +142,6 @@ export const getLiveForecast = (laps = 10) =>
 export const getLiveWinProb = () =>
   json<WinProb>('/api/live/win-prob')
 
-export const getLiveBattles = () =>
-  json<BattlesResponse>('/api/live/battles')
-
 export const getLiveSimulatePit = (driver: string) =>
   json<PitSim>(`/api/live/simulate-pit?driver=${encodeURIComponent(driver)}`)
 

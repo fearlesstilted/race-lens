@@ -51,6 +51,7 @@ export function useReplayStream(
       const url = getStreamUrl(nextSpeed, startMs, nextLang, nextLevel)
       const source = new EventSource(url)
       sourceRef.current = source
+      source.onopen = () => set.setError(null)
 
       // Network side-data (feed / battles / commentary). Throttled — these are
       // API round-trips, not the on-screen frame. The table/map are NOT here.
@@ -116,13 +117,12 @@ export function useReplayStream(
       })
 
       source.onerror = () => {
-        closeStream()
-        set.setPlaying(false)
-        set.setError('Stream disconnected')
+        // EventSource reconnects by itself unless explicitly closed.
+        set.setError('Stream disconnected · reconnecting')
       }
     },
     [active, closeStream, getStreamUrl, sessionId, set],
   )
 
-  return { sourceRef, closeStream, openStream }
+  return { closeStream, openStream }
 }

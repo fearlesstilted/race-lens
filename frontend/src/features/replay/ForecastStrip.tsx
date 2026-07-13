@@ -14,7 +14,7 @@ type Props = {
   live?: boolean
 }
 
-// ponytail: throttle, not debounce — during play atMs ticks continuously and a
+// Throttle rather than debounce: during play atMs ticks continuously and a
 // debounce would never fire until pause (the old bug). Throttle fires on the
 // leading edge then at most every THROTTLE_MS, with a trailing fetch on stop.
 const THROTTLE_MS = 1500
@@ -31,11 +31,17 @@ export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs
   const lastFetch = useRef(0)
 
   useEffect(() => {
+    setForecast(null)
+    lastFetch.current = 0
+  }, [sessionId, live])
+
+  useEffect(() => {
     let cancelled = false
     const run = () => {
       lastFetch.current = Date.now()
       const req = live ? getLiveForecast(10) : sessionId ? getForecast(sessionId, atMs, 10) : null
-      req?.then((value) => { if (!cancelled) setForecast(value) }).catch(() => undefined)
+      req?.then((value) => { if (!cancelled) setForecast(value) })
+        .catch(() => { if (!cancelled) setForecast(null) })
     }
     const elapsed = Date.now() - lastFetch.current
     if (elapsed >= THROTTLE_MS) {

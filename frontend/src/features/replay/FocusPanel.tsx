@@ -326,7 +326,7 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers,
   return (
     <div className="focus-panel">
       <div className="focus-cards">
-        <DriverCard driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} />
+        <DriverCard key={idA} driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} />
       </div>
     </div>
   )

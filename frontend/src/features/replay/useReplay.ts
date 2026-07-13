@@ -104,7 +104,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   const { loadSnapshot } = useSnapshotLoader(sessionId, set)
   const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
-  const { greenFlag, greenFlagText, reset: resetGreenFlag } = useGreenFlag(atMs, markers, timeline?.lights_out_ms ?? 0)
+  const { greenFlag, greenFlagText } = useGreenFlag(atMs, markers, timeline?.lights_out_ms ?? 0)
 
   // Source change: reset everything, then load appropriately
   useEffect(() => {
@@ -126,8 +126,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     setFeedError(null)
     setPositionsData(null)
     setMarkers([])
-    resetGreenFlag()
-
     if (!source) return
 
     if (source.kind === 'live') {
@@ -181,16 +179,17 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   // Re-fetch feed + commentary when lang/level change (without resetting position).
   useEffect(() => {
-    if (!sessionId || atMs === 0) return
-    setFeedError(null)
-    getFeed(sessionId, atMs, 30, lang)
-      .then((r) => { setFeed(r.items); setFeedError(null) })
-      .catch((err: unknown) => setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
-    getCommentary(sessionId, atMs, lang, level)
-      .then((r) => setCommentary(r.items))
-      .catch(() => undefined)
+    if (sessionId) {
+      setFeedError(null)
+      getFeed(sessionId, atMs, 30, lang)
+        .then((r) => { setFeed(r.items); setFeedError(null) })
+        .catch((err: unknown) => setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
+      getCommentary(sessionId, atMs, lang, level)
+        .then((r) => setCommentary(r.items))
+        .catch(() => undefined)
+    }
 
-    // Reopen stream with same position but new lang/level so live commentary updates
+    // Reopen replay or live stream with the new language/detail settings.
     if (playing) {
       openStream(speed, atMs, lang, level)
     }

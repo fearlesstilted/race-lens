@@ -32,7 +32,7 @@ const INNER_H = H - PAD.top - PAD.bottom
 const SAMPLES = 20
 const MAX_LIVE_POINTS = 60
 const Y_TICKS = [0, 25, 50, 75, 100]
-// ponytail: throttle the (heavy) series fetch — atMs ticks every frame during play.
+// Throttle the series fetch because atMs changes every frame during playback.
 const THROTTLE_MS = 1500
 
 function scaleX(idx: number, total: number): number {
@@ -65,10 +65,13 @@ export function WinProbGraph({ sessionId, atMs, live }: Props) {
   const lastFetch = useRef(0)
   const liveSeriesRef = useRef<WinProbSeriesPoint[]>([])
 
-  // Reset the accumulated live series when (re)entering live mode.
+  // A new data source must never display the previous source's series.
   useEffect(() => {
-    if (live) liveSeriesRef.current = []
-  }, [live])
+    liveSeriesRef.current = []
+    setSeries([])
+    setDrivers([])
+    lastFetch.current = 0
+  }, [sessionId, live])
 
   useEffect(() => {
     if (!live && atMs === 0) return
@@ -98,7 +101,11 @@ export function WinProbGraph({ sessionId, atMs, live }: Props) {
           setLoading(false)
         })
         .catch(() => {
-          if (!cancelled) setLoading(false)
+          if (!cancelled) {
+            setSeries([])
+            setDrivers([])
+            setLoading(false)
+          }
         })
     }
 

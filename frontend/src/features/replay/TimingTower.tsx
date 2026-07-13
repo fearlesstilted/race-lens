@@ -102,8 +102,6 @@ export const TimingTower = React.memo(function TimingTower({
   // Map driver_id → last measured offsetTop (before render)
   const prevTopsRef = useRef<Map<string, number>>(new Map())
 
-  const containerRef = useRef<HTMLDivElement>(null)
-
   // Track which drivers changed position direction for highlight
   const prevPositionRef = useRef<Map<string, number>>(new Map())
   const [posChanges, setPosChanges] = useState<Map<string, 'up' | 'down'>>(new Map())
@@ -212,7 +210,6 @@ export const TimingTower = React.memo(function TimingTower({
 
   return (
     <div
-      ref={containerRef}
       className="col col-timing"
       style={{ '--row-count': rowCount } as React.CSSProperties}
     >

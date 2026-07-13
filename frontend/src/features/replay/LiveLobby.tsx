@@ -253,7 +253,6 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
           sessionId={null}
           atMs={0}
           playing={false}
-          frameMs={1000}
           playbackSpeed={1}
           drivers={{}}
           classification={[]}

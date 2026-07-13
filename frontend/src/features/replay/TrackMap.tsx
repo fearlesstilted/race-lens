@@ -11,8 +11,6 @@ type Props = {
   sessionId: string | null
   atMs: number
   playing: boolean
-  /** Wall-clock ms between stream frames — used to set CSS transition duration. */
-  frameMs: number
   playbackSpeed: number
   drivers: Record<string, DriverState>
   classification: string[]
@@ -160,12 +158,14 @@ export const TrackMap = React.memo(function TrackMap({
 
   // Fetch track data whenever session changes
   useEffect(() => {
-    if (!sessionId) return
+    let cancelled = false
     setTrackData(null)
     setTrackError(false)
+    if (!sessionId) return
     getTrack(sessionId)
-      .then((d) => setTrackData(d))
-      .catch(() => setTrackError(true))
+      .then((d) => { if (!cancelled) setTrackData(d) })
+      .catch(() => { if (!cancelled) setTrackError(true) })
+    return () => { cancelled = true }
   }, [sessionId])
 
   const status = sessionStatus ?? ''

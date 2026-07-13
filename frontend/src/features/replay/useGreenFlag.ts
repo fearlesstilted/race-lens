@@ -18,8 +18,6 @@ const GRID_FORM_MS = 10000
 export type GreenFlag = {
   greenFlag: boolean
   greenFlagText: string
-  /** no-op kept for API compatibility with useReplay reset on session change */
-  reset: () => void
 }
 
 export function useGreenFlag(
@@ -54,5 +52,5 @@ export function useGreenFlag(
     return { greenFlag: false, greenFlagText: '' }
   }, [atMs, markers, lightsOutMs])
 
-  return { ...result, reset: () => undefined }
+  return result
 }
