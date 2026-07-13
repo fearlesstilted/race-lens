@@ -47,37 +47,10 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
     return session_to_events(ses, session_id_for(year, gp, session))
 
 
-def ingest_live_feed(*feed_files: str, year: int, gp: str,
-                     session: str = "R") -> list[Event]:
-    """Map a recorded F1 SignalR live-timing feed to the same Event timeline.
-
-    *feed_files* are raw recordings saved by
-    :class:`fastf1.livetiming.client.SignalRClient`. FastF1 parses them through
-    its ``livedata`` path, so this reuses the exact historical Session->events
-    mapping in :func:`session_to_events` — no separate feed parser. *year/gp/
-    session* identify the event so FastF1 can attach schedule/circuit metadata.
-
-    ponytail: the pipeline is proven to run offline, but feed->field fidelity is
-    NOT yet validated against a real recording (Plan B Phase 1 needs a live
-    session to capture one). Synthetic feeds encode schema guesses, not reality.
-    """
-    import fastf1
-    from fastf1.livetiming.data import LiveTimingData
-
-    ltd = LiveTimingData(*feed_files)
-    ses = fastf1.get_session(year, gp, session)
-    ses.load(livedata=ltd, telemetry=False, weather=False, messages=True)
-    return session_to_events(ses, session_id_for(year, gp, session),
-                             src="f1live")
-
-
 def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
-    """Normalize a loaded FastF1 Session into the Event timeline.
-
-    Shared by historical ingestion (:func:`ingest_session`) and recorded
-    live-feed ingestion (:func:`ingest_live_feed`).
-    """
+    """Normalize a loaded FastF1 Session into the Event timeline."""
     import pandas as pd
+    from fastf1.exceptions import DataNotLoadedError
 
     events: list[Event] = []
 
@@ -86,7 +59,7 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
     # Emit what we can; the next live poll re-parses a fuller recording.
     try:
         total_laps = ses.total_laps
-    except Exception:
+    except DataNotLoadedError:
         total_laps = None
     events.append(
         event(sid, "SessionStarted", 0, source=src,
@@ -95,7 +68,7 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
 
     try:
         laps = ses.laps
-    except Exception:
+    except DataNotLoadedError:
         return events  # no laps yet (pre-start / formation) — status-only frame
 
     by_lap: dict[int, list[tuple[int, int, str]]] = {}  # lap → [(position, t_end, driver)]

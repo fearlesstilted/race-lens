@@ -58,10 +58,6 @@ def _cmd_capture_live(args: argparse.Namespace) -> None:
         timeout=args.timeout,
         no_auth=args.no_auth,
     )
-    # Record real car coordinates too (fastf1's default topic list omits them).
-    # Costs file size only; enables a real live map (decode is a separate step).
-    if "Position.z" not in client.topics:
-        client.topics.append("Position.z")
     print(
         f"recording live feed → {args.out} "
         f"(no_auth={args.no_auth}, timeout={args.timeout}s); Ctrl-C to stop …",
@@ -71,15 +67,13 @@ def _cmd_capture_live(args: argparse.Namespace) -> None:
 
 
 def _cmd_ingest_live(args: argparse.Namespace) -> None:
-    import fastf1
+    from racelens.adapters.f1live_adapter import ingest_f1live
+    from racelens.adapters.fastf1_adapter import session_id_for
 
-    from racelens.adapters.fastf1_adapter import ingest_live_feed
-
-    cache_dir = Path("fastf1_cache")
-    cache_dir.mkdir(exist_ok=True)
-    fastf1.Cache.enable_cache(str(cache_dir))
-
-    events = ingest_live_feed(*args.feed, year=args.year, gp=args.gp, session=args.session)
+    events = ingest_f1live(
+        *args.feed,
+        session_id=session_id_for(args.year, args.gp, args.session),
+    )
     _write_events(events, args.out)
 
 

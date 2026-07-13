@@ -364,9 +364,8 @@ async def live_start(
             if importlib.util.find_spec("fastf1") is None:
                 raise HTTPException(503, "SignalR live capture requires the fastf1 extra")
             feed_path = FIXTURES_DIR / f"_capture_{year}_{_safe_slug(country)}_{_safe_slug(session)}.txt"
-            # Default no_auth: anonymous feed carries full timing (verified
-            # live). auth=1 uses the fastf1 token cache (one-time browser
-            # login via scripts/f1_login.py) — unlocks Position.z coordinates.
+            # Default no_auth: anonymous feed carries full timing (verified live).
+            # auth=1 uses the fastf1 token cache (scripts/f1_login.py).
             _capture = SignalRCapture(feed_path, no_auth=not auth)
             try:
                 _capture.start()

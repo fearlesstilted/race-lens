@@ -46,7 +46,6 @@ class LiveRunner:
 
         # Accumulated events: event_id → Event
         self._all: dict[str, Event] = {}
-        self._seen: set[str] = set()   # same keys as _all, kept separate for O(1) check
         self._next_seq: int = 0        # monotonic ingest_seq counter across polls
 
         # Stats
@@ -160,8 +159,7 @@ class LiveRunner:
 
         new_count = 0
         for e in events:
-            if e.event_id not in self._seen:
-                self._seen.add(e.event_id)
+            if e.event_id not in self._all:
                 e.ingest_seq = self._next_seq
                 self._next_seq += 1
                 self._all[e.event_id] = e
