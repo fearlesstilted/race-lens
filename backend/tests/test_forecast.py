@@ -1,7 +1,7 @@
 """Tests for the Phase 2 forecast layer: projection, pit simulation, overtake probability."""
 from __future__ import annotations
 
-from racelens.forecast.projection import _tyre_deg, project_order
+from racelens.forecast.projection import project_order
 from racelens.forecast.pit_sim import simulate_pit
 from racelens.forecast.overtake import overtake_probability
 
@@ -139,28 +139,6 @@ def test_project_order_fallback_to_last_lap_ms():
     result = project_order(state, laps_ahead=5)
     assert "VER" in result["projected"]
     assert "NOR" in result["projected"]
-
-
-# ── tyre deg clamp test ───────────────────────────────────────────────────────
-
-
-def test_tyre_deg_clamp():
-    """Rapidly rising lap times (e.g. cliff degradation) clamp to 500 ms/lap."""
-    # Each lap 1000 ms slower → slope = 1000 ms/lap → should clamp to 500
-    deg = _tyre_deg([78_000.0, 79_000.0, 80_000.0])
-    assert deg == 500.0
-
-
-def test_tyre_deg_no_negative():
-    """Improving lap times (e.g. track evolution) → deg clamped to 0."""
-    deg = _tyre_deg([80_000.0, 79_500.0, 79_000.0])
-    assert deg == 0.0
-
-
-def test_tyre_deg_single_lap():
-    """Single lap → slope is 0.0 (not enough data)."""
-    deg = _tyre_deg([78_000.0])
-    assert deg == 0.0
 
 
 # ── simulate_pit tests ────────────────────────────────────────────────────────

@@ -40,28 +40,6 @@ def _clean_laps(laps: list[float]) -> list[float]:
     return clean if clean else laps
 
 
-def _slope(values: list[float]) -> float:
-    """Ordinary least-squares slope for a 1-D sequence."""
-    n = len(values)
-    if n < 2:
-        return 0.0
-    xs = list(range(n))
-    x_mean = sum(xs) / n
-    y_mean = sum(values) / n
-    num = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, values))
-    den = sum((x - x_mean) ** 2 for x in xs)
-    if den == 0:
-        return 0.0
-    return num / den
-
-
-def _tyre_deg(recent_laps_ms: list[float]) -> float:
-    """ms per lap degradation (clamped to [0, 500])."""
-    laps = recent_laps_ms[-3:] if len(recent_laps_ms) >= 3 else recent_laps_ms
-    raw = _slope(laps)
-    return max(0.0, min(raw, 500.0))
-
-
 def project_order(state: Any, laps_ahead: int = 10) -> dict:
     """Project the race order *laps_ahead* laps into the future.
 

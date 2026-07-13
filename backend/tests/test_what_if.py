@@ -140,7 +140,7 @@ def test_pit_now_pit_loss_appears_in_assumptions():
 
 def test_pit_now_without_driver_raises():
     state = _simple_state()
-    with pytest.raises((ValueError, Exception)):
+    with pytest.raises(ValueError, match="requires a driver"):
         what_if(state, "spain_2024_race", "pit_now", driver=None)
 
 
@@ -159,7 +159,7 @@ def test_stay_out_worsens_projection_for_worn_driver():
 
 def test_stay_out_without_driver_raises():
     state = _simple_state()
-    with pytest.raises((ValueError, Exception)):
+    with pytest.raises(ValueError, match="requires a driver"):
         what_if(state, "spain_2024_race", "stay_out", driver=None)
 
 

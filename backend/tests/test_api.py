@@ -275,7 +275,7 @@ def test_download_replay_writes_fixture_and_returns_shape(tmp_path, monkeypatch)
     # Fixture file must have been written
     written = tmp_path / "monaco_2024_race.jsonl"
     assert written.is_file(), f"Expected fixture file at {written}"
-    lines = [l for l in written.read_text(encoding="utf-8").splitlines() if l.strip()]
+    lines = [line for line in written.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert len(lines) == len(fake_events)
 
 
