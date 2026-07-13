@@ -10,6 +10,7 @@
 // i.e. the formation lap occupies [0, LEAD) and lights-out = LEAD. Keeps the
 // timeline non-negative. Must match LIGHTS_OUT_MS (api) and PRE_START_MS (positions/track.py).
 const LEAD_MS: i64 = 180_000;
+const MAX_INTERPOLATION_GAP_MS: i64 = 5_000;
 
 use std::collections::HashMap;
 use std::env;
@@ -70,7 +71,7 @@ pub(crate) fn normalise(x: f64, y: f64, track: &TrackJson) -> (f64, f64) {
 
 /// Resample sorted (t, x, y) points onto a uniform tick grid [start_t..max_t]
 /// step tick_ms. start_t may be negative (pre-start / formation lap).
-/// Gap > 5000 ms → null frame. Returns Vec<Option<(f64, f64)>>.
+/// Gaps above MAX_INTERPOLATION_GAP_MS produce null frames.
 pub(crate) fn resample(
     points: &[(i64, f32, f32)],
     start_t: i64,
@@ -107,7 +108,7 @@ pub(crate) fn resample(
         // Check for gap
         let next_t = if idx + 1 < points.len() { points[idx + 1].0 } else { t0 };
         let gap = if idx + 1 < points.len() { next_t - t0 } else { 0 };
-        if gap > 5000 && t > t0 {
+        if gap > MAX_INTERPOLATION_GAP_MS && t > t0 {
             frames.push(None);
             continue;
         }
@@ -130,6 +131,17 @@ pub(crate) fn resample(
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+fn parse_tick_ms(value: Option<&str>) -> Result<i64, String> {
+    let tick_ms = value
+        .unwrap_or("500")
+        .parse::<i64>()
+        .map_err(|_| "tick_ms must be a positive integer".to_string())?;
+    if tick_ms <= 0 {
+        return Err("tick_ms must be a positive integer".to_string());
+    }
+    Ok(tick_ms)
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 {
@@ -140,11 +152,10 @@ fn main() {
     let raw_path = &args[1];
     let track_path = &args[2];
     let out_path = &args[3];
-    let tick_ms: i64 = if args.len() >= 5 {
-        args[4].parse().expect("tick_ms must be integer")
-    } else {
-        500
-    };
+    let tick_ms = parse_tick_ms(args.get(4).map(String::as_str)).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(1);
+    });
 
     // Load track.json
     let track_str = std::fs::read_to_string(track_path).expect("Cannot read track.json");
@@ -304,6 +315,13 @@ mod tests {
         let frames = resample(&pts, 0, 0, 500, &track);
         assert_eq!(frames.len(), 1);
         assert!(frames[0].is_some());
+    }
+
+    #[test]
+    fn test_tick_ms_must_be_positive() {
+        assert_eq!(parse_tick_ms(None), Ok(500));
+        assert!(parse_tick_ms(Some("0")).is_err());
+        assert!(parse_tick_ms(Some("-500")).is_err());
     }
 
     #[test]
