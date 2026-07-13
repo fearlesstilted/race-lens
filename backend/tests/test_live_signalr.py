@@ -74,6 +74,7 @@ def test_live_start_signalr_wires_runner_and_capture(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "SignalRCapture", FakeCapture)
     monkeypatch.setattr(api, "make_signalr_fetch", fake_make_fetch)
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    monkeypatch.setattr(api.importlib.util, "find_spec", lambda name: object())
 
     c = TestClient(api.app)
     r = c.post("/api/live/start", params={
@@ -139,6 +140,7 @@ def test_live_feed_returns_items_once_engine_ready(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "SignalRCapture", FakeCapture)
     monkeypatch.setattr(api, "make_signalr_fetch", fake_make_fetch)
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    monkeypatch.setattr(api.importlib.util, "find_spec", lambda name: object())
 
     c = TestClient(api.app)
     r = c.post("/api/live/start", params={
