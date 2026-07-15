@@ -23,7 +23,12 @@ const TOP_N = 8
 function deltaMark(delta: number): { text: string; cls: string } {
   if (delta > 0) return { text: `▲${delta}`, cls: 'proj-up' }
   if (delta < 0) return { text: `▼${Math.abs(delta)}`, cls: 'proj-dn' }
-  return { text: '=', cls: 'proj-eq' }
+  return { text: 'HOLD', cls: 'proj-eq' }
+}
+
+function projectedGap(gap: number | null): string {
+  if (gap === null) return '—'
+  return gap === 0 ? 'LEADER' : `+${gap.toFixed(1)}s`
 }
 
 export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs, live }: Props) {
@@ -55,24 +60,50 @@ export const ForecastStrip = React.memo(function ForecastStrip({ sessionId, atMs
   if (!forecast) return null
 
   const top = forecast.projected_order.slice(0, TOP_N)
+  const movers = Object.entries(forecast.projected)
+    .filter(([, value]) => value.delta_pos !== 0)
+    .slice(0, 4)
 
   return (
     <div className="forecast-strip">
-      <div className="forecast-label">
-        PACE OUTLOOK · +{forecast.effective_laps ?? forecast.laps_ahead} LAPS · UNCALIBRATED
+      <div className="forecast-head">
+        <div className="forecast-label">
+          PACE OUTLOOK · +{forecast.effective_laps ?? forecast.laps_ahead} LAPS
+        </div>
+        <span className="forecast-model">EXPERIMENTAL</span>
       </div>
       <div className="forecast-rows">
         {top.map((driverId, i) => {
           const proj = forecast.projected[driverId]
-          const delta = proj ? deltaMark(proj.delta_pos) : { text: '=', cls: 'proj-eq' }
+          const delta = proj ? deltaMark(proj.delta_pos) : { text: '—', cls: 'proj-eq' }
           return (
             <span key={driverId} className="forecast-row">
               <span className="forecast-pos">P{i + 1}</span>
               <span className="forecast-id">{driverId}</span>
+              <span className="forecast-gap">{projectedGap(proj?.projected_gap_s ?? null)}</span>
               <span className={`forecast-delta ${delta.cls}`}>{delta.text}</span>
             </span>
           )
         })}
+      </div>
+      <div className="forecast-movers">
+        <div className="forecast-movers-title">PROJECTED POSITION CHANGES</div>
+        {movers.length > 0 ? (
+          <div className="forecast-mover-list">
+            {movers.map(([driverId, proj]) => {
+              const delta = deltaMark(proj.delta_pos)
+              return (
+                <div key={driverId} className="forecast-mover">
+                  <span className="forecast-id">{driverId}</span>
+                  <span className="forecast-route">P{proj.current_pos} → P{proj.projected_pos}</span>
+                  <span className={`forecast-delta ${delta.cls}`}>{delta.text}</span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="forecast-stable">ORDER STABLE IN THIS WINDOW</div>
+        )}
       </div>
     </div>
   )

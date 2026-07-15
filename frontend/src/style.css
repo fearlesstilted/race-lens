@@ -1862,6 +1862,13 @@ body {
   flex: 1;
   overflow-y: auto;
 }
+.forecast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: var(--s3);
+}
 .forecast-label {
   font: 700 11px var(--cond);
   letter-spacing: 0.34em;
@@ -1869,27 +1876,33 @@ body {
   height: var(--col-label-h);
   display: flex;
   align-items: center;
-  margin-bottom: var(--s2);
+}
+.forecast-model {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.16em;
+  color: var(--amber);
 }
 .forecast-rows {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--s2) var(--s5);
+  gap: var(--s2);
 }
 .forecast-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
+  display: grid;
+  grid-template-columns: 28px 42px 1fr 42px;
+  align-items: center;
+  gap: var(--s1);
   font: 600 15px var(--cond);
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
-  padding: var(--s1) 0;
+  padding: var(--s2) var(--s3);
+  background: #ffffff05;
+  border-left: 2px solid #ffffff16;
 }
 .forecast-pos {
   color: var(--dim);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  min-width: 24px;
 }
 .forecast-id {
   color: var(--ink);
@@ -1897,14 +1910,56 @@ body {
   font-weight: 700;
   letter-spacing: 0.08em;
 }
+.forecast-gap {
+  color: #c8c8d2;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .forecast-delta {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .proj-up { color: #00c853; }
 .proj-dn { color: var(--red); }
 .proj-eq { color: var(--dim); }
+.forecast-movers {
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hair);
+}
+.forecast-movers-title {
+  margin-bottom: var(--s2);
+  font: 700 10px var(--cond);
+  letter-spacing: 0.24em;
+  color: var(--dim);
+}
+.forecast-mover-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.forecast-mover {
+  display: grid;
+  grid-template-columns: 38px auto 32px;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 150px;
+  padding: var(--s2) var(--s3);
+  background: #15151d;
+  border: 1px solid var(--hair);
+  font: 600 14px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.forecast-route {
+  color: #c8c8d2;
+}
+.forecast-stable {
+  font: 600 13px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
 
 /* ── Pit sim card ───────────────────────────────────────────────── */
 .focus-pit-row {
