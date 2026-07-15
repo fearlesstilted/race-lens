@@ -1,6 +1,6 @@
 // 2026 grid — official TeamColour values straight from the F1 live-timing
 // DriverList feed (recorded Silverstone 2026). Unknown drivers fall back to
-// grey, which reads as a ghost car — update this map when the grid changes.
+// grey; update this map when the grid changes.
 export const TEAM_COLORS: Record<string, string> = {
   // Ferrari
   LEC: '#ED1131', HAM: '#ED1131',
@@ -31,7 +31,7 @@ export const teamColor = (driverCode: string): string =>
 
 // ── Tyre compound colors ───────────────────────────────────────────────────
 // Canonical (broadcast-style) palette — single source of truth for all
-// compound-coloured UI (stint bars, on-track compound rings, etc).
+// compound-coloured UI such as stint bars and tyre labels.
 
 export const COMPOUND_COLORS = {
   SOFT: '#e8002d',

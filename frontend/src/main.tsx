@@ -470,7 +470,6 @@ function App() {
             neutralizationStartMs={replay.neutralizationStartMs}
             selectedIds={selectedIds}
             positionsData={effectivePositionsData}
-            projection={mode === 'replay' && projection}
             battles={replay.battles}
             recentPasses={replay.recentPasses}
           />

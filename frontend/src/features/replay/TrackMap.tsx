@@ -4,7 +4,7 @@ import { getTrack } from '../../api/client'
 import type { Battle, DriverState, RecentPass } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
-import { compoundColor, normalizeCompound, teamColor } from './teamColors'
+import { teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
 type Props = {
@@ -20,8 +20,6 @@ type Props = {
   selectedIds?: string[]
   /** Positions telemetry data lifted from parent (useReplay). If null, schematic mode is used. */
   positionsData: PositionsData | null
-  /** Whether the PROJECTION overlay (ghost cars) is enabled. */
-  projection?: boolean
   /** Active battles for on-map highlights */
   battles?: Battle[]
   /** Overtakes in the last ~20s of session time — drives the on-map overtake flash. */
@@ -30,11 +28,6 @@ type Props = {
 
 /** How long the overtake flash ring stays on a driver after their pass. */
 const OVERTAKE_FLASH_MS = 3_000
-
-/** Advance a fractional lap position forward by ghostSec seconds. */
-function advanceGhostFrac(frac: number, ghostSec: number, lapMs: number): number {
-  return ((frac + (ghostSec * 1000) / lapMs) % 1 + 1) % 1
-}
 
 // Pit lane overlay — fixed position in bottom-left of SVG coordinate space
 // These are SVG units, sized relative to typical 600x400 viewbox
@@ -72,12 +65,9 @@ function fmtElapsed(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-// Ghost cars: fractional positions +30s ahead, computed each render in schematic mode
-const GHOST_AHEAD_S = 30
-
 export const TrackMap = React.memo(function TrackMap({
   sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, neutralizationStartMs,
-  selectedIds = [], positionsData, projection = false, battles = [], recentPasses = [],
+  selectedIds = [], positionsData, battles = [], recentPasses = [],
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
@@ -126,35 +116,9 @@ export const TrackMap = React.memo(function TrackMap({
     }
   }, [])
 
-  const { pathRef, registerCar, currentFracRef, driverLapMsRef, pelotonMedianRef } = useTrackAnimation({
+  const { pathRef, registerCar } = useTrackAnimation({
     atMs, playing, playbackSpeed, drivers, classification, sessionStatus, positionsData,
   })
-
-  // Ghost positions for schematic mode — recomputed on atMs change
-  const [ghostPositions, setGhostPositions] = useState<Map<string, [number, number]>>(new Map())
-
-  useEffect(() => {
-    if (!projection || positionsData) {
-      setGhostPositions(new Map())
-      return
-    }
-    const path = pathRef.current
-    if (!path) return
-    const totalLength = path.getTotalLength()
-    const positions = new Map<string, [number, number]>()
-    const pelotonMs = pelotonMedianRef.current
-    for (const driverId of classification) {
-      if (drivers[driverId]?.in_pit || drivers[driverId]?.retired) continue
-      const frac = currentFracRef.current.get(driverId)
-      if (frac === undefined) continue
-      const lapMs = driverLapMsRef.current.get(driverId) ?? pelotonMs
-      const ghostFrac = advanceGhostFrac(frac, GHOST_AHEAD_S, lapMs)
-      const pt = path.getPointAtLength(ghostFrac * totalLength)
-      positions.set(driverId, [pt.x, pt.y])
-    }
-    setGhostPositions(positions)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atMs, projection, positionsData, classification])
 
   // Fetch track data whenever session changes
   useEffect(() => {
@@ -363,8 +327,6 @@ export const TrackMap = React.memo(function TrackMap({
             const showLabel = isSelected || isTop3
             const inBattle = battles.some(b => b.chaser_id === driverId || b.leader_id === driverId)
             const isFlashing = flashingIds.has(driverId)
-            const tyreCompound = drivers[driverId]?.tyre_compound
-            const ringColor = normalizeCompound(tyreCompound) ? compoundColor(tyreCompound) : null
             return (
               <g
                 key={driverId}
@@ -382,19 +344,11 @@ export const TrackMap = React.memo(function TrackMap({
                     strokeWidth={2}
                   />
                 )}
-                {/* Battle glow ring */}
-                {inBattle && (
-                  <circle r={r + 5} fill="none" stroke="#f2a900" strokeWidth={1.2} opacity={0.7} />
-                )}
-                {/* Compound ring */}
-                {ringColor && !inBattle && (
-                  <circle r={r + 3} fill="none" stroke={ringColor} strokeWidth={1} opacity={0.55} />
-                )}
                 <circle
                   r={r}
                   fill={color}
-                  stroke={isSelected ? '#fff' : isTop3 ? '#fff' : 'none'}
-                  strokeWidth={isSelected ? 2 : isTop3 ? 1.5 : 0}
+                  stroke={isSelected ? '#fff' : inBattle ? '#f2a900' : isTop3 ? '#fff' : 'none'}
+                  strokeWidth={isSelected || inBattle ? 2 : isTop3 ? 1.5 : 0}
                 />
                 {showLabel && (
                   <text
@@ -414,16 +368,6 @@ export const TrackMap = React.memo(function TrackMap({
               </g>
             )
           })}
-
-        {/* Ghost cars — projection overlay, +30s ahead, schematic mode only */}
-        {projection && !positionsData && [...ghostPositions.entries()].map(([driverId, [gx, gy]]) => {
-          const color = teamColor(driverId)
-          return (
-            <g key={`ghost-${driverId}`} transform={`translate(${gx.toFixed(1)},${gy.toFixed(1)})`} opacity={0.35} pointerEvents="none">
-              <circle r={7} fill="none" stroke={color} strokeWidth={1.5} />
-            </g>
-          )
-        })}
 
         {/* Pit lane cars — in the pit pocket */}
         {pitDrivers.map((driverId, i) => {
