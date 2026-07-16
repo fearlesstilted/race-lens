@@ -7,6 +7,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
 </p>
 
+<p align="center"><strong><a href="https://race-lens.onrender.com">Open the live demo</a></strong></p>
+
 Race Lens turns recorded timing events into an explainable race state at any
 point in time. The same event timeline always produces the same replay, which
 makes the system straightforward to inspect, test, and extend.
@@ -28,6 +30,11 @@ product. It focuses on data normalization, replay correctness, transparent
 heuristics, and a polished end-to-end demo.
 
 ## Try the demo
+
+Open [race-lens.onrender.com](https://race-lens.onrender.com). The free instance
+may take up to a minute to wake after inactivity.
+
+To run it locally:
 
 ```bash
 docker compose up --build
