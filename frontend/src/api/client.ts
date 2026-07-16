@@ -1,7 +1,11 @@
 import type { BattlesResponse, Capabilities, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
-const json = async <T>(path: string): Promise<T> => {
+const json = async <T>(path: string, retry = true): Promise<T> => {
   const response = await fetch(path)
+  if (retry && [502, 503, 504].includes(response.status)) {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    return json<T>(path, false)
+  }
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}: ${path}`)
   }

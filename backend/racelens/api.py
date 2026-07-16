@@ -14,6 +14,7 @@ import re
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -75,6 +76,10 @@ _live_session_id: Optional[str] = None
 
 # Lock to prevent concurrent start requests.
 _start_lock: asyncio.Lock = asyncio.Lock()
+
+# lru_cache may compute the same missing key concurrently. Fixture parsing is
+# memory-heavy, so serialize cold loads and let later callers hit the cache.
+_engine_load_lock = Lock()
 
 
 @lru_cache(maxsize=1)
@@ -157,7 +162,8 @@ def _engine(session_id: str) -> ReplayEngine:
     """
     path = FIXTURES_DIR / f"{session_id}.jsonl"
     mtime = path.stat().st_mtime if path.is_file() else 0.0
-    return _engine_cached(session_id, str(FIXTURES_DIR), mtime)
+    with _engine_load_lock:
+        return _engine_cached(session_id, str(FIXTURES_DIR), mtime)
 
 
 @lru_cache(maxsize=4)

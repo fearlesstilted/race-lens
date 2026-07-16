@@ -41,6 +41,33 @@ def test_security_headers(client):
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
+def test_engine_cold_load_is_single_flight(tmp_path, monkeypatch):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    import racelens.api as api
+
+    session_id = "cold_race"
+    (tmp_path / f"{session_id}.jsonl").write_text(dump_jsonl(mini_race()), encoding="utf-8")
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._engine_cached.cache_clear()
+    original_load = api.load_jsonl
+    load_count = 0
+
+    def slow_load(text):
+        nonlocal load_count
+        load_count += 1
+        time.sleep(0.05)
+        return original_load(text)
+
+    monkeypatch.setattr(api, "load_jsonl", slow_load)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        engines = list(pool.map(lambda _: api._engine(session_id), range(4)))
+
+    assert load_count == 1
+    assert len({id(engine) for engine in engines}) == 1
+
+
 def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
     import racelens.api as api
 
