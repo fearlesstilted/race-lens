@@ -45,9 +45,9 @@ Then open:
 - UI: http://localhost:5173
 - API docs: http://localhost:8000/docs
 
-Choose **Spain 2024** for the complete bundled experience. Its recorded
-positions are committed, so the track map works without FastF1, Rust, or a
-preprocessing step.
+Start with **Bahrain 2021** for the historical strategy duel, or **Spain 2024**
+for the densest 500 ms telemetry. Every bundled race includes recorded
+positions, so the track map works without FastF1, Rust, or preprocessing.
 
 The root `Dockerfile` builds a single public-demo image on port `7860`.
 It runs as a non-root user with `RACELENS_READONLY=1`, so public deployments
@@ -80,20 +80,26 @@ can replay committed data but cannot start capture jobs or write fixtures.
 
 ## Bundled data
 
-| Session | Events | Track | Recorded positions |
-|---|:---:|:---:|:---:|
-| Monaco 2024 race | yes | yes | regenerate locally |
-| Spain 2024 race | yes | yes | **yes** |
-| Miami 2026 race | yes | yes | regenerate locally |
-| Silverstone 2026 race | yes | yes | regenerate locally |
+| Session | Replay story | Recorded positions |
+|---|---|:---:|
+| Bahrain 2021 race | Hamilton–Verstappen strategy duel | yes |
+| Germany 2019 race | Wet-weather chaos and repeated safety cars | yes |
+| São Paulo 2021 race | Hamilton recovery drive and overtaking | yes |
+| Monaco 2024 race | Street-circuit traffic and strategy | yes |
+| Spain 2024 race | High-density reference replay | yes |
+| Miami 2026 race | Current-era archive replay | yes |
+| Silverstone 2026 race | Deterministic fixture replay | yes |
+
+Silverstone uses recorded XY for the map but fixture events for tower ordering,
+because its archived lap-progress channel is incomplete.
 
 Spa 2026 FP1, qualifying, and race track metadata is also included for the
 near-live track view. Large raw telemetry and most derived position files stay
 out of Git.
 
-The event fixtures power the replay demo and golden tests. They are data
-snapshots, not a claim of live accuracy or permission to redistribute upstream
-data elsewhere.
+The historical set stays within FastF1's full-telemetry era (2018 onward). The
+event fixtures power the demo and golden tests; they are snapshots, not a claim
+of live accuracy or permission to redistribute upstream data elsewhere.
 
 ## Run from source
 

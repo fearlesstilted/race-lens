@@ -12,10 +12,16 @@ GEMINI.md
 .ruff_cache/
 fastf1_cache/
 # Event fixtures are committed so CI and fresh clones can run golden tests.
-# Heavy derived telemetry stays out; Spain positions remain as the ready-to-run demo.
+# Heavy derived telemetry stays out; only curated demo positions are committed.
 backend/fixtures/*.positions_raw.jsonl
 backend/fixtures/*.positions.json
+!backend/fixtures/bahrain_2021_race.positions.json
+!backend/fixtures/germany_2019_race.positions.json
+!backend/fixtures/miami_2026_race.positions.json
+!backend/fixtures/monaco_2024_race.positions.json
+!backend/fixtures/sao_paulo_2021_race.positions.json
 !backend/fixtures/spain_2024_race.positions.json
+!backend/fixtures/silverstone_2026_race.positions.json
 **/target/
 .env
 frontend/node_modules/
