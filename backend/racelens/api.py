@@ -49,6 +49,9 @@ from racelens.replay.engine import ReplayEngine
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 READONLY = os.environ.get("RACELENS_READONLY", "").lower() in {"1", "true", "yes"}
 
+# One parsed replay plus its positions stays below Render Free's 512 MB limit.
+SESSION_CACHE_SIZE = 1
+
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; base-uri 'self'; connect-src 'self'; "
@@ -82,7 +85,7 @@ _start_lock: asyncio.Lock = asyncio.Lock()
 _engine_load_lock = Lock()
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=SESSION_CACHE_SIZE)
 def _radio_worker():
     """Lazy singleton: whisper model loads only when live radio actually shows up."""
     from racelens.radio.transcribe import TranscriptWorker
@@ -137,7 +140,7 @@ def _safe_slug(value: str) -> str:
 LIGHTS_OUT_MS = 180_000
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=SESSION_CACHE_SIZE)
 def _engine_cached(session_id: str, fixtures_dir: str, mtime: float) -> ReplayEngine:
     # mtime is part of the cache key: regenerating a fixture on disk must not
     # keep serving the stale engine (bit us when re-ingesting live recordings).
@@ -166,7 +169,7 @@ def _engine(session_id: str) -> ReplayEngine:
         return _engine_cached(session_id, str(FIXTURES_DIR), mtime)
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=1)
 def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> dict | None:
     path = Path(fixtures_dir) / f"{session_id}.positions.json"
     if not path.is_file():

@@ -42,10 +42,13 @@ def compute_progress(year: int, gp: str, session: str, session_id: str) -> dict[
     ses = fastf1.get_session(year, gp, session_map.get(session.upper(), session))
     ses.load(telemetry=True, weather=False, messages=False)
 
-    # Race-start rebase — identical to fastf1_adapter so the grid lines up.
-    lap1 = ses.laps[ses.laps["LapNumber"] == 1]
-    starts = (lap1["Time"] - lap1["LapTime"]).dropna()
-    t0_ms = starts.min().total_seconds() * 1000 if len(starts) else 0.0
+    # Match positions-raw's physical launch anchor so map and tower stay aligned.
+    from racelens.positions.launch import detect_launch_ms
+    t0_ms = detect_launch_ms(ses)
+    if t0_ms is None:
+        lap1 = ses.laps[ses.laps["LapNumber"] == 1]
+        starts = (lap1["Time"] - lap1["LapTime"]).dropna()
+        t0_ms = starts.min().total_seconds() * 1000 if len(starts) else 0.0
 
     out: dict[str, list] = {}
     for drv in ses.drivers:

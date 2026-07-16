@@ -61,3 +61,12 @@ def detect_launch_date(ses):
         else:
             i += 1
     return pd.Timestamp(launch) if launch is not None else None
+
+
+def detect_launch_ms(ses) -> int | None:
+    """Standing-start launch in FastF1 session-time milliseconds."""
+    launch_date = detect_launch_date(ses)
+    if launch_date is None:
+        return None
+    session_zero = ses.date - ses.session_start_time
+    return int((launch_date - session_zero).total_seconds() * 1000)

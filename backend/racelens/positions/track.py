@@ -120,10 +120,9 @@ def export_raw_positions(year: int, gp: str, session: str, out: Path) -> int:
     # Anchor t=0 to the detected standing-start launch, in the SAME Date clock
     # used below, so the map's lights-out lines up with the cars actually
     # leaving the grid. Fall back to lap-1 start if no clean grid-hold is found.
-    from racelens.positions.launch import detect_launch_date
-    launch_date = detect_launch_date(ses)
-    if launch_date is not None:
-        t0_ms = int((launch_date - session_zero).total_seconds() * 1000)
+    from racelens.positions.launch import detect_launch_ms
+    t0_ms = detect_launch_ms(ses)
+    if t0_ms is not None:
         print(f"launch detected → t0 = {t0_ms} ms", file=sys.stderr)
     else:
         lap1 = ses.laps[ses.laps["LapNumber"] == 1]
