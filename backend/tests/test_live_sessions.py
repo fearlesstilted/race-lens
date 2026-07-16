@@ -98,6 +98,14 @@ def test_network_error_returns_502(client):
     assert "unavailable" in r.json()["detail"].lower()
 
 
+def test_readonly_does_not_call_openf1(client, monkeypatch):
+    monkeypatch.setattr(api, "READONLY", True)
+    with patch.object(_mod, "_get") as get:
+        response = client.get("/api/live/sessions", params={"year": 2026})
+    assert response.status_code == 403
+    get.assert_not_called()
+
+
 def test_year_only_no_country(client):
     """Omitting country should work — returns all sessions for that year."""
     with patch.object(_mod, "_get", _mock_get(_SESSIONS)):

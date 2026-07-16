@@ -16,8 +16,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response
 
 from racelens.adapters.openf1_adapter import (
     OpenF1IncrementalIngester,
@@ -45,6 +47,20 @@ from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 READONLY = os.environ.get("RACELENS_READONLY", "").lower() in {"1", "true", "yes"}
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; base-uri 'self'; connect-src 'self'; "
+        "font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'; "
+        "img-src 'self' data:; media-src 'self' https:; object-src 'none'; "
+        "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
+    ),
+    "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+}
 
 # Global live runner — None when no live session is active.
 _live: Optional[LiveRunner] = None
@@ -78,7 +94,23 @@ async def lifespan(app: FastAPI):
         _capture.stop()
 
 
-app = FastAPI(title="Race Lens", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Race Lens",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None if READONLY else "/docs",
+    redoc_url=None if READONLY else "/redoc",
+    openapi_url=None if READONLY else "/openapi.json",
+)
+
+
+@app.middleware("http")
+async def add_security_headers(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
+    response = await call_next(request)
+    response.headers.update(SECURITY_HEADERS)
+    return response
 
 
 def _require_writable() -> None:
@@ -604,7 +636,7 @@ def download_replay(
 
 @app.get("/api/live/sessions")
 def live_sessions(
-    year: int = Query(...),
+    year: int = Query(..., ge=1950, le=2100),
     country: Optional[str] = Query(default=None),
 ) -> list[dict]:
     """List sessions for a given year (and optional country) from OpenF1.
@@ -613,6 +645,8 @@ def live_sessions(
     that is True when the current UTC time is >= date_start.
     """
     import urllib.error
+
+    _require_writable()
 
     try:
         return _openf1_list_sessions(year, country)

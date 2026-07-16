@@ -34,6 +34,13 @@ def test_sessions_and_state(client):
     assert client.get("/api/sessions/nope/state", params={"at_ms": 0}).status_code == 404
 
 
+def test_security_headers(client):
+    response = client.get("/api/ping")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
 def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
     import racelens.api as api
 
