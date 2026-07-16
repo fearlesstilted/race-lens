@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: race-lens
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/ping
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: "7860"
