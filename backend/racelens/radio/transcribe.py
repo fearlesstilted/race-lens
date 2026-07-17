@@ -83,6 +83,8 @@ def enrich_fixture(path: Path) -> int:
     """
     import json
 
+    from racelens.events.models import make_event_id
+
     lines = path.read_text(encoding="utf-8").splitlines()
     done = 0
     for i, ln in enumerate(lines):
@@ -93,6 +95,10 @@ def enrich_fixture(path: Path) -> int:
             text = transcribe(url)
             if text:
                 p["transcript"] = text
+                e["event_id"] = make_event_id(
+                    e["session_id"], e["type"], e["session_time_ms"],
+                    e.get("driver_id"), p,
+                )
                 done += 1
                 lines[i] = json.dumps(e, ensure_ascii=False, separators=(",", ":"))
                 # Write after every clip: a killed run keeps its progress and a

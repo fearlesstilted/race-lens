@@ -321,6 +321,11 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             for c in items:
                 if not isinstance(c, dict) or not c.get("Path"):
                     continue
+                # Keyframes contain the full radio history. Their row timestamp
+                # is the join time, not the clip time; each capture carries its
+                # own UTC timestamp and must be placed on the replay with that.
+                radio_posix = _parse_iso(str(c.get("Utc") or ""))
+                radio_ms = to_ms(radio_posix) if radio_posix is not None else t_ms
                 d = drv(str(c.get("RacingNumber", "")))
                 radio_payload: dict[str, Any] = {
                     "category": "Radio",
@@ -331,7 +336,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                     radio_payload["audio_url"] = (
                         f"https://livetiming.formula1.com/static/{session_path}{c['Path']}"
                     )
-                events.append(event(sid, "RaceControlMessage", t_ms, d,
+                events.append(event(sid, "RaceControlMessage", radio_ms, d,
                                     lap=laps.get(d, 0) + 1,
                                     **radio_payload))
 

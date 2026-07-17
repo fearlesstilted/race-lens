@@ -36,6 +36,7 @@ def test_team_radio_gets_absolute_audio_url_and_lap(tmp_path):
     r = radio[0]
     assert r.driver_id == "HAM"
     assert r.lap == 1
+    assert r.session_time_ms == 300_000
     assert r.payload["audio_path"] == _RADIO_PATH
     assert r.payload["audio_url"] == f"https://livetiming.formula1.com/static/{_SESSION_PATH}{_RADIO_PATH}"
 

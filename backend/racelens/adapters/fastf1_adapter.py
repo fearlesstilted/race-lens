@@ -8,8 +8,11 @@ Requires the `fastf1` extra:  pip install -e ".[fastf1]"
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from racelens.adapters._common import message_to_status
-from racelens.events.models import Event, event
+from racelens.events.models import Event, event, make_event_id
 
 
 def _ms(td) -> int | None:
@@ -42,6 +45,9 @@ def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
     """
     import fastf1
 
+    cache_dir = Path(os.environ.get("FASTF1_CACHE", "fastf1_cache"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    fastf1.Cache.enable_cache(str(cache_dir))
     ses = fastf1.get_session(year, gp, session)
     ses.load(telemetry=False, weather=False, messages=True)
     return session_to_events(ses, session_id_for(year, gp, session))
@@ -165,6 +171,9 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
     if t0_ms:
         for e in events:
             e.session_time_ms = max(e.session_time_ms - t0_ms, 0)
+            e.event_id = make_event_id(
+                e.session_id, e.type, e.session_time_ms, e.driver_id, e.payload
+            )
 
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events

@@ -2,7 +2,7 @@
 import json
 
 from racelens.commentary.feed import render_feed
-from racelens.events.models import event
+from racelens.events.models import event, make_event_id
 from racelens.radio import transcribe as rt
 
 
@@ -43,3 +43,6 @@ def test_enrich_fixture_fills_and_skips(tmp_path, monkeypatch) -> None:
     assert got[0]["payload"]["transcript"] == "text for https://x/1.mp3"
     assert got[1]["payload"]["transcript"] == "old"  # untouched
     assert "transcript" not in got[2]["payload"]
+    assert got[0]["event_id"] == make_event_id(
+        "s", "RaceControlMessage", 1, "HAM", got[0]["payload"]
+    )

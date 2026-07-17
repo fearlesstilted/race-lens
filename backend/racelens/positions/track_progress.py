@@ -37,7 +37,9 @@ def compute_progress(year: int, gp: str, session: str, session_id: str) -> dict[
         "R": "Race", "Q": "Qualifying",
         "FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3",
     }
-    fastf1.Cache.enable_cache(str(Path("fastf1_cache")))
+    cache_dir = Path(os.environ.get("FASTF1_CACHE", "fastf1_cache"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    fastf1.Cache.enable_cache(str(cache_dir))
     print(f"Loading {year} {gp} {session} telemetry …", file=sys.stderr)
     ses = fastf1.get_session(year, gp, session_map.get(session.upper(), session))
     ses.load(telemetry=True, weather=False, messages=False)

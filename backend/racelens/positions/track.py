@@ -26,8 +26,10 @@ def _load_session(year: int, gp: str, session: str):
     """Load a FastF1 session with telemetry, using the local cache dir."""
     import fastf1
 
-    cache_dir = Path("fastf1_cache")
-    cache_dir.mkdir(exist_ok=True)
+    import os
+
+    cache_dir = Path(os.environ.get("FASTF1_CACHE", "fastf1_cache"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
     fastf1.Cache.enable_cache(str(cache_dir))
 
     session_name = SESSION_NAME_MAP.get(session.upper(), session)
