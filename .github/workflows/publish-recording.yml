@@ -1,0 +1,41 @@
+name: Publish recording
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'capture/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate trusted diff boundary
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch origin "$SHA"
+          git merge-base --is-ancestor origin/main "$SHA"
+          test "$(git rev-list --count origin/main.."$SHA")" = 1
+          python deploy/recorder/verify_capture.py --head "$SHA" --paths-only
+      - name: Fast-forward main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh api --method PATCH "repos/$REPOSITORY/git/refs/heads/main" \
+            -f sha="$SHA" -F force=false
