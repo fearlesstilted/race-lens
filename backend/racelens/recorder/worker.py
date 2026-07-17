@@ -102,11 +102,15 @@ class Recorder:
         self.now = now or (lambda: datetime.now(UTC))
         self.sleep = sleep
         self.store = StateStore(config.state_dir / "recorder.json")
+        self.heartbeat = config.state_dir / "heartbeat"
         self._schedule: list[ScheduledSession] = []
         self._schedule_loaded_at: datetime | None = None
         self._schedule_years: set[int] = set()
         for path in (config.state_dir, config.raw_dir, config.data_dir):
             path.mkdir(parents=True, exist_ok=True)
+
+    def _beat(self) -> None:
+        self.heartbeat.touch()
 
     def _paths(self, session: ScheduledSession) -> dict[str, Path]:
         stem = fixture_stem(session)
@@ -149,6 +153,7 @@ class Recorder:
         finished_at: datetime | None = None
         try:
             while True:
+                self._beat()
                 now = self.now()
                 inspection = inspect_feed(raw, session)
                 if inspection.finished and finished_at is None:
@@ -178,7 +183,9 @@ class Recorder:
         merged_env = os.environ.copy()
         if env:
             merged_env.update(env)
+        self._beat()
         subprocess.run(argv, check=True, timeout=PROCESS_TIMEOUT, env=merged_env)
+        self._beat()
 
     def _stage(self, session: ScheduledSession, artifacts: list[Path]) -> None:
         destination = self._paths(session)["publish"]
@@ -347,10 +354,12 @@ class Recorder:
 
     def run_forever(self) -> None:
         while True:
+            self._beat()
             try:
                 print(f"{self.now().isoformat()} {self.run_once()}", flush=True)
             except Exception as exc:
                 print(f"{self.now().isoformat()} worker error: {exc}", file=sys.stderr, flush=True)
+            self._beat()
             self.sleep(self.config.interval_seconds)
 
 

@@ -55,3 +55,12 @@ docker run -d \
 
 docker ps --filter "name=^/${container}$" \
     --format 'name={{.Names}} image={{.Image}} status={{.Status}} ports={{.Ports}}'
+
+watchdog="$script_dir/watchdog.sh"
+watchdog_log="$storage_dir/watchdog.log"
+watchdog_marker='# race-lens-recorder-watchdog'
+watchdog_entry="*/2 * * * * $watchdog >> $watchdog_log 2>&1 $watchdog_marker"
+(
+    crontab -l 2>/dev/null | grep -Fv "$watchdog_marker" || true
+    printf '%s\n' "$watchdog_entry"
+) | crontab -

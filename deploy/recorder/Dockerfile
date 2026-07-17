@@ -28,6 +28,6 @@ WORKDIR /var/lib/race-lens-recorder
 USER 65534:65534
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD ["python", "-c", "import os; os.kill(1, 0)"]
+    CMD ["python", "-m", "racelens.recorder.health"]
 
 ENTRYPOINT ["/usr/local/bin/race-lens-recorder"]

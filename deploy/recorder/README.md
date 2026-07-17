@@ -27,6 +27,10 @@ No Compose or sudo is required. The script replaces only the container named
 - `~/.local/share/race-lens-recorder/state/`
 - `~/.local/share/race-lens-recorder/raw/`
 
+The installer also adds a two-minute host watchdog. Health requires a recent
+worker heartbeat and, during capture, a growing raw feed. An unhealthy
+container is restarted and resumes the same recording by appending.
+
 ## Publication boundary
 
 The container has no repository or SSH key. It can only write an exact fixture,
