@@ -76,6 +76,7 @@ can replay committed data but cannot start capture jobs or write fixtures.
 | Narrative | Commentary, significant events, highlights, driver of the day | [backend/racelens/commentary/](backend/racelens/commentary/) |
 | API | FastAPI REST, SSE, and local near-live runner | [backend/racelens/api.py](backend/racelens/api.py) |
 | Telemetry | Rust JSONL-to-position-frame resampler | [rust/race-core/](rust/race-core/) |
+| Recorder | Scheduled capture, archive validation, radio merge, and CI-gated publication | [backend/racelens/recorder/](backend/racelens/recorder/) |
 | UI | React + TypeScript replay/live dashboard | [frontend/src/](frontend/src/) |
 
 ## Bundled data
@@ -171,6 +172,20 @@ cargo run --release -- \
 
 The Rust CLI linearly interpolates short gaps, emits null frames across longer
 gaps, and normalizes raw coordinates to the SVG viewbox.
+
+### Unattended race weekends
+
+The optional Debian recorder follows the FastF1 UTC schedule from FP1 through
+the race. It starts early, records the F1 SignalR feed, verifies the meeting,
+round, year, and session before accepting data, and resumes safely after a
+restart. Raw and provisional data stay on the server; archive processing is
+retried without repeating capture.
+
+Races and sprints pass an archive coverage gate before a three-file fixture is
+sent through an isolated `capture/*` branch. GitHub Actions runs Python, Rust,
+frontend, and fixture validation before moving `main`, which in turn lets
+Render deploy the already-checked commit. See
+[deploy/recorder/README.md](deploy/recorder/README.md) for deployment details.
 
 ## API guide
 
