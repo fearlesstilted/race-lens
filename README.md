@@ -90,13 +90,14 @@ can replay committed data but cannot start capture jobs or write fixtures.
 | Spain 2024 race | High-density reference replay | yes |
 | Miami 2026 race | Current-era archive replay | yes |
 | Silverstone 2026 race | Deterministic fixture replay | yes |
+| Belgium 2026 FP1 | Verstappen leads Friday practice | yes |
+| Belgium 2026 FP2 | Antonelli–Norris–Verstappen top three | yes |
 
 Silverstone uses recorded XY for the map but fixture events for tower ordering,
 because its archived lap-progress channel is incomplete.
 
-Spa 2026 FP1, qualifying, and race track metadata is also included for the
-near-live track view. Large raw telemetry and most derived position files stay
-out of Git.
+Spa 2026 qualifying and race track metadata is also included for the near-live
+track view. Large raw telemetry and most derived position files stay out of Git.
 
 The historical set stays within FastF1's full-telemetry era (2018 onward). The
 event fixtures power the demo and golden tests; they are snapshots, not a claim

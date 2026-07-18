@@ -22,6 +22,8 @@ backend/fixtures/*.positions.json
 !backend/fixtures/sao_paulo_2021_race.positions.json
 !backend/fixtures/spain_2024_race.positions.json
 !backend/fixtures/silverstone_2026_race.positions.json
+!backend/fixtures/belgian_2026_fp1.positions.json
+!backend/fixtures/belgian_2026_fp2.positions.json
 **/target/
 .env
 frontend/node_modules/
