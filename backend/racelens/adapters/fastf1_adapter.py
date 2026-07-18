@@ -37,6 +37,30 @@ def session_id_for(year: int, gp: str, session: str) -> str:
     return f"{year}_{gp.lower().replace(' ', '_')}_{session.lower()}"
 
 
+def best_lap_position_events(
+    sid: str,
+    laps: list[tuple[int, str, int | None]],
+    src: str = "fastf1",
+) -> list[Event]:
+    """Build practice/qualifying order when FastF1 has no race position column."""
+    best: dict[str, int] = {}
+    positions: dict[str, int] = {}
+    out: list[Event] = []
+    for at_ms, driver, lap_time_ms in sorted(laps):
+        if lap_time_ms is None or lap_time_ms >= best.get(driver, float("inf")):
+            continue
+        best[driver] = lap_time_ms
+        order = sorted(best, key=lambda item: (best[item], item))
+        for position, item in enumerate(order, 1):
+            if positions.get(item) == position:
+                continue
+            positions[item] = position
+            out.append(
+                event(sid, "PositionChanged", at_ms, item, source=src, position=position)
+            )
+    return out
+
+
 def ingest_session(year: int, gp: str, session: str = "R") -> list[Event]:
     """Load a historical session via FastF1 and normalize it to events.
 
@@ -78,6 +102,7 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
         return events  # no laps yet (pre-start / formation) — status-only frame
 
     by_lap: dict[int, list[tuple[int, int, str]]] = {}  # lap → [(position, t_end, driver)]
+    completed: list[tuple[int, str, int | None]] = []
     for _, lap in laps.iterlaps():
         drv = str(lap["Driver"])
         lap_no = int(lap["LapNumber"])
@@ -85,9 +110,11 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
         if t_end is None:
             continue
 
+        lap_time_ms = _ms(lap["LapTime"])
+        completed.append((t_end, drv, lap_time_ms))
         events.append(
             event(sid, "LapCompleted", t_end, drv, lap=lap_no, source=src,
-                  lap_time_ms=_ms(lap["LapTime"]))
+                  lap_time_ms=lap_time_ms)
         )
         if not pd.isna(lap["Position"]):
             pos = int(lap["Position"])
@@ -109,6 +136,9 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
                           compound=str(lap["Compound"]),
                           age_laps=int(lap["TyreLife"]) if not pd.isna(lap["TyreLife"]) else 0)
                 )
+
+    if not by_lap:
+        events.extend(best_lap_position_events(sid, completed, src))
 
     # Timing-screen gaps/intervals, derived from line-crossing times on the
     # same lap number. Approximation: exact for cars on the lead lap, coarse
