@@ -2,7 +2,7 @@
 import json
 
 from racelens.commentary.feed import render_feed
-from racelens.events.models import event, make_event_id
+from racelens.events.models import dump_jsonl, event, load_jsonl, make_event_id
 from racelens.radio import transcribe as rt
 
 
@@ -46,3 +46,19 @@ def test_enrich_fixture_fills_and_skips(tmp_path, monkeypatch) -> None:
     assert got[0]["event_id"] == make_event_id(
         "s", "RaceControlMessage", 1, "HAM", got[0]["payload"]
     )
+
+
+def test_enrich_fixture_restores_order_after_event_id_changes(tmp_path, monkeypatch) -> None:
+    fx = tmp_path / "r.jsonl"
+    radio = event(
+        "s", "RaceControlMessage", 1, "HAM", category="Radio",
+        message="RADIO: HAM", audio_url="https://x/1.mp3",
+    )
+    other = event("s", "RaceControlMessage", 1, category="Other", message="5")
+    fx.write_text(dump_jsonl(sorted([radio, other], key=lambda item: item.event_id)))
+    monkeypatch.setattr(rt, "transcribe", lambda url: f"text for {url}")
+
+    rt.enrich_fixture(fx)
+
+    got = load_jsonl(fx.read_text())
+    assert got == sorted(got, key=lambda item: (item.session_time_ms, item.event_id))
