@@ -83,7 +83,7 @@ def enrich_fixture(path: Path) -> int:
     """
     import json
 
-    from racelens.events.models import make_event_id
+    from racelens.events.models import dump_jsonl, load_jsonl, make_event_id
 
     lines = path.read_text(encoding="utf-8").splitlines()
     done = 0
@@ -105,4 +105,7 @@ def enrich_fixture(path: Path) -> int:
                 # re-run resumes from the first missing transcript.
                 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
                 print(f"  {e.get('driver_id')}: {text[:70]}", file=sys.stderr)
+    events = load_jsonl("\n".join(lines))
+    events.sort(key=lambda event_: (event_.session_time_ms, event_.event_id))
+    path.write_text(dump_jsonl(events), encoding="utf-8")
     return done
