@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { SessionSummary } from '../../api/types'
-import { sessionLabel } from '../../lib/format'
+import { sessionLabel, sessionMeta, sessionTypeLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
 import { HighlightsPanel } from './HighlightsPanel'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
@@ -37,6 +37,16 @@ type Props = {
 
 export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, liveAvailable, projection, winProb, voice, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
+  const choices = sessions.map((item) => ({ ...item, ...sessionMeta(item.session_id) }))
+  const current = choices.find((item) => item.session_id === sessionId) ?? choices[0]
+  const years = [...new Set(choices.map((item) => item.year))].sort().reverse()
+  const events = [...new Set(choices.filter((item) => item.year === current?.year).map((item) => item.event))]
+  const types = choices.filter((item) => item.year === current?.year && item.event === current?.event)
+  const choose = (matches: (item: typeof choices[number]) => boolean) => {
+    const next = choices.find((item) => matches(item) && item.type === current?.type)
+      ?? choices.find(matches)
+    if (next) onSessionChange(next.session_id)
+  }
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
   const anyLayer = projection || winProb || voice || level === 'beginner'
@@ -48,22 +58,22 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
 
       {mode === 'replay' ? (
         <div className="sess">
-          {sessions.length > 1 ? (
-            <select
-              className="sess-select"
-              value={sessionId ?? ''}
-              onChange={(e) => onSessionChange(e.target.value)}
-            >
-              {sessions.map((s) => (
-                <option key={s.session_id} value={s.session_id}>
-                  {sessionLabel(s.session_id)}
-                </option>
-              ))}
-            </select>
+          {sessions.length > 1 && current ? (
+            <div className="sess-picker">
+              <select aria-label="Season" className="sess-select sess-year" value={current.year} onChange={(event) => choose((item) => item.year === event.target.value)}>
+                {years.map((year) => <option key={year}>{year}</option>)}
+              </select>
+              <select aria-label="Grand Prix" className="sess-select sess-event" value={current.event} onChange={(event) => choose((item) => item.year === current.year && item.event === event.target.value)}>
+                {events.map((event) => <option key={event}>{event}</option>)}
+              </select>
+              <select aria-label="Session" className="sess-select sess-type" value={current.session_id} onChange={(event) => onSessionChange(event.target.value)}>
+                {types.map((item) => <option key={item.session_id} value={item.session_id}>{sessionTypeLabel(item.type)}</option>)}
+              </select>
+            </div>
           ) : (
             <b>{label.toUpperCase()}</b>
           )}
-          <i>Race · replay · source: {session?.source ?? 'unknown'}</i>
+          <i>{current ? sessionTypeLabel(current.type) : 'Session'} · replay · source: {session?.source ?? 'unknown'}</i>
         </div>
       ) : (
         <div className="sess">
