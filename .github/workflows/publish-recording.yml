@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -31,11 +32,18 @@ jobs:
           git merge-base --is-ancestor origin/main "$SHA"
           test "$(git rev-list --count origin/main.."$SHA")" = 1
           python deploy/recorder/verify_capture.py --head "$SHA" --paths-only
-      - name: Fast-forward main
+      - name: Publish through data PR
         env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          gh api --method PATCH "repos/$REPOSITORY/git/refs/heads/main" \
-            -f sha="$SHA" -F force=false
+          pr=$(gh pr list --repo "$REPOSITORY" --base main --head "$BRANCH" \
+            --state open --json number --jq '.[0].number')
+          if [ -z "$pr" ]; then
+            url=$(gh pr create --repo "$REPOSITORY" --base main --head "$BRANCH" \
+              --title "data(${BRANCH#capture/}): publish recorded session" \
+              --body "Validated recorder publication. Merged automatically after CI.")
+            pr=${url##*/}
+          fi
+          gh pr merge --repo "$REPOSITORY" --rebase "$pr"
