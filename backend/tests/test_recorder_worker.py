@@ -50,6 +50,14 @@ def test_config_rejects_unknown_publish_session(tmp_path, monkeypatch):
         Config.from_env()
 
 
+def test_config_publishes_every_session_type_by_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("RACELENS_RECORDER_DATA", str(tmp_path))
+    monkeypatch.delenv("RECORDER_PUBLISH_SESSIONS", raising=False)
+    assert Config.from_env().publish_sessions == frozenset(
+        {"FP1", "FP2", "FP3", "Q", "SQ", "Sprint", "R"}
+    )
+
+
 def test_capture_then_processing_retry_never_recaptures(tmp_path, monkeypatch):
     clock = [datetime(2026, 7, 19, 12, 55, tzinfo=UTC)]
     session = ScheduledSession(2026, 13, "Belgian Grand Prix", "R", clock[0])

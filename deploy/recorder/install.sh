@@ -20,7 +20,7 @@ if [ ! -e "$env_file" ]; then
         'RECORDER_INTERVAL_SEC=120' \
         'RECORDER_CAPTURE_POLL_SEC=5' \
         'RECORDER_RAW_RETENTION_DAYS=14' \
-        'RECORDER_PUBLISH_SESSIONS=R,Sprint' \
+        'RECORDER_PUBLISH_SESSIONS=FP1,FP2,FP3,Q,SQ,Sprint,R' \
         'RECORDER_TRANSCRIBE_RADIO=1' > "$env_file"
 fi
 chmod 0600 "$env_file"
