@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,22 @@ _SPEC = importlib.util.spec_from_file_location("recorder_publisher", _PATH)
 assert _SPEC and _SPEC.loader
 publisher = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(publisher)
+
+
+@pytest.mark.parametrize(
+    ("fetch_code", "remote_in_main", "main_in_remote", "expected"),
+    [(1, False, False, "new"), (0, True, False, "merged"),
+     (0, False, True, "pending"), (0, False, False, "stale")],
+)
+def test_capture_state(fetch_code, remote_in_main, main_in_remote, expected, monkeypatch):
+    def fake_git(_repo, *args, check=True):
+        code = fetch_code
+        if args[:2] == ("merge-base", "--is-ancestor"):
+            code = 0 if (remote_in_main if args[2].startswith("refs/") else main_in_remote) else 1
+        return subprocess.CompletedProcess(args, code, "", "")
+
+    monkeypatch.setattr(publisher, "git", fake_git)
+    assert publisher._capture_state(Path("."), "capture/belgian_2026_race") == expected
 
 
 def _staged(tmp_path):
