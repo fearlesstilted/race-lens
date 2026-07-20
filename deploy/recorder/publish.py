@@ -22,6 +22,20 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     )
 
 
+def _capture_state(repo: Path, branch: str) -> str:
+    remote = f"refs/remotes/origin/{branch}"
+    fetched = git(
+        repo, "fetch", "origin", f"refs/heads/{branch}:{remote}", check=False,
+    )
+    if fetched.returncode != 0:
+        return "new"
+    if git(repo, "merge-base", "--is-ancestor", remote, "origin/main", check=False).returncode == 0:
+        return "merged"
+    if git(repo, "merge-base", "--is-ancestor", "origin/main", remote, check=False).returncode == 0:
+        return "pending"
+    return "stale"
+
+
 def _read_at(directory_fd: int, name: str, limit: int) -> bytes:
     descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
     try:
@@ -117,12 +131,21 @@ def _snapshot_at(staging_fd: int, name: str, destination: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def publish(repo: Path, staging_fd: int, manifest_name: str) -> None:
+def publish(repo: Path, staging_fd: int, manifest_name: str) -> bool:
     stem, sources = manifest_files(manifest_name, staging_fd)
     if git(repo, "status", "--porcelain").stdout.strip():
         raise RuntimeError("publisher checkout is dirty")
     git(repo, "fetch", "origin", "main")
     branch = f"capture/{stem}"
+    state = _capture_state(repo, branch)
+    if state == "merged":
+        os.rename(
+            manifest_name, manifest_name.removesuffix(".json") + ".published",
+            src_dir_fd=staging_fd, dst_dir_fd=staging_fd,
+        )
+        return True
+    if state == "pending":
+        return False
     git(repo, "switch", "-C", branch, "origin/main")
     fixtures = repo / "backend" / "fixtures"
     try:
@@ -132,13 +155,15 @@ def publish(repo: Path, staging_fd: int, manifest_name: str) -> None:
             _snapshot_at(staging_fd, source_name, destination)
             destinations.append(destination)
         git(repo, "add", "-f", *[str(path) for path in destinations])
-        if git(repo, "diff", "--cached", "--quiet", check=False).returncode != 0:
-            git(repo, "commit", "-m", f"data({stem}): publish recorded session")
-            git(repo, "push", "--force-with-lease", "origin", f"HEAD:refs/heads/{branch}")
-        os.rename(
-            manifest_name, manifest_name.removesuffix(".json") + ".published",
-            src_dir_fd=staging_fd, dst_dir_fd=staging_fd,
-        )
+        if git(repo, "diff", "--cached", "--quiet", check=False).returncode == 0:
+            os.rename(
+                manifest_name, manifest_name.removesuffix(".json") + ".published",
+                src_dir_fd=staging_fd, dst_dir_fd=staging_fd,
+            )
+            return True
+        git(repo, "commit", "-m", f"data({stem}): publish recorded session")
+        git(repo, "push", "--force-with-lease", "origin", f"HEAD:refs/heads/{branch}")
+        return False
     finally:
         git(repo, "switch", "main", check=False)
         git(repo, "pull", "--ff-only", "origin", "main", check=False)
@@ -163,7 +188,8 @@ def main() -> None:
                 name for name in os.listdir(staging_fd) if name.endswith(".ready.json")
             )
             for manifest_name in manifests:
-                publish(repo, staging_fd, manifest_name)
+                if not publish(repo, staging_fd, manifest_name):
+                    break
         finally:
             os.close(staging_fd)
 
