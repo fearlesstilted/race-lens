@@ -125,6 +125,20 @@ body {
   padding: 0;
   text-transform: uppercase;
 }
+.sess-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sess-select {
+  border-bottom: 1px solid #ffffff24;
+}
+.sess-select option {
+  background: var(--navy2);
+}
+.sess-year { width: 58px; }
+.sess-event { width: 148px; }
+.sess-type { width: 116px; }
 .sess i {
   font-style: normal;
   color: var(--dim);

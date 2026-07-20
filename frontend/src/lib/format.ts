@@ -6,12 +6,31 @@ export const formatRaceTime = (ms: number) => {
   return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-// "monaco_2024_race" → "Monaco 2024 — Race"
-// Splits on underscore, Title Cases each part, joins with space,
-// then replaces the last word with " — LastWord" to mark the session type.
 export const sessionLabel = (sessionId: string): string => {
-  const parts = sessionId.split('_').map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-  if (parts.length < 2) return parts.join(' ')
-  const sessionType = parts.pop()!
-  return `${parts.join(' ')} — ${sessionType}`
+  const session = sessionMeta(sessionId)
+  return `${session.event} ${session.year} — ${sessionTypeLabel(session.type)}`
+}
+
+const title = (value: string) => value.charAt(0).toUpperCase() + value.slice(1)
+
+const SESSION_TYPES: Record<string, string> = {
+  fp1: 'Practice 1', fp2: 'Practice 2', fp3: 'Practice 3',
+  q: 'Qualifying', qualifying: 'Qualifying', sq: 'Sprint Qualifying',
+  sprint_qualifying: 'Sprint Qualifying', sprint: 'Sprint', r: 'Race', race: 'Race',
+}
+
+export const sessionTypeLabel = (type: string): string =>
+  SESSION_TYPES[type] ?? type.split('_').map(title).join(' ')
+
+export const sessionMeta = (sessionId: string) => {
+  const parts = sessionId.split('_')
+  const yearIndex = parts.findIndex((part) => /^\d{4}$/.test(part))
+  if (yearIndex <= 0 || yearIndex === parts.length - 1) {
+    return { year: '', event: sessionId.split('_').map(title).join(' '), type: '' }
+  }
+  return {
+    year: parts[yearIndex],
+    event: parts.slice(0, yearIndex).map(title).join(' '),
+    type: parts.slice(yearIndex + 1).join('_'),
+  }
 }
