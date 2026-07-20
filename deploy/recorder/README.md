@@ -7,9 +7,8 @@ for recovery. After the archive becomes available it builds the canonical
 fixture, merges captured team radio, transcribes it with Whisper, and generates
 track telemetry for sessions selected for publication.
 
-By default every session is archived on the server, while races and sprints are
-published to the demo. Change `RECORDER_PUBLISH_SESSIONS` in the private env
-file to alter that policy.
+By default every recorded session is published to the demo. Change
+`RECORDER_PUBLISH_SESSIONS` in the private env file to narrow that policy.
 
 ## Install or update
 

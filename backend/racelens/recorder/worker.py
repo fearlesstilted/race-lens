@@ -68,10 +68,12 @@ class Config:
         base = Path(os.environ.get("RACELENS_RECORDER_DATA", "/var/lib/race-lens-recorder"))
         publish = {
             item.strip()
-            for item in os.environ.get("RECORDER_PUBLISH_SESSIONS", "R,Sprint").split(",")
+            for item in os.environ.get(
+                "RECORDER_PUBLISH_SESSIONS", "FP1,FP2,FP3,Q,SQ,Sprint,R"
+            ).split(",")
             if item.strip()
         }
-        valid = {"SQ", "Sprint", "Q", "R"}
+        valid = {"FP1", "FP2", "FP3", "SQ", "Sprint", "Q", "R"}
         if not publish <= valid:
             raise ValueError("RECORDER_PUBLISH_SESSIONS contains an unknown session")
         transcribe = os.environ.get("RECORDER_TRANSCRIBE_RADIO", "1").lower() in {
