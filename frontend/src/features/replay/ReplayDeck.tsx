@@ -340,6 +340,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
               }}
               role="button"
               tabIndex={canScrub ? 0 : -1}
+              aria-label={tipText}
               className={markerCls}
               style={{
                 left: `${cluster.pct}%`,
@@ -426,6 +427,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
                 type="button"
                 className={`b${speed === s ? ' on' : ''}`}
                 onClick={() => onSpeed(s)}
+                aria-pressed={speed === s}
               >
                 {s}×
               </button>

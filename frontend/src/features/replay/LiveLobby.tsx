@@ -141,37 +141,40 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
 
   if (phase === 'LOBBY') {
     return (
-      <div className="live-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+      <div className="live-bar live-lobby" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
+        <div className="live-lobby-controls">
           <input
-            className="live-input"
+            className="live-input live-year"
             type="number"
             value={year}
             min={2018}
             max={2030}
             onChange={(e) => setYear(Number(e.target.value))}
             title="Year"
+            aria-label="Year"
             style={{ width: '4rem' }}
           />
           <input
-            className="live-input"
+            className="live-input live-event"
             type="text"
             value={country}
             placeholder="Austria"
             onChange={(e) => setCountry(e.target.value)}
             title="Country / event"
+            aria-label="Country or event"
             style={{ width: '9rem' }}
             onKeyDown={(e) => e.key === 'Enter' && void handleLoad()}
           />
           {source === 'signalr' ? (
             <>
               <input
-                className="live-input"
+                className="live-input live-session"
                 type="text"
                 value={sessionName}
                 placeholder="Race"
                 onChange={(e) => setSessionName(e.target.value)}
                 title='Session: Race / Qualifying / Sprint / FP1…'
+                aria-label="Session"
                 style={{ width: '7rem' }}
                 onKeyDown={(e) => e.key === 'Enter' && handleDirectStart()}
               />
@@ -184,7 +187,7 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
               {loadBusy ? '...' : 'LOAD'}
             </button>
           )}
-          <div className="tog-group" title="Live data source">
+          <div className="tog-group live-source-toggle" title="Live data source">
             <button
               type="button"
               className={`tog${source === 'signalr' ? ' tog-on' : ''}`}
@@ -216,7 +219,7 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
 
   if (phase === 'SESSIONS') {
     return (
-      <div className="live-bar" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
+      <div className="live-bar live-lobby" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontStyle: 'italic', fontWeight: 700, letterSpacing: '0.08em', color: '#888', fontSize: '0.875rem' }}>
             {year} {country.toUpperCase()}
