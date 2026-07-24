@@ -32,7 +32,14 @@ heuristics, and a polished end-to-end demo.
 ## Try the demo
 
 Open [race-lens.onrender.com](https://race-lens.onrender.com). The free instance
-may take up to a minute to wake after inactivity.
+may take up to a minute to wake after inactivity; the UI keeps the selected
+session and shows the wake-up stage instead of a local development error.
+
+Use **ARCHIVE** to browse completed practice, sprint, qualifying, and race
+sessions from the full-telemetry era (2018 onward). Sessions already in the
+demo open immediately. A writable local deployment can queue a missing session
+once; the public read-only demo keeps preparation disabled until durable object
+storage is connected.
 
 To run it locally:
 
@@ -92,6 +99,9 @@ can replay committed data but cannot start capture jobs or write fixtures.
 | Silverstone 2026 race | Deterministic fixture replay | yes |
 | Belgium 2026 FP1 | Verstappen leads Friday practice | yes |
 | Belgium 2026 FP2 | Antonelli–Norris–Verstappen top three | yes |
+| Belgium 2026 FP3 | Final practice replay | yes |
+| Belgium 2026 qualifying | Qualifying replay | yes |
+| Belgium 2026 race | Race replay | yes |
 
 Silverstone uses recorded XY for the map but fixture events for tower ordering,
 because its archived lap-progress channel is incomplete.
@@ -196,6 +206,7 @@ groups are:
 | Area | Routes |
 |---|---|
 | Discovery | `GET /api/ping`, `/api/capabilities`, `/api/sessions` |
+| Archive | `GET /api/catalog`, `POST /api/catalog/{id}/prepare`, `GET /api/preparations/{id}` |
 | Replay | `/api/sessions/{id}/state`, `/api/sessions/{id}/stream`, `/timeline`, `/track`, `/positions` |
 | Race story | `/api/sessions/{id}/insights`, `/battles`, `/commentary`, `/feed`, `/markers`, `/highlights`, `/driver-of-day` |
 | Experimental | `/api/sessions/{id}/forecast`, `/win-prob`, `/overtake`, `/simulate-pit`, `/what-if` |
@@ -205,6 +216,12 @@ Replay endpoints accept timestamps such as `at_ms` or `until_ms`. State,
 insights, and feed responses only use events available up to that cutoff.
 Full-race markers and highlights are explicit requests, which keeps the UI
 spoiler-free by default.
+
+Preparation accepts only canonical catalog IDs such as `2024-08-r`; it does
+not accept URLs or filesystem paths. Jobs are bounded, atomic, and idempotent,
+so repeated clicks cannot create duplicate downloads. On Render the API remains
+read-only: archive building belongs on the isolated Debian worker, not in a
+public web process.
 
 ## Evaluation and limits
 
