@@ -1,4 +1,4 @@
-import type { BattlesResponse, Capabilities, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
+import type { BattlesResponse, Capabilities, CatalogResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, Preparation, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
 const json = async <T>(path: string, retry = true): Promise<T> => {
   const response = await fetch(path)
@@ -12,8 +12,21 @@ const json = async <T>(path: string, retry = true): Promise<T> => {
   return (await response.json()) as T
 }
 
-export const listSessions = () => json<SessionSummary[]>('/api/sessions')
+export const listSessions = async (onWake?: () => void): Promise<SessionSummary[]> => {
+  const deadline = Date.now() + 45_000
+  while (true) {
+    try {
+      return await json<SessionSummary[]>('/api/sessions')
+    } catch (error) {
+      if (Date.now() >= deadline) throw error
+      onWake?.()
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+    }
+  }
+}
 export const getCapabilities = () => json<Capabilities>('/api/capabilities')
+export const getCatalog = (season?: number) =>
+  json<CatalogResponse>(`/api/catalog${season ? `?season=${season}` : ''}`)
 
 export const getTimeline = (sessionId: string) =>
   json<Timeline>(`/api/sessions/${encodeURIComponent(sessionId)}/timeline`)
@@ -113,6 +126,12 @@ const post = async <T>(path: string): Promise<T> => {
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${path}`)
   return (await response.json()) as T
 }
+
+export const prepareSession = (sessionId: string) =>
+  post<Preparation>(`/api/catalog/${encodeURIComponent(sessionId)}/prepare`)
+
+export const getPreparation = (sessionId: string) =>
+  json<Preparation>(`/api/preparations/${encodeURIComponent(sessionId)}`)
 
 export type LiveSource = 'openf1' | 'signalr'
 
