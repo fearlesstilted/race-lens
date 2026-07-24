@@ -12,23 +12,31 @@ import json
 import os
 import re
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from racelens.adapters.openf1_adapter import (
     OpenF1IncrementalIngester,
     find_session,
-    ingest_openf1,
     list_sessions as _openf1_list_sessions,
 )
 from racelens.commentary.feed import render_feed
+from racelens.catalog import (
+    FIRST_SEASON,
+    build_catalog,
+    expected_replay_id,
+    find_session as find_catalog_session,
+    public_job,
+    ready_job,
+)
 from racelens.events_significant import significant_events
 from racelens.commentary.renderer import render_all
 from racelens.driver_of_day import driver_of_day as _driver_of_day
@@ -44,10 +52,21 @@ from racelens.insights.passes import Pass, detect_passes
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
 from racelens.live.signalr import SignalRCapture, make_signalr_fetch
+from racelens.preparations import PreparationQueue, QueueFullError, SESSION_ID
 from racelens.replay.engine import ReplayEngine
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 READONLY = os.environ.get("RACELENS_READONLY", "").lower() in {"1", "true", "yes"}
+CATALOG_CACHE_DIR = Path(
+    os.environ.get("RACELENS_CATALOG_CACHE", FIXTURES_DIR.parent / "catalog-cache")
+)
+PREPARATION_QUEUE_DIR = Path(
+    os.environ.get("RACELENS_PREPARATION_QUEUE", FIXTURES_DIR.parent / "preparations")
+)
+try:
+    PREPARATION_QUEUE_MAX = int(os.environ.get("RACELENS_PREPARATION_QUEUE_MAX", "32"))
+except ValueError:
+    PREPARATION_QUEUE_MAX = 32
 
 # One parsed replay plus its positions stays below Render Free's 512 MB limit.
 SESSION_CACHE_SIZE = 1
@@ -131,6 +150,20 @@ def _safe_slug(value: str) -> str:
     if not slug:
         raise HTTPException(422, "country and session must contain letters or digits")
     return slug
+
+
+def _preparation_queue() -> PreparationQueue:
+    return PreparationQueue(PREPARATION_QUEUE_DIR, PREPARATION_QUEUE_MAX)
+
+
+def _catalog(season: int) -> dict:
+    return build_catalog(
+        season,
+        FIXTURES_DIR,
+        _preparation_queue(),
+        CATALOG_CACHE_DIR,
+        preparation_enabled=not READONLY,
+    )
 
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
@@ -276,6 +309,8 @@ def capabilities() -> dict:
     return {
         "readonly": READONLY,
         "signalr_available": importlib.util.find_spec("fastf1") is not None,
+        "catalog_available": True,
+        "preparation_enabled": not READONLY,
     }
 
 
@@ -299,6 +334,70 @@ def list_sessions() -> list[dict]:
             pass
         out.append({"session_id": f.stem, "source": source})
     return out
+
+
+@app.get("/api/catalog")
+def catalog(
+    season: Optional[int] = Query(default=None, ge=FIRST_SEASON, le=2100),
+) -> dict:
+    current_season = datetime.now(UTC).year
+    if season is not None and season > current_season:
+        raise HTTPException(422, "Season cannot be in the future")
+    return _catalog(season or current_season)
+
+
+@app.post("/api/catalog/{session_id}/prepare")
+def prepare_replay(session_id: str):
+    if not SESSION_ID.fullmatch(session_id):
+        raise HTTPException(404, "Session is not in the supported catalog")
+    season = int(session_id[:4])
+    if season < FIRST_SEASON or season > datetime.now(UTC).year:
+        raise HTTPException(404, "Session is not in the supported catalog")
+    catalog_data = _catalog(season)
+    if not catalog_data["catalog_available"]:
+        raise HTTPException(503, "Session catalog is temporarily unavailable")
+    match = find_catalog_session(catalog_data, session_id)
+    if match is None:
+        raise HTTPException(404, "Session is not in the supported catalog")
+    event, session = match
+    replay_id = session.get("replay_session_id") or expected_replay_id(season, event, session)
+    replay_path = FIXTURES_DIR / f"{replay_id}.jsonl"
+    if replay_path.is_file():
+        return ready_job(session_id, replay_id, replay_path)
+    _require_writable()
+    try:
+        record, _created = _preparation_queue().enqueue(session_id, replay_id)
+    except QueueFullError as exc:
+        raise HTTPException(429, str(exc), headers={"Retry-After": "60"}) from exc
+    status_code = 202 if record["status"] in {"queued", "running"} else 200
+    headers = {"Location": f"/api/preparations/{session_id}"}
+    if status_code == 202:
+        headers["Retry-After"] = "3"
+    return JSONResponse(public_job(record), status_code=status_code, headers=headers)
+
+
+@app.get("/api/preparations/{session_id}")
+def preparation_status(session_id: str) -> dict:
+    if not SESSION_ID.fullmatch(session_id):
+        raise HTTPException(404, "Preparation not found")
+    season = int(session_id[:4])
+    if season < FIRST_SEASON or season > datetime.now(UTC).year:
+        raise HTTPException(404, "Preparation not found")
+    catalog_data = _catalog(season)
+    if not catalog_data["catalog_available"]:
+        raise HTTPException(503, "Session catalog is temporarily unavailable")
+    match = find_catalog_session(catalog_data, session_id)
+    if match is None:
+        raise HTTPException(404, "Preparation not found")
+    event, session = match
+    replay_id = session.get("replay_session_id") or expected_replay_id(season, event, session)
+    replay_path = FIXTURES_DIR / f"{replay_id}.jsonl"
+    if replay_path.is_file():
+        return ready_job(session_id, replay_id, replay_path)
+    record = _preparation_queue().get(session_id)
+    if record is None:
+        raise HTTPException(404, "Preparation not found")
+    return public_job(record)
 
 
 @app.get("/api/sessions/{session_id}/state")
@@ -593,54 +692,6 @@ _DIST = Path(
     os.environ.get("RACELENS_DIST")
     or Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 )
-
-
-@app.post("/api/replays/download")
-def download_replay(
-    year: int = Query(..., ge=1950, le=2100),
-    country: str = Query(..., min_length=1, max_length=80),
-    session: str = Query(default="Race", min_length=1, max_length=40),
-) -> dict:
-    """Download a session from OpenF1 and save it as a replay fixture.
-
-    Fetches the full session, writes it to
-    ``fixtures/<country>_<year>_<session>.jsonl`` (lowercased, spaces → _),
-    and returns ``{session_id, events, path}``.
-
-    Errors:
-    - 404: session not found in OpenF1 (find_session raised ValueError).
-    - 502: OpenF1 unavailable (network or HTTP error).
-    """
-    import urllib.error
-
-    from racelens.events.models import dump_jsonl
-
-    _require_writable()
-
-    try:
-        session_key = find_session(year, country, session)
-    except ValueError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
-        # find_session also hits OpenF1, so it can throttle/network-fail too.
-        raise HTTPException(502, f"OpenF1 unavailable: {exc}") from exc
-
-    try:
-        events = ingest_openf1(session_key)
-    except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
-        raise HTTPException(502, f"OpenF1 unavailable: {exc}") from exc
-
-    # Build slug: lowercase, normalise non-alphanumeric runs to underscore
-    slug = f"{_safe_slug(country)}_{year}_{_safe_slug(session)}"
-    out_path = FIXTURES_DIR / f"{slug}.jsonl"
-    FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(dump_jsonl(events), encoding="utf-8")
-
-    # Invalidate the engine cache so the new fixture is immediately available
-    # (this can overwrite an existing fixture at the same session_id + FIXTURES_DIR).
-    _engine_cached.cache_clear()
-
-    return {"session_id": slug, "events": len(events), "path": str(out_path)}
 
 
 @app.get("/api/live/sessions")
