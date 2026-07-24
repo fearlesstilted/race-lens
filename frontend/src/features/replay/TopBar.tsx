@@ -29,13 +29,14 @@ type Props = {
   onVoice: (on: boolean) => void
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
+  onCatalogOpen?: () => void
   sessionStatus?: string
   atMs?: number
   /** Live-only session badge text, e.g. "SILVERSTONE · RACE". */
   sessionName?: string | null
 }
 
-export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, liveAvailable, projection, winProb, voice, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, sessionStatus, atMs, sessionName }: Props) {
+export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, level, mode, liveAvailable, projection, winProb, voice, onModeChange, onSessionChange, onLang, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, sessionName }: Props) {
   const label = sessionId ? sessionLabel(sessionId) : 'No session'
   const choices = sessions.map((item) => ({ ...item, ...sessionMeta(item.session_id) }))
   const current = choices.find((item) => item.session_id === sessionId) ?? choices[0]
@@ -58,21 +59,42 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
 
       {mode === 'replay' ? (
         <div className="sess">
-          {sessions.length > 1 && current ? (
-            <div className="sess-picker">
-              <select aria-label="Season" className="sess-select sess-year" value={current.year} onChange={(event) => choose((item) => item.year === event.target.value)}>
-                {years.map((year) => <option key={year}>{year}</option>)}
-              </select>
-              <select aria-label="Grand Prix" className="sess-select sess-event" value={current.event} onChange={(event) => choose((item) => item.year === current.year && item.event === event.target.value)}>
-                {events.map((event) => <option key={event}>{event}</option>)}
-              </select>
-              <select aria-label="Session" className="sess-select sess-type" value={current.session_id} onChange={(event) => onSessionChange(event.target.value)}>
-                {types.map((item) => <option key={item.session_id} value={item.session_id}>{sessionTypeLabel(item.type)}</option>)}
-              </select>
-            </div>
-          ) : (
-            <b>{label.toUpperCase()}</b>
-          )}
+          <div className="sess-main">
+            {sessions.length > 1 && current ? (
+              <>
+                <div className="sess-picker sess-picker--desktop">
+                  <select aria-label="Season" className="sess-select sess-year" value={current.year} onChange={(event) => choose((item) => item.year === event.target.value)}>
+                    {years.map((year) => <option key={year}>{year}</option>)}
+                  </select>
+                  <select aria-label="Grand Prix" className="sess-select sess-event" value={current.event} onChange={(event) => choose((item) => item.year === current.year && item.event === event.target.value)}>
+                    {events.map((event) => <option key={event}>{event}</option>)}
+                  </select>
+                  <select aria-label="Session" className="sess-select sess-type" value={current.session_id} onChange={(event) => onSessionChange(event.target.value)}>
+                    {types.map((item) => <option key={item.session_id} value={item.session_id}>{sessionTypeLabel(item.type)}</option>)}
+                  </select>
+                </div>
+                <select
+                  aria-label="Race session"
+                  className="sess-select sess-mobile"
+                  value={current.session_id}
+                  onChange={(event) => onSessionChange(event.target.value)}
+                >
+                  {choices.map((item) => (
+                    <option key={item.session_id} value={item.session_id}>
+                      {item.year} · {item.event} · {sessionTypeLabel(item.type)}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <b>{label.toUpperCase()}</b>
+            )}
+            {onCatalogOpen && (
+              <button type="button" className="catalog-open" onClick={onCatalogOpen}>
+                ARCHIVE
+              </button>
+            )}
+          </div>
           <i>{current ? sessionTypeLabel(current.type) : 'Session'} · replay · source: {session?.source ?? 'unknown'}</i>
         </div>
       ) : (

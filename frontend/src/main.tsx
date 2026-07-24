@@ -14,6 +14,7 @@ import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
 import { RaceFeed } from './features/replay/RaceFeed'
 import { ReplayDeck } from './features/replay/ReplayDeck'
+import { SessionCatalog } from './features/replay/SessionCatalog'
 import { StatusStrip } from './features/replay/StatusStrip'
 import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
@@ -62,13 +63,30 @@ type DrawerProps = {
 }
 
 function SettingsDrawer({ open, onClose, lang, level, mode, liveAvailable, projection, winProb, onLang, onLevel, onModeChange, onProjection, onWinProb, sessionId, onSeek, drawerLang, sessionStatus, lap, totalLaps, atMs }: DrawerProps) {
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const previousFocus = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    previousFocus.current = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      previousFocus.current?.focus()
+    }
+  }, [open, onClose])
+
   return (
     <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="settings-backdrop" onClick={onClose} />
-      <div className="settings-drawer" role="dialog" aria-label="Settings">
+      <div className="settings-drawer" role="dialog" aria-modal="true" aria-label="Settings">
         <div className="settings-drawer-hdr">
           <span>SETTINGS</span>
-          <button type="button" className="settings-close" onClick={onClose} aria-label="Close">&#215;</button>
+          <button ref={closeRef} type="button" className="settings-close" onClick={onClose} aria-label="Close">&#215;</button>
         </div>
 
         <div className="settings-group">
@@ -159,17 +177,25 @@ type MobTab = 'TIMING' | 'MAP' | 'INSIGHTS' | 'FEED'
 const MOB_TABS: MobTab[] = ['TIMING', 'MAP', 'INSIGHTS', 'FEED']
 
 function App() {
+  const initialCatalogId = new URLSearchParams(window.location.search).get('catalog')
+  const initialCatalogSeason = initialCatalogId && /^\d{4}-/.test(initialCatalogId)
+    ? Number(initialCatalogId.slice(0, 4))
+    : undefined
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
+  const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveAvailable, setLiveAvailable] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
+  const closeSettings = useCallback(() => setSettingsOpen(false), [])
+  const closeCatalog = useCallback(() => setCatalogOpen(false), [])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -201,21 +227,42 @@ function App() {
   const replay = useReplay(source)
   useVoiceAlerts(replay.feed, voice, replay.lang)
 
-  // Load replay sessions list once
-  useEffect(() => {
+  const loadSessions = useCallback(() => {
     let cancelled = false
-    listSessions()
+    setSessionError(null)
+    setBackendPhase('connecting')
+    const wakeTimer = window.setTimeout(() => {
+      if (!cancelled) setBackendPhase('waking')
+    }, 1200)
+    listSessions(() => setBackendPhase('waking'))
       .then((items) => {
         if (cancelled) return
+        window.clearTimeout(wakeTimer)
         setSessions(items)
-        setSessionId((current) => current ?? items[0]?.session_id ?? null)
+        const requested = new URLSearchParams(window.location.search).get('session')
+        setSessionId((current) => (
+          current
+          ?? items.find((item) => item.session_id === requested)?.session_id
+          ?? items[0]?.session_id
+          ?? null
+        ))
+        setBackendPhase('ready')
       })
       .catch((err: unknown) => {
         if (cancelled) return
+        window.clearTimeout(wakeTimer)
         setSessionError(err instanceof Error ? err.message : 'Could not load sessions')
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      window.clearTimeout(wakeTimer)
+    }
   }, [])
+
+  // Load replay sessions once; the bounded retry covers a sleeping free Render instance.
+  useEffect(() => {
+    return loadSessions()
+  }, [loadSessions])
 
   useEffect(() => {
     let cancelled = false
@@ -272,6 +319,7 @@ function App() {
   }, [])
 
   const handleSelectDriver = useCallback((id: string) => {
+    setMobTab('INSIGHTS')
     setSelectedIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       if (prev.length >= 2) return [prev[1], id]
@@ -294,6 +342,10 @@ function App() {
   const handleSessionChange = (id: string) => {
     replay.pause()
     setSessionId(id)
+    const url = new URL(window.location.href)
+    url.searchParams.set('session', id)
+    url.searchParams.delete('catalog')
+    window.history.replaceState(null, '', url)
   }
 
   const state = replay.state
@@ -315,9 +367,10 @@ function App() {
     return (
       <div className="error-screen">
         <div>
-          <h2>Backend not ready</h2>
-          <p>{sessionError}</p>
-          <code>cd backend &amp;&amp; RACELENS_FIXTURES=fixtures uvicorn racelens.api:app --port 8000</code>
+          <h2>Race server is still asleep</h2>
+          <p>The free demo did not wake in time. Your selected race is safe.</p>
+          <button type="button" className="b" onClick={loadSessions}>RETRY</button>
+          <small>{sessionError}</small>
         </div>
       </div>
     )
@@ -341,9 +394,15 @@ function App() {
 
   return (
     <>
+      <SessionCatalog
+        open={catalogOpen}
+        initialSeason={initialCatalogSeason}
+        onClose={closeCatalog}
+        onOpenReplay={handleSessionChange}
+      />
       <SettingsDrawer
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeSettings}
         lang={replay.lang}
         level={replay.level}
         mode={mode}
@@ -385,6 +444,7 @@ function App() {
         onWinProb={setWinProb}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
+        onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
         sessionName={mode === 'live' ? state?.session_name ?? null : null}
@@ -424,7 +484,18 @@ function App() {
         </div>
       )}
 
-      <StatusStrip
+      {backendPhase !== 'ready' && mode === 'replay' && (
+        <div className="error-screen wake-screen" role="status" aria-live="polite">
+          <div>
+            <span className="wake-pulse" />
+            <h2>{backendPhase === 'waking' ? 'Waking race server' : 'Connecting'}</h2>
+            <p>Free hosting may need up to a minute after inactivity.</p>
+          </div>
+        </div>
+      )}
+
+      {(mode === 'replay' || isLiveActive) && <>
+        <StatusStrip
         status={sessionStatus}
         lap={state?.lap ?? null}
         atMs={replay.atMs}
@@ -527,7 +598,7 @@ function App() {
         )}
       </div>
 
-      <ReplayDeck
+        <ReplayDeck
         timeline={timeline}
         atMs={replay.atMs}
         playing={replay.playing}
@@ -541,7 +612,8 @@ function App() {
         onPlay={replay.play}
         onPause={replay.pause}
         onSpeed={replay.setSpeed}
-      />
+        />
+      </>}
     </>
   )
 }

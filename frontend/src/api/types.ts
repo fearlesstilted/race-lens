@@ -6,6 +6,45 @@ export type SessionSummary = {
 export type Capabilities = {
   readonly: boolean
   signalr_available: boolean
+  catalog_available?: boolean
+  preparation_enabled?: boolean
+}
+
+export type CatalogSessionType = 'FP1' | 'FP2' | 'FP3' | 'SQ' | 'Sprint' | 'Q' | 'R'
+export type CatalogSessionStatus = 'ready' | 'prepare' | 'queued' | 'failed'
+
+export type CatalogSession = {
+  session_id: string
+  type: CatalogSessionType
+  name: string
+  starts_at: string
+  status: CatalogSessionStatus
+  replay_session_id: string | null
+  job_id: string | null
+}
+
+export type CatalogEvent = {
+  round: number
+  name: string
+  sessions: CatalogSession[]
+}
+
+export type CatalogResponse = {
+  season: number
+  seasons: number[]
+  catalog_available: boolean
+  preparation_enabled: boolean
+  events: CatalogEvent[]
+}
+
+export type Preparation = {
+  job_id: string
+  session_id: string
+  status: 'ready' | 'queued' | 'failed'
+  created_at: string
+  updated_at: string
+  replay_session_id: string | null
+  error: string | null
 }
 
 export type Timeline = {
