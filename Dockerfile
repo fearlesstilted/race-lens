@@ -10,7 +10,7 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 COPY backend/ ./backend/
-RUN pip install --no-cache-dir ./backend[api]
+RUN pip install --no-cache-dir ./backend[api,storage]
 COPY --from=web /app/dist ./frontend/dist
 ENV RACELENS_FIXTURES=/app/backend/fixtures \
     RACELENS_DIST=/app/frontend/dist \
