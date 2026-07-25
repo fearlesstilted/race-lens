@@ -7,8 +7,15 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from racelens.events.models import dump_jsonl  # noqa: E402
+from racelens.object_storage import (  # noqa: E402
+    ObjectPreparationQueue,
+    RemoteSessionCache,
+    StorageError,
+    publish_session,
+)
 from racelens.preparations import PreparationQueue, QueueFullError  # noqa: E402
 from racelens.recorder.schedule import ScheduledSession  # noqa: E402
+from tests.test_object_storage import MemoryStore  # noqa: E402
 from tests.test_replay import mini_race  # noqa: E402
 
 
@@ -77,6 +84,33 @@ def test_catalog_matches_legacy_venue_fixture_names(tmp_path, monkeypatch):
     }
     assert by_id["2024-10-r"]["replay_session_id"] == "spain_2024_race"
     assert by_id["2024-12-r"]["replay_session_id"] == "silverstone_2024_race"
+
+
+def test_catalog_exposes_only_completed_sessions(tmp_path, monkeypatch):
+    import racelens.catalog as catalog
+
+    start = datetime(2024, 5, 26, 13, tzinfo=UTC)
+    session = ScheduledSession(2024, 8, "Monaco Grand Prix", "R", start)
+    monkeypatch.setattr(catalog, "load_schedule", lambda year, cache_dir: [session])
+
+    during = catalog.build_catalog(
+        2024,
+        tmp_path / "fixtures",
+        PreparationQueue(tmp_path / "queue"),
+        tmp_path / "cache",
+        preparation_enabled=True,
+        now=start + (session.capture_until - start) / 2,
+    )
+    after = catalog.build_catalog(
+        2024,
+        tmp_path / "fixtures",
+        PreparationQueue(tmp_path / "queue"),
+        tmp_path / "cache",
+        preparation_enabled=True,
+        now=session.capture_until,
+    )
+    assert during["events"] == []
+    assert after["events"][0]["sessions"][0]["session_id"] == "2024-08-r"
 
 
 def test_jolpica_fallback_uses_fixed_host_and_disk_cache(tmp_path, monkeypatch):
@@ -195,3 +229,104 @@ def test_catalog_prepare_is_explicitly_disabled_in_readonly_mode(tmp_path, monke
     assert response.status_code == 403
     assert "read-only" in response.json()["detail"]
     assert client.get("/api/capabilities").json()["preparation_enabled"] is False
+
+
+def test_readonly_api_queues_and_replays_a_verified_remote_session(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    scheduled = ScheduledSession(
+        2024, 8, "Monaco Grand Prix", "R", datetime(2024, 5, 26, 13, tzinfo=UTC),
+    )
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    store = MemoryStore()
+    queue = ObjectPreparationQueue(store)
+    monkeypatch.setattr(catalog, "load_schedule", lambda year, cache_dir: [scheduled])
+    monkeypatch.setattr(api, "FIXTURES_DIR", fixtures)
+    monkeypatch.setattr(api, "CATALOG_CACHE_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(api, "READONLY", True)
+    monkeypatch.setattr(api, "STORAGE_CONFIG", object())
+    monkeypatch.setattr(api, "_object_queue", lambda: queue)
+    monkeypatch.setattr(
+        api,
+        "_remote_cache",
+        lambda: RemoteSessionCache(store, tmp_path / "remote-cache"),
+    )
+    api._remote_fixture_root.cache_clear()
+    client = TestClient(api.app)
+
+    first = client.post("/api/catalog/2024-08-r/prepare")
+    duplicate = client.post("/api/catalog/2024-08-r/prepare")
+    assert first.status_code == duplicate.status_code == 202
+    assert first.json() == duplicate.json()
+    assert client.get("/api/capabilities").json()["preparation_enabled"] is True
+
+    assert queue.claim_next()["status"] == "processing"
+    assert client.get("/api/preparations/2024-08-r").json()["status"] == "processing"
+
+    fixture = tmp_path / "monaco_2024_race.jsonl"
+    track = tmp_path / "monaco_2024_race.track.json"
+    positions = tmp_path / "monaco_2024_race.positions.json"
+    fixture.write_text(dump_jsonl(mini_race()), encoding="utf-8")
+    track.write_text(
+        json.dumps({
+            "session_id": "monaco_2024_race",
+            "viewbox": [600, 400],
+            "points": [[0, 0], [1, 1]],
+        }),
+        encoding="utf-8",
+    )
+    positions.write_text(
+        json.dumps({
+            "session_id": "monaco_2024_race",
+            "start_ms": 0,
+            "tick_ms": 1000,
+            "viewbox": [600, 400],
+            "drivers": {},
+            "progress": {},
+        }),
+        encoding="utf-8",
+    )
+    publish_session(
+        store,
+        "2024-08-r",
+        "monaco_2024_race",
+        fixture,
+        track,
+        positions,
+        event_count=len(mini_race()),
+    )
+    queue.finish("2024-08-r", replay_session_id="monaco_2024_race")
+
+    ready = client.get("/api/preparations/2024-08-r")
+    assert ready.json()["status"] == "ready"
+    assert client.get(
+        "/api/sessions/monaco_2024_race/state", params={"at_ms": 0},
+    ).status_code == 200
+    assert {"session_id": "monaco_2024_race", "source": "object-storage"} in (
+        client.get("/api/sessions").json()
+    )
+    api._remote_fixture_root.cache_clear()
+
+
+def test_storage_errors_are_publicly_sanitized(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    session = ScheduledSession(
+        2024, 8, "Monaco Grand Prix", "R", datetime(2024, 5, 26, 13, tzinfo=UTC),
+    )
+
+    class BrokenQueue:
+        def get(self, session_id):
+            raise StorageError("SECRET_ACCESS_KEY=do-not-return")
+
+    monkeypatch.setattr(catalog, "load_schedule", lambda year, cache_dir: [session])
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path / "fixtures")
+    monkeypatch.setattr(api, "CATALOG_CACHE_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(api, "_object_queue", lambda: BrokenQueue())
+    response = TestClient(api.app).get("/api/catalog", params={"season": 2024})
+
+    assert response.status_code == 503
+    assert "SECRET_ACCESS_KEY" not in response.text

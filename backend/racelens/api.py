@@ -52,6 +52,15 @@ from racelens.insights.passes import Pass, detect_passes
 from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
 from racelens.live.signalr import SignalRCapture, make_signalr_fetch
+from racelens.object_storage import (
+    ManifestError,
+    ObjectPreparationQueue,
+    REPLAY_ID,
+    RemoteSessionCache,
+    S3Store,
+    StorageConfig,
+    StorageError,
+)
 from racelens.preparations import PreparationQueue, QueueFullError, SESSION_ID
 from racelens.replay.engine import ReplayEngine
 
@@ -64,9 +73,21 @@ PREPARATION_QUEUE_DIR = Path(
     os.environ.get("RACELENS_PREPARATION_QUEUE", FIXTURES_DIR.parent / "preparations")
 )
 try:
-    PREPARATION_QUEUE_MAX = int(os.environ.get("RACELENS_PREPARATION_QUEUE_MAX", "32"))
+    PREPARATION_QUEUE_MAX = int(os.environ.get("RACELENS_PREPARATION_QUEUE_MAX", "8"))
 except ValueError:
-    PREPARATION_QUEUE_MAX = 32
+    PREPARATION_QUEUE_MAX = 8
+try:
+    PREPARATION_DAILY_MAX = int(os.environ.get("RACELENS_PREPARATION_DAILY_MAX", "4"))
+except ValueError:
+    PREPARATION_DAILY_MAX = 4
+REMOTE_CACHE_DIR = Path(os.environ.get("RACELENS_REMOTE_CACHE", "/tmp/race-lens-sessions"))
+try:
+    REMOTE_CACHE_MAX = int(
+        os.environ.get("RACELENS_REMOTE_CACHE_MAX_BYTES", str(160 * 1024 * 1024))
+    )
+except ValueError:
+    REMOTE_CACHE_MAX = 160 * 1024 * 1024
+STORAGE_CONFIG = StorageConfig.from_env()
 
 # One parsed replay plus its positions stays below Render Free's 512 MB limit.
 SESSION_CACHE_SIZE = 1
@@ -152,18 +173,80 @@ def _safe_slug(value: str) -> str:
     return slug
 
 
-def _preparation_queue() -> PreparationQueue:
-    return PreparationQueue(PREPARATION_QUEUE_DIR, PREPARATION_QUEUE_MAX)
+@lru_cache(maxsize=1)
+def _object_store() -> S3Store | None:
+    return S3Store(STORAGE_CONFIG) if STORAGE_CONFIG is not None else None
+
+
+@lru_cache(maxsize=1)
+def _object_queue() -> ObjectPreparationQueue | None:
+    store = _object_store()
+    return (
+        ObjectPreparationQueue(
+            store,
+            max_jobs=PREPARATION_QUEUE_MAX,
+            daily_max=PREPARATION_DAILY_MAX,
+        )
+        if store is not None
+        else None
+    )
+
+
+def _preparation_queue() -> PreparationQueue | ObjectPreparationQueue:
+    return _object_queue() or PreparationQueue(
+        PREPARATION_QUEUE_DIR, PREPARATION_QUEUE_MAX,
+    )
+
+
+def _preparation_enabled() -> bool:
+    return STORAGE_CONFIG is not None or not READONLY
 
 
 def _catalog(season: int) -> dict:
-    return build_catalog(
-        season,
-        FIXTURES_DIR,
-        _preparation_queue(),
-        CATALOG_CACHE_DIR,
-        preparation_enabled=not READONLY,
+    try:
+        return build_catalog(
+            season,
+            FIXTURES_DIR,
+            _preparation_queue(),
+            CATALOG_CACHE_DIR,
+            preparation_enabled=_preparation_enabled(),
+        )
+    except StorageError as exc:
+        raise HTTPException(
+            503, "Archive preparation storage is temporarily unavailable",
+        ) from exc
+
+
+@lru_cache(maxsize=1)
+def _remote_cache() -> RemoteSessionCache | None:
+    store = _object_store()
+    return (
+        RemoteSessionCache(store, REMOTE_CACHE_DIR, max_bytes=REMOTE_CACHE_MAX)
+        if store is not None
+        else None
     )
+
+
+@lru_cache(maxsize=1)
+def _remote_fixture_root(session_id: str) -> Path:
+    cache = _remote_cache()
+    if cache is None or not REPLAY_ID.fullmatch(session_id):
+        raise HTTPException(404, f"session '{session_id}' not found")
+    try:
+        return cache.materialize(session_id)
+    except ManifestError as exc:
+        raise HTTPException(404, f"session '{session_id}' is not ready") from exc
+    except StorageError as exc:
+        raise HTTPException(503, "Replay storage is temporarily unavailable") from exc
+
+
+def _fixture_root(session_id: str) -> Path:
+    if any(
+        (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
+        for suffix in (".jsonl", ".track.json", ".positions.json")
+    ):
+        return FIXTURES_DIR
+    return _remote_fixture_root(session_id)
 
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
@@ -196,10 +279,11 @@ def _engine(session_id: str) -> ReplayEngine:
     Keeps monkeypatched FIXTURES_DIR (tests) from colliding with real cache
     entries, and picks up regenerated fixture files without a restart.
     """
-    path = FIXTURES_DIR / f"{session_id}.jsonl"
+    fixtures_dir = _fixture_root(session_id)
+    path = fixtures_dir / f"{session_id}.jsonl"
     mtime = path.stat().st_mtime if path.is_file() else 0.0
     with _engine_load_lock:
-        return _engine_cached(session_id, str(FIXTURES_DIR), mtime)
+        return _engine_cached(session_id, str(fixtures_dir), mtime)
 
 
 @lru_cache(maxsize=1)
@@ -212,9 +296,10 @@ def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> 
 
 def _positions_data(session_id: str) -> dict | None:
     """Thin wrapper so the cache key includes FIXTURES_DIR (see _engine)."""
-    path = FIXTURES_DIR / f"{session_id}.positions.json"
+    fixtures_dir = _fixture_root(session_id)
+    path = fixtures_dir / f"{session_id}.positions.json"
     mtime = path.stat().st_mtime if path.is_file() else 0.0
-    return _positions_data_cached(session_id, str(FIXTURES_DIR), mtime)
+    return _positions_data_cached(session_id, str(fixtures_dir), mtime)
 
 
 def _attach_frame(state: dict, session_id: str | None = None) -> dict:
@@ -310,13 +395,13 @@ def capabilities() -> dict:
         "readonly": READONLY,
         "signalr_available": importlib.util.find_spec("fastf1") is not None,
         "catalog_available": True,
-        "preparation_enabled": not READONLY,
+        "preparation_enabled": _preparation_enabled(),
     }
 
 
 @app.get("/api/sessions")
 def list_sessions() -> list[dict]:
-    out = []
+    out = {}
     files = sorted(
         FIXTURES_DIR.glob("*.jsonl"),
         key=lambda f: (
@@ -332,8 +417,29 @@ def list_sessions() -> list[dict]:
             source = str(json.loads(first).get("source") or "unknown")
         except (OSError, StopIteration, json.JSONDecodeError):
             pass
-        out.append({"session_id": f.stem, "source": source})
-    return out
+        out[f.stem] = {"session_id": f.stem, "source": source}
+    remote = _object_queue()
+    if remote is not None:
+        try:
+            for record in remote.records():
+                if record["status"] == "ready":
+                    replay_id = record["replay_session_id"]
+                    out.setdefault(
+                        replay_id,
+                        {"session_id": replay_id, "source": "object-storage"},
+                    )
+        except StorageError:
+            pass
+    return sorted(
+        out.values(),
+        key=lambda item: (
+            not (
+                (FIXTURES_DIR / f"{item['session_id']}.positions.json").is_file()
+                or item["source"] == "object-storage"
+            ),
+            item["session_id"],
+        ),
+    )
 
 
 @app.get("/api/catalog")
@@ -364,12 +470,26 @@ def prepare_replay(session_id: str):
     replay_path = FIXTURES_DIR / f"{replay_id}.jsonl"
     if replay_path.is_file():
         return ready_job(session_id, replay_id, replay_path)
-    _require_writable()
+    queue = _preparation_queue()
     try:
-        record, _created = _preparation_queue().enqueue(session_id, replay_id)
+        current = queue.get(session_id)
+    except StorageError as exc:
+        raise HTTPException(
+            503, "Archive preparation storage is temporarily unavailable",
+        ) from exc
+    if current is not None and current.get("status") == "ready":
+        return public_job(current)
+    if STORAGE_CONFIG is None:
+        _require_writable()
+    try:
+        record, _created = queue.enqueue(session_id, replay_id)
     except QueueFullError as exc:
         raise HTTPException(429, str(exc), headers={"Retry-After": "60"}) from exc
-    status_code = 202 if record["status"] in {"queued", "running"} else 200
+    except StorageError as exc:
+        raise HTTPException(
+            503, "Archive preparation storage is temporarily unavailable",
+        ) from exc
+    status_code = 202 if record["status"] in {"queued", "processing", "running"} else 200
     headers = {"Location": f"/api/preparations/{session_id}"}
     if status_code == 202:
         headers["Retry-After"] = "3"
@@ -394,7 +514,12 @@ def preparation_status(session_id: str) -> dict:
     replay_path = FIXTURES_DIR / f"{replay_id}.jsonl"
     if replay_path.is_file():
         return ready_job(session_id, replay_id, replay_path)
-    record = _preparation_queue().get(session_id)
+    try:
+        record = _preparation_queue().get(session_id)
+    except StorageError as exc:
+        raise HTTPException(
+            503, "Archive preparation storage is temporarily unavailable",
+        ) from exc
     if record is None:
         raise HTTPException(404, "Preparation not found")
     return public_job(record)
@@ -816,7 +941,7 @@ def overtake_endpoint(
 @app.get("/api/sessions/{session_id}/track")
 def track(session_id: str) -> dict:
     """Return pre-computed track outline as {session_id, viewbox, points}."""
-    path = FIXTURES_DIR / f"{session_id}.track.json"
+    path = _fixture_root(session_id) / f"{session_id}.track.json"
     if not path.is_file():
         raise HTTPException(404, f"track data for '{session_id}' not found")
     return json.loads(path.read_text(encoding="utf-8"))
@@ -829,7 +954,7 @@ def positions(session_id: str) -> dict:
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
     404 if positions.json has not been generated yet.
     """
-    path = FIXTURES_DIR / f"{session_id}.positions.json"
+    path = _fixture_root(session_id) / f"{session_id}.positions.json"
     if not path.is_file():
         raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
     return json.loads(path.read_text(encoding="utf-8"))
@@ -902,7 +1027,7 @@ def timeline(session_id: str) -> dict:
     # events are lead-shifted (see _engine), so lights-out = LIGHTS_OUT_MS and the
     # scrubber starts at the formation origin from positions.json. Without it there
     # is no formation: lights-out stays at 0.
-    pos_path = FIXTURES_DIR / f"{session_id}.positions.json"
+    pos_path = _fixture_root(session_id) / f"{session_id}.positions.json"
     lights_out_ms = 0
     if pos_path.is_file():
         lights_out_ms = LIGHTS_OUT_MS
