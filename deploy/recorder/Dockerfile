@@ -11,7 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/ /build/backend/
-RUN pip install --no-cache-dir "/build/backend[recorder]" \
+RUN pip install --no-cache-dir "/build/backend[recorder,storage]" \
     && rm -rf /build
 COPY --from=race-core /build/target/release/race-core /usr/local/bin/race-core
 COPY deploy/recorder/run.sh /usr/local/bin/race-lens-recorder
