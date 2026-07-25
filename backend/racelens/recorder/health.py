@@ -24,7 +24,10 @@ def _require_fresh(path: Path, now: datetime, max_age: int) -> None:
 def check(base: Path, now: datetime | None = None) -> None:
     current = now or datetime.now(UTC)
     state = StateStore(base / "state" / "recorder.json").load()
-    processing = any(item.phase is Phase.PROCESSING for item in state.sessions.values())
+    processing = (
+        any(item.phase is Phase.PROCESSING for item in state.sessions.values())
+        or (base / "state" / "remote-processing").is_file()
+    )
     _require_fresh(
         base / "state" / "heartbeat",
         current,

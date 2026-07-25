@@ -4,9 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from racelens.object_storage import publish_session
 from racelens.recorder.schedule import ScheduledSession
 from racelens.recorder.worker import Config, Recorder, fixture_stem
 from racelens.recorder.state import Phase
+from tests.test_object_storage import MemoryStore
 
 
 SESSION = ScheduledSession(
@@ -121,3 +123,43 @@ def test_restart_finalizes_recording_after_schedule_deadline(tmp_path, monkeypat
 
     assert recorder.run_once().startswith("captured:")
     assert captures == [session.session_id]
+
+
+def test_idle_worker_processes_one_durable_historical_request(tmp_path, monkeypatch):
+    now = datetime(2026, 1, 10, tzinfo=UTC)
+    historical = ScheduledSession(
+        2024, 8, "Monaco Grand Prix", "R", datetime(2024, 5, 26, 13, tzinfo=UTC),
+    )
+    storage = MemoryStore()
+    recorder = Recorder(_config(tmp_path), now=lambda: now, object_store=storage)
+    recorder.remote_queue.enqueue(historical.session_id, fixture_stem(historical))
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule",
+        lambda year: [historical] if year == 2024 else [],
+    )
+
+    def process_requested(session, replay_id):
+        archive = tmp_path / "remote"
+        archive.mkdir()
+        fixture = archive / f"{replay_id}.jsonl"
+        track = archive / f"{replay_id}.track.json"
+        positions = archive / f"{replay_id}.positions.json"
+        fixture.write_text("{}\n", encoding="utf-8")
+        track.write_text("{}\n", encoding="utf-8")
+        positions.write_text("{}\n", encoding="utf-8")
+        publish_session(
+            storage,
+            session.session_id,
+            replay_id,
+            fixture,
+            track,
+            positions,
+            event_count=1,
+        )
+        recorder.remote_queue.finish(session.session_id, replay_session_id=replay_id)
+
+    monkeypatch.setattr(recorder, "process_requested", process_requested)
+
+    assert recorder.run_once() == "requested archive complete: 2024-08-r"
+    assert recorder.remote_queue.get("2024-08-r")["status"] == "ready"
+    assert not recorder.remote_processing.exists()

@@ -322,6 +322,8 @@ def validate_archive(
     positions = _json_object(Path(positions_path), "positions")
     if positions.get("session_id") != track.get("session_id"):
         raise ArchiveValidationError("track and positions session_id differ")
+    if positions.get("session_id") != Path(fixture_path).stem:
+        raise ArchiveValidationError("archive session_id differs from fixture name")
     tick_ms = positions.get("tick_ms")
     if tick_ms != 1000:
         raise ArchiveValidationError("positions.tick_ms must be 1000")

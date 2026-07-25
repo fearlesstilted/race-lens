@@ -15,6 +15,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
+from racelens.object_storage import (
+    ObjectPreparationQueue,
+    S3Store,
+    StorageConfig,
+    publish_session,
+)
 from racelens.recorder.feed import inspect_feed, isolate_session
 from racelens.recorder.postprocess import merge_captured_radio, validate_archive, validate_fixture
 from racelens.recorder.schedule import ScheduledSession, load_fastf1_schedule, select_due_session
@@ -25,6 +31,7 @@ CAPTURE_RETRY = timedelta(minutes=5)
 ARCHIVE_RETRY = timedelta(minutes=15)
 PROCESS_TIMEOUT = 60 * 60
 SCHEDULE_REFRESH = timedelta(hours=6)
+REMOTE_CAPTURE_GUARD = timedelta(hours=2)
 SESSION_LABEL = {"R": "race", "Q": "qualifying", "SQ": "sprint_qualifying"}
 
 
@@ -62,6 +69,7 @@ class Config:
     publish_sessions: frozenset[str]
     transcribe_radio: bool
     race_core: Path
+    git_publication: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -79,6 +87,9 @@ class Config:
         transcribe = os.environ.get("RECORDER_TRANSCRIBE_RADIO", "1").lower() in {
             "1", "true", "yes",
         }
+        git_publication = os.environ.get("RECORDER_GIT_PUBLICATION", "1").lower() in {
+            "1", "true", "yes",
+        }
         return cls(
             state_dir=base / "state",
             raw_dir=base / "raw",
@@ -89,6 +100,7 @@ class Config:
             publish_sessions=frozenset(publish),
             transcribe_radio=transcribe,
             race_core=Path(os.environ.get("RACELENS_RACE_CORE", "/usr/local/bin/race-core")),
+            git_publication=git_publication,
         )
 
 
@@ -99,17 +111,27 @@ class Recorder:
         *,
         now: Callable[[], datetime] | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        object_store: object | None = None,
     ) -> None:
         self.config = config
         self.now = now or (lambda: datetime.now(UTC))
         self.sleep = sleep
         self.store = StateStore(config.state_dir / "recorder.json")
         self.heartbeat = config.state_dir / "heartbeat"
+        self.remote_processing = config.state_dir / "remote-processing"
         self._schedule: list[ScheduledSession] = []
         self._schedule_loaded_at: datetime | None = None
         self._schedule_years: set[int] = set()
+        if object_store is None:
+            storage_config = StorageConfig.from_env()
+            object_store = S3Store(storage_config) if storage_config is not None else None
+        self.object_store = object_store
+        self.remote_queue = (
+            ObjectPreparationQueue(object_store) if object_store is not None else None
+        )
         for path in (config.state_dir, config.raw_dir, config.data_dir):
             path.mkdir(parents=True, exist_ok=True)
+        self.remote_processing.unlink(missing_ok=True)
 
     def _beat(self) -> None:
         self.heartbeat.touch()
@@ -186,8 +208,22 @@ class Recorder:
         if env:
             merged_env.update(env)
         self._beat()
-        subprocess.run(argv, check=True, timeout=PROCESS_TIMEOUT, env=merged_env)
-        self._beat()
+        process = subprocess.Popen(argv, env=merged_env)
+        deadline = time.monotonic() + PROCESS_TIMEOUT
+        try:
+            while process.poll() is None:
+                self._beat()
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(argv, PROCESS_TIMEOUT)
+                try:
+                    process.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    pass
+            if process.returncode:
+                raise subprocess.CalledProcessError(process.returncode, argv)
+        finally:
+            self._stop(process)
+            self._beat()
 
     def _stage(self, session: ScheduledSession, artifacts: list[Path]) -> None:
         destination = self._paths(session)["publish"]
@@ -209,11 +245,14 @@ class Recorder:
         )
         os.replace(temporary, manifest)
 
-    def process(self, session: ScheduledSession) -> None:
+    def _build_archive(
+        self,
+        session: ScheduledSession,
+        *,
+        captured: Path | None,
+        full: bool,
+    ) -> tuple[list[Path], int]:
         paths = self._paths(session)
-        clean = paths["clean"]
-        if not clean.is_file():
-            isolate_session(paths["raw"], clean, session)
         archive_dir = paths["fixture"].parent
         archive_dir.mkdir(parents=True, exist_ok=True)
         env = {
@@ -221,24 +260,19 @@ class Recorder:
             "FASTF1_CACHE": str(self.config.data_dir / "fastf1_cache"),
         }
         self._run([
-            sys.executable, "-m", "racelens.cli", "ingest-live", str(clean),
-            "--year", str(session.year), "--gp", session.event_name,
-            "--session", session.kind, "-o", str(paths["provisional"]),
-        ], env=env)
-        self._run([
             sys.executable, "-m", "racelens.cli", "ingest", str(session.year),
             session.event_name, session.kind, "-o", str(paths["fixture"]),
         ], env=env)
-        merge_captured_radio(paths["fixture"], paths["provisional"])
-        if self.config.transcribe_radio:
+        if captured is not None:
+            merge_captured_radio(paths["fixture"], captured)
+        if captured is not None and self.config.transcribe_radio:
             self._run([
                 sys.executable, "-m", "racelens.cli", "radio-transcribe",
                 str(paths["fixture"]),
             ], env=env)
-        validate_fixture(paths["fixture"])
-
-        if session.kind not in self.config.publish_sessions:
-            return
+        event_count = validate_fixture(paths["fixture"])
+        if not full:
+            return [paths["fixture"]], event_count
         self._run([
             sys.executable, "-m", "racelens.cli", "track", str(session.year),
             session.event_name, session.kind, "-o", str(paths["track"]),
@@ -255,9 +289,91 @@ class Recorder:
             sys.executable, "-m", "racelens.cli", "track-progress", str(session.year),
             session.event_name, session.kind, fixture_stem(session),
         ], env=env)
-        validate_archive(paths["fixture"], paths["track"], paths["positions"])
-        self._stage(session, [paths["fixture"], paths["track"], paths["positions"]])
+        report = validate_archive(paths["fixture"], paths["track"], paths["positions"])
         paths["positions_raw"].unlink(missing_ok=True)
+        return [paths["fixture"], paths["track"], paths["positions"]], report.events
+
+    def _publish(
+        self,
+        session: ScheduledSession,
+        artifacts: list[Path],
+        event_count: int,
+    ) -> None:
+        if self.config.git_publication:
+            self._stage(session, artifacts)
+        if self.object_store is not None:
+            replay_id = fixture_stem(session)
+            publish_session(
+                self.object_store,
+                session.session_id,
+                replay_id,
+                *artifacts,
+                event_count=event_count,
+            )
+            self.remote_queue.finish(
+                session.session_id,
+                replay_session_id=replay_id,
+            )
+
+    def process(self, session: ScheduledSession) -> None:
+        paths = self._paths(session)
+        clean = paths["clean"]
+        if not clean.is_file():
+            isolate_session(paths["raw"], clean, session)
+        archive_dir = paths["fixture"].parent
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        env = {
+            "RACELENS_FIXTURES": str(archive_dir),
+            "FASTF1_CACHE": str(self.config.data_dir / "fastf1_cache"),
+        }
+        self._run([
+            sys.executable, "-m", "racelens.cli", "ingest-live", str(clean),
+            "--year", str(session.year), "--gp", session.event_name,
+            "--session", session.kind, "-o", str(paths["provisional"]),
+        ], env=env)
+        full = session.kind in self.config.publish_sessions
+        artifacts, event_count = self._build_archive(
+            session, captured=paths["provisional"], full=full,
+        )
+        if full:
+            self._publish(session, artifacts, event_count)
+
+    def process_requested(self, session: ScheduledSession, replay_id: str) -> None:
+        if fixture_stem(session) != replay_id:
+            raise RuntimeError("requested replay ID differs from the FastF1 schedule")
+        artifacts, event_count = self._build_archive(session, captured=None, full=True)
+        self._publish(session, artifacts, event_count)
+
+    def _run_remote_once(self) -> str:
+        if self.remote_queue is None:
+            return "idle"
+        job = self.remote_queue.claim_next(self.now())
+        if job is None:
+            return "idle"
+        session_id = job["session_id"]
+        self.remote_processing.touch()
+        try:
+            year = int(session_id.split("-", 1)[0])
+            matches = [
+                session
+                for session in load_fastf1_schedule(year)
+                if session.session_id == session_id
+            ]
+            if len(matches) != 1:
+                raise RuntimeError("FastF1 schedule does not contain the requested session")
+            session = matches[0]
+            if session.capture_until > self.now():
+                raise RuntimeError("requested session has not completed")
+            self.process_requested(session, job["fixture_stem"])
+        except Exception as exc:
+            self.remote_queue.finish(
+                session_id,
+                error="Archive preparation failed on the worker",
+            )
+            return f"requested archive failed: {session_id}: {type(exc).__name__}"
+        finally:
+            self.remote_processing.unlink(missing_ok=True)
+        return f"requested archive complete: {session_id}"
 
     def run_once(self) -> str:
         now = self.now()
@@ -341,7 +457,18 @@ class Recorder:
         }
         session = select_due_session(sessions, now, unavailable)
         if session is None:
-            return "idle"
+            next_capture = min(
+                (
+                    item.capture_from
+                    for item in sessions
+                    if item.capture_from > now
+                    and item.session_id not in unavailable
+                ),
+                default=None,
+            )
+            if next_capture is not None and next_capture <= now + REMOTE_CAPTURE_GUARD:
+                return "idle: scheduled capture is approaching"
+            return self._run_remote_once()
         self.store.transition(session.session_id, Phase.RECORDING, now)
         try:
             self.capture(session)

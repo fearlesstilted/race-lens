@@ -161,6 +161,19 @@ def test_validate_archive_rejects_one_sample_per_driver(tmp_path):
         validate_archive(fixture, track, positions)
 
 
+def test_validate_archive_rejects_a_different_session_identity(tmp_path):
+    fixture, track, positions = _archive(tmp_path)
+    payload = json.loads(track.read_text())
+    payload["session_id"] = "other_race"
+    track.write_text(json.dumps(payload), encoding="utf-8")
+    payload = json.loads(positions.read_text())
+    payload["session_id"] = "other_race"
+    positions.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ArchiveValidationError, match="fixture name"):
+        validate_archive(fixture, track, positions)
+
+
 def test_command_plan_retains_every_capture_but_publishes_positions_selectively(tmp_path):
     race = build_command_plan(2026, "British", "R", "2026-12-r", root=tmp_path)
     practice = build_command_plan(2026, "British", "FP2", "2026-12-fp2", root=tmp_path)
