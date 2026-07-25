@@ -11,7 +11,7 @@ export type Capabilities = {
 }
 
 export type CatalogSessionType = 'FP1' | 'FP2' | 'FP3' | 'SQ' | 'Sprint' | 'Q' | 'R'
-export type CatalogSessionStatus = 'ready' | 'prepare' | 'queued' | 'failed'
+export type CatalogSessionStatus = 'ready' | 'prepare' | 'queued' | 'processing' | 'failed'
 
 export type CatalogSession = {
   session_id: string
@@ -40,7 +40,7 @@ export type CatalogResponse = {
 export type Preparation = {
   job_id: string
   session_id: string
-  status: 'ready' | 'queued' | 'failed'
+  status: 'ready' | 'queued' | 'processing' | 'failed'
   created_at: string
   updated_at: string
   replay_session_id: string | null

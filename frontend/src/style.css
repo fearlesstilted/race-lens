@@ -584,8 +584,17 @@ body {
   color: var(--ink);
   font: 700 14px var(--cond);
 }
+.catalog-toolbar label:not(:first-child) {
+  margin-left: 8px;
+}
 .catalog-toolbar span {
   margin-left: auto;
+}
+.catalog-notice {
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--hair);
+  color: var(--dim);
+  font: 600 11px/1.4 var(--cond);
 }
 .catalog-error {
   padding: 10px 18px;
@@ -660,6 +669,12 @@ body {
 }
 .catalog-session.is-ready small {
   color: var(--green);
+}
+.catalog-session.is-processing {
+  border-color: #f6b73c66;
+}
+.catalog-session.is-processing small {
+  color: var(--amber);
 }
 .catalog-session.is-failed {
   border-color: #e8002d66;
@@ -1844,6 +1859,14 @@ body {
   }
   .catalog-toolbar span {
     margin-left: 0;
+    width: 100%;
+  }
+  .catalog-toolbar label:not(:first-child) {
+    margin-left: 0;
+  }
+  .catalog-notice {
+    padding-right: calc(12px + env(safe-area-inset-right));
+    padding-left: calc(12px + env(safe-area-inset-left));
   }
   .catalog-list {
     padding: 0 calc(12px + env(safe-area-inset-right))
