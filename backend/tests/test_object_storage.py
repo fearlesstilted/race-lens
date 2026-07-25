@@ -46,6 +46,14 @@ class MemoryStore:
         if len(data) != size or hashlib.sha256(data).hexdigest() != sha256:
             raise ManifestError("checksum")
 
+    def matches(self, key, *, size, sha256):
+        data = self.objects.get(key)
+        return (
+            isinstance(data, bytes)
+            and len(data) == size
+            and hashlib.sha256(data).hexdigest() == sha256
+        )
+
     def copy(self, source, destination):
         self.operations.append(("copy", destination))
         self.objects[destination] = self.objects[source]
@@ -156,3 +164,27 @@ def test_object_queue_is_bounded_idempotent_and_retries_after_worker_failure():
     assert retried_now is True
     assert retried["status"] == "queued"
     assert retried["generation"] == 2
+
+
+def test_ready_queue_record_disappears_when_an_archive_object_is_corrupt(tmp_path):
+    store = MemoryStore()
+    fixture, track, positions = _archive(tmp_path)
+    queue = ObjectPreparationQueue(store)
+    queue.enqueue("2024-08-r", "monaco_2024_race")
+    queue.claim_next()
+    publish_session(
+        store,
+        "2024-08-r",
+        "monaco_2024_race",
+        fixture,
+        track,
+        positions,
+        event_count=1,
+    )
+    queue.finish("2024-08-r", replay_session_id="monaco_2024_race")
+    store.objects["sessions/monaco_2024_race/events.jsonl"] = b"corrupt"
+    queue._cache = None
+
+    record = queue.get("2024-08-r")
+    assert record["status"] == "failed"
+    assert record["replay_session_id"] is None

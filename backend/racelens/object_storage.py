@@ -268,6 +268,19 @@ class S3Store:
         finally:
             body.close()
 
+    def matches(self, key: str, *, size: int, sha256: str) -> bool:
+        _safe_key(key)
+        try:
+            response = self.client.head_object(Bucket=self.bucket, Key=key)
+        except Exception as exc:
+            if self._missing(exc):
+                return False
+            raise StorageError("object storage metadata read failed") from exc
+        return (
+            int(response.get("ContentLength", -1)) == size
+            and response.get("Metadata", {}).get("sha256") == sha256
+        )
+
     def download_verified(
         self,
         key: str,
@@ -403,6 +416,13 @@ def load_manifest(
     ):
         raise ManifestError("archive manifest canonical ID differs")
     return manifest
+
+
+def manifest_objects_match(store: Any, manifest: dict) -> bool:
+    return all(
+        store.matches(row["key"], size=row["size"], sha256=row["sha256"])
+        for row in manifest["files"].values()
+    )
 
 
 def publish_session(
@@ -620,11 +640,13 @@ class ObjectPreparationQueue:
         record = dict(status)
         if record["status"] == "ready":
             try:
-                load_manifest(
+                manifest = load_manifest(
                     self.store,
                     record["replay_session_id"],
                     canonical_session_id=record["session_id"],
                 )
+                if not manifest_objects_match(self.store, manifest):
+                    raise ManifestError("archive objects differ from manifest")
             except (ManifestError, StorageError):
                 record.update(
                     status="failed",
