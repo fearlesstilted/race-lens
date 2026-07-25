@@ -72,17 +72,21 @@ needs list/read on `requests/` and `status/`, write on `status/`, multipart
 write/copy on `tmp/` and `sessions/`, and delete only on `tmp/`. It does not
 need bucket administration or public access.
 
-Cloudflare R2 Standard is a cost-effective candidate: its current free tier is
-[10 GB-month, one million Class A operations, ten million Class B operations,
-and free egress](https://developers.cloudflare.com/r2/pricing/). Existing Race
-Lens triplets are roughly 3–17 MB each, so storage capacity is not the initial
-limit. R2 long-lived tokens, however, scope permissions to buckets rather than
-mixed per-prefix actions. Its
+Tigris Standard is the preferred free-tier provider for this deployment. Use
+endpoint `https://t3.storage.dev` and region `auto`. Its
+[free tier](https://www.tigrisdata.com/pricing/) includes 5 GB, 10,000 Class A
+requests, 100,000 Class B requests, and free egress; existing Race Lens
+triplets are roughly 3–17 MB each. Tigris access keys support custom
+[AWS-style IAM policies](https://github.com/tigrisdata/storage/tree/main/packages/cli)
+so the two permission sets above can be applied without changing the object
+contract or adding a gateway.
+
+Cloudflare R2 has a larger free tier, but its long-lived tokens scope
+permissions to buckets rather than mixed per-prefix actions. Its
 [prefix-scoped temporary credentials](https://developers.cloudflare.com/r2/api/s3/temporary-credentials/)
 expire after at most seven days. Do not silently give Render a permanent
-bucket-wide write token: use an S3 provider with an IAM prefix policy, or add a
-credential-rotation/gateway step before choosing R2 for the strict one-bucket
-deployment.
+bucket-wide write token: add credential rotation or a gateway before choosing
+R2 for the strict one-bucket deployment.
 
 The stable object contract is:
 
