@@ -1,5 +1,11 @@
 import type { BattlesResponse, Capabilities, CatalogResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, Preparation, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
 
+const responseError = async (response: Response, path: string) => {
+  const body = await response.json().catch(() => null) as { detail?: unknown } | null
+  const detail = typeof body?.detail === 'string' ? body.detail : response.statusText
+  return new Error(`${response.status} ${detail}: ${path}`)
+}
+
 const json = async <T>(path: string, retry = true): Promise<T> => {
   const response = await fetch(path)
   if (retry && [502, 503, 504].includes(response.status)) {
@@ -7,7 +13,7 @@ const json = async <T>(path: string, retry = true): Promise<T> => {
     return json<T>(path, false)
   }
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}: ${path}`)
+    throw await responseError(response, path)
   }
   return (await response.json()) as T
 }
@@ -123,7 +129,7 @@ export type LiveStatusResult = {
 
 const post = async <T>(path: string): Promise<T> => {
   const response = await fetch(path, { method: 'POST' })
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${path}`)
+  if (!response.ok) throw await responseError(response, path)
   return (await response.json()) as T
 }
 

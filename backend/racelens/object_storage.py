@@ -885,7 +885,16 @@ class RemoteSessionCache:
             self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             target = self.directory / replay_session_id
             ready = target / ".manifest-sha256"
-            if ready.is_file() and ready.read_text(encoding="ascii").strip() == marker:
+            complete = all(
+                (path := target / f"{replay_session_id}{ARCHIVE_FILES[name]}").is_file()
+                and path.stat().st_size == row["size"]
+                for name, row in manifest["files"].items()
+            )
+            if (
+                complete
+                and ready.is_file()
+                and ready.read_text(encoding="ascii").strip() == marker
+            ):
                 os.utime(target)
                 return target
             temporary = Path(tempfile.mkdtemp(prefix=".session-", dir=self.directory))
