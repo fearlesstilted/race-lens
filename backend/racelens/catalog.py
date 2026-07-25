@@ -8,9 +8,8 @@ import time
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
-from racelens.preparations import PreparationQueue
 from racelens.recorder.schedule import ScheduledSession, load_fastf1_schedule
 from racelens.recorder.worker import fixture_stem
 
@@ -211,21 +210,28 @@ def load_schedule(year: int, cache_dir: Path) -> list[ScheduledSession]:
 
 
 def public_job(record: dict) -> dict:
+    status = "processing" if record["status"] == "running" else record["status"]
     return {
         "job_id": record["job_id"],
         "session_id": record["session_id"],
-        "status": "queued" if record["status"] == "running" else record["status"],
+        "status": status,
         "created_at": record["created_at"],
         "updated_at": record["updated_at"],
         "replay_session_id": record.get("replay_session_id"),
-        "error": record.get("error"),
+        "error": (
+            "Archive preparation failed; retry to try again"
+            if status == "failed"
+            else "Archive preparation will retry automatically"
+            if record.get("error")
+            else None
+        ),
     }
 
 
 def catalog_session(
     session: ScheduledSession,
     fixtures_dir: Path,
-    queue: PreparationQueue,
+    queue: Any,
 ) -> dict:
     expected_id = fixture_stem(session)
     venue, suffix = expected_id.split(f"_{session.year}_", 1)
@@ -241,7 +247,8 @@ def catalog_session(
     else:
         record = queue.get(session.session_id)
         status = (
-            "queued" if record and record.get("status") in {"queued", "running"}
+            "processing" if record and record.get("status") in {"processing", "running"}
+            else "queued" if record and record.get("status") == "queued"
             else "failed" if record and record.get("status") == "failed"
             else "ready" if record and record.get("status") == "ready"
             else "prepare"
@@ -265,7 +272,7 @@ def catalog_session(
 def build_catalog(
     season: int,
     fixtures_dir: Path,
-    queue: PreparationQueue,
+    queue: Any,
     cache_dir: Path,
     *,
     preparation_enabled: bool,
@@ -281,7 +288,7 @@ def build_catalog(
 
     events: dict[tuple[int, str], list[dict]] = {}
     for session in sessions:
-        if session.starts_at > current:
+        if session.capture_until > current:
             continue
         key = (session.round_number, session.event_name)
         events.setdefault(key, []).append(catalog_session(session, fixtures_dir, queue))
