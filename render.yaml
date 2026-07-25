@@ -11,3 +11,17 @@ services:
     envVars:
       - key: PORT
         value: "7860"
+      - key: RACELENS_PREPARATION_QUEUE_MAX
+        value: "8"
+      - key: RACELENS_PREPARATION_DAILY_MAX
+        value: "4"
+      - key: RACELENS_S3_ENDPOINT
+        sync: false
+      - key: RACELENS_S3_REGION
+        sync: false
+      - key: RACELENS_S3_BUCKET
+        sync: false
+      - key: RACELENS_S3_ACCESS_KEY_ID
+        sync: false
+      - key: RACELENS_S3_SECRET_ACCESS_KEY
+        sync: false
