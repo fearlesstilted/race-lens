@@ -25,6 +25,17 @@ REST + SSE → React broadcast UI
 insights, commentary, highlights, and experimental strategy tools
 ```
 
+Missing archives use a second, deliberately small path:
+
+```text
+browser canonical ID → Render request object → Debian worker
+                         ↑ status/manifest ← verified private triplet
+```
+
+The final manifest is the readiness marker. Render downloads a remote triplet
+to a bounded `/tmp` cache and checks every declared size and SHA-256 before the
+existing replay engine sees it.
+
 This is a personal engineering portfolio project, not a commercial timing
 product. It focuses on data normalization, replay correctness, transparent
 heuristics, and a polished end-to-end demo.
@@ -37,9 +48,10 @@ session and shows the wake-up stage instead of a local development error.
 
 Use **ARCHIVE** to browse completed practice, sprint, qualifying, and race
 sessions from the full-telemetry era (2018 onward). Sessions already in the
-demo open immediately. A writable local deployment can queue a missing session
-once; the public read-only demo keeps preparation disabled until durable object
-storage is connected.
+demo open immediately. With private S3-compatible storage configured, a missing
+session is queued once for the outbound-only Debian worker; its verified replay
+becomes available without a Git data commit. Without storage, writable local
+deployments retain the small filesystem queue and the public demo stays bounded.
 
 To run it locally:
 
@@ -58,7 +70,8 @@ positions, so the track map works without FastF1, Rust, or preprocessing.
 
 The root `Dockerfile` builds a single public-demo image on port `7860`.
 It runs as a non-root user with `RACELENS_READONLY=1`, so public deployments
-can replay committed data but cannot start capture jobs or write fixtures.
+cannot start capture jobs or write fixtures. Read-only mode may write only a
+bounded canonical preparation request when private object storage is configured.
 
 ## What it demonstrates
 
@@ -221,7 +234,14 @@ Preparation accepts only canonical catalog IDs such as `2024-08-r`; it does
 not accept URLs or filesystem paths. Jobs are bounded, atomic, and idempotent,
 so repeated clicks cannot create duplicate downloads. On Render the API remains
 read-only: archive building belongs on the isolated Debian worker, not in a
-public web process.
+public web process. Defaults are eight active jobs, one worker, and four new
+preparations per UTC day.
+
+Configure the API and recorder with `RACELENS_S3_ENDPOINT`,
+`RACELENS_S3_REGION`, `RACELENS_S3_BUCKET`, `RACELENS_S3_ACCESS_KEY_ID`, and
+`RACELENS_S3_SECRET_ACCESS_KEY`. Temporary credentials may additionally use
+`RACELENS_S3_SESSION_TOKEN`. Never put their values in Git or frontend
+environment variables; see [the recorder runbook](deploy/recorder/README.md).
 
 ## Evaluation and limits
 
