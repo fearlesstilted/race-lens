@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getCatalog, getPreparation, prepareSession } from '../../api/client'
-import type { CatalogResponse, CatalogSession } from '../../api/types'
+import type { CatalogResponse, CatalogSession, CatalogSessionType } from '../../api/types'
 
 type Props = {
   open: boolean
@@ -12,16 +12,23 @@ type Props = {
 const buttonText = (session: CatalogSession) => {
   if (session.status === 'ready') return 'WATCH'
   if (session.status === 'queued') return 'QUEUED'
+  if (session.status === 'processing') return 'PROCESSING'
   if (session.status === 'failed') return 'RETRY'
   return 'PREPARE'
 }
 
+const SESSION_TYPES: Array<'ALL' | CatalogSessionType> = [
+  'ALL', 'FP1', 'FP2', 'FP3', 'SQ', 'Sprint', 'Q', 'R',
+]
+
 export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: Props) {
   const [season, setSeason] = useState(initialSeason ?? new Date().getUTCFullYear())
+  const [sessionType, setSessionType] = useState<'ALL' | CatalogSessionType>('ALL')
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
+  const panel = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -39,10 +46,26 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
   useEffect(() => {
     if (!open) return
     previousFocus.current = document.activeElement as HTMLElement | null
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
-    window.addEventListener('keydown', close)
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Tab' || !panel.current) return
+      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+      ))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', handleKey)
     return () => {
-      window.removeEventListener('keydown', close)
+      window.removeEventListener('keydown', handleKey)
       previousFocus.current?.focus()
     }
   }, [open, onClose])
@@ -51,13 +74,24 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
     () => catalog?.events.flatMap((event) => event.sessions) ?? [],
     [catalog],
   )
+  const events = useMemo(
+    () => catalog?.events.flatMap((event) => {
+      const matching = sessionType === 'ALL'
+        ? event.sessions
+        : event.sessions.filter((session) => session.type === sessionType)
+      return matching.length ? [{ ...event, sessions: matching }] : []
+    }) ?? [],
+    [catalog, sessionType],
+  )
 
   useEffect(() => {
-    const queued = sessions.filter((session) => session.status === 'queued')
-    if (!open || queued.length === 0) return
+    const active = sessions.filter(
+      (session) => session.status === 'queued' || session.status === 'processing',
+    )
+    if (!open || active.length === 0) return
     const timer = window.setInterval(async () => {
       const updates = await Promise.allSettled(
-        queued.map((session) => getPreparation(session.session_id)),
+        active.map((session) => getPreparation(session.session_id)),
       )
       setCatalog((current) => {
         if (!current) return current
@@ -120,7 +154,7 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
   return (
     <div className="settings-overlay open catalog-overlay">
       <button type="button" className="settings-backdrop catalog-backdrop" onClick={onClose} aria-label="Close race archive" />
-      <section className="settings-drawer catalog-panel" role="dialog" aria-modal="true" aria-label="Race archive">
+      <section ref={panel} className="settings-drawer catalog-panel" role="dialog" aria-modal="true" aria-label="Race archive">
         <header className="settings-drawer-hdr catalog-header">
           <div>
             <small>RACE ARCHIVE · 2018—NOW</small>
@@ -133,11 +167,22 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
           <select id="catalog-season" value={season} onChange={(event) => setSeason(Number(event.target.value))}>
             {(catalog?.seasons ?? [season]).map((item) => <option key={item}>{item}</option>)}
           </select>
-          <span>{catalog ? `${catalog.events.length} weekends` : 'Loading calendar…'}</span>
+          <label htmlFor="catalog-session-type">TYPE</label>
+          <select
+            id="catalog-session-type"
+            value={sessionType}
+            onChange={(event) => setSessionType(event.target.value as 'ALL' | CatalogSessionType)}
+          >
+            {SESSION_TYPES.map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <span>{catalog ? `${events.length} weekends` : 'Loading calendar…'}</span>
         </div>
-        {error && <div className="catalog-error" role="alert">{error}</div>}
-        <div className="catalog-list">
-          {catalog?.events.map((event) => (
+        <div className="catalog-notice">
+          Missing sessions are prepared once by the archive worker. A full archive can take 15–45 minutes.
+        </div>
+        {error && <div className="catalog-error" role="alert" aria-live="polite">{error}</div>}
+        <div className="catalog-list" aria-busy={!catalog}>
+          {events.map((event) => (
             <article className="catalog-event" key={event.round}>
               <div className="catalog-event-name">
                 <small>ROUND {String(event.round).padStart(2, '0')}</small>
@@ -149,7 +194,11 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
                     type="button"
                     className={`catalog-session is-${session.status}`}
                     key={session.session_id}
-                    disabled={busy === session.session_id || session.status === 'queued'}
+                    disabled={
+                      busy === session.session_id
+                      || session.status === 'queued'
+                      || session.status === 'processing'
+                    }
                     onClick={() => void choose(session)}
                   >
                     <span>{session.name}</span>
@@ -159,7 +208,7 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
               </div>
             </article>
           ))}
-          {catalog && catalog.events.length === 0 && (
+          {catalog && events.length === 0 && (
             <div className="catalog-empty">No completed supported sessions in this season.</div>
           )}
         </div>
