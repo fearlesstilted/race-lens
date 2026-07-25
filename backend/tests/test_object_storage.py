@@ -103,6 +103,10 @@ def test_manifest_is_final_and_remote_cache_rejects_corruption(tmp_path):
     cache = RemoteSessionCache(store, tmp_path / "cache")
     root = cache.materialize("monaco_2024_race")
     assert (root / "monaco_2024_race.jsonl").read_bytes() == fixture.read_bytes()
+    (root / "monaco_2024_race.positions.json").unlink()
+    assert cache.materialize(
+        "monaco_2024_race",
+    ).joinpath("monaco_2024_race.positions.json").is_file()
 
     store.objects["sessions/monaco_2024_race/events.jsonl"] = b"corrupt"
     (root / ".manifest-sha256").unlink()

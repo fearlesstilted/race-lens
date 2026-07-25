@@ -240,13 +240,16 @@ def _remote_fixture_root(session_id: str) -> Path:
         raise HTTPException(503, "Replay storage is temporarily unavailable") from exc
 
 
-def _fixture_root(session_id: str) -> Path:
-    if any(
-        (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
-        for suffix in (".jsonl", ".track.json", ".positions.json")
-    ):
+def _fixture_root(session_id: str, suffix: str = ".jsonl") -> Path:
+    if (FIXTURES_DIR / f"{session_id}.jsonl").is_file():
         return FIXTURES_DIR
-    return _remote_fixture_root(session_id)
+    local_component = (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
+    try:
+        return _remote_fixture_root(session_id)
+    except HTTPException:
+        if local_component:
+            return FIXTURES_DIR
+        raise
 
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
@@ -296,7 +299,7 @@ def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> 
 
 def _positions_data(session_id: str) -> dict | None:
     """Thin wrapper so the cache key includes FIXTURES_DIR (see _engine)."""
-    fixtures_dir = _fixture_root(session_id)
+    fixtures_dir = _fixture_root(session_id, ".positions.json")
     path = fixtures_dir / f"{session_id}.positions.json"
     mtime = path.stat().st_mtime if path.is_file() else 0.0
     return _positions_data_cached(session_id, str(fixtures_dir), mtime)
@@ -941,7 +944,7 @@ def overtake_endpoint(
 @app.get("/api/sessions/{session_id}/track")
 def track(session_id: str) -> dict:
     """Return pre-computed track outline as {session_id, viewbox, points}."""
-    path = _fixture_root(session_id) / f"{session_id}.track.json"
+    path = _fixture_root(session_id, ".track.json") / f"{session_id}.track.json"
     if not path.is_file():
         raise HTTPException(404, f"track data for '{session_id}' not found")
     return json.loads(path.read_text(encoding="utf-8"))
@@ -954,7 +957,7 @@ def positions(session_id: str) -> dict:
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
     404 if positions.json has not been generated yet.
     """
-    path = _fixture_root(session_id) / f"{session_id}.positions.json"
+    path = _fixture_root(session_id, ".positions.json") / f"{session_id}.positions.json"
     if not path.is_file():
         raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
     return json.loads(path.read_text(encoding="utf-8"))

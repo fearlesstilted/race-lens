@@ -178,7 +178,7 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
           <span>{catalog ? `${events.length} weekends` : 'Loading calendar…'}</span>
         </div>
         <div className="catalog-notice">
-          Missing sessions are prepared once by the archive worker. A full archive can take 15–45 minutes.
+          Missing sessions are prepared once by the archive worker. A full archive often takes 15–45 minutes; queued requests can take longer.
         </div>
         {error && <div className="catalog-error" role="alert" aria-live="polite">{error}</div>}
         <div className="catalog-list" aria-busy={!catalog}>
