@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getCapabilities, listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
@@ -99,7 +99,6 @@ function App() {
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const prevSessionRef = useRef<string | null>(null)
 
   // PROJECTION toggle — replay only
   const [projection, setProjection] = useState(false)
@@ -201,14 +200,6 @@ function App() {
     return () => { cancelled = true; clearInterval(id) }
   }, [isLiveActive])
 
-  // Reset selection when session changes
-  useEffect(() => {
-    if (sessionId !== prevSessionRef.current) {
-      setSelectedIds([])
-      prevSessionRef.current = sessionId
-    }
-  }, [sessionId])
-
   // Esc to clear selection
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -241,6 +232,7 @@ function App() {
 
   const handleSessionChange = (id: string) => {
     replay.pause()
+    setSelectedIds([])
     setSessionId(id)
     const url = new URL(window.location.href)
     url.searchParams.set('session', id)
@@ -393,126 +385,128 @@ function App() {
         </div>
       )}
 
-      {(mode === 'replay' || isLiveActive) && <>
-        <StatusStrip
-        status={sessionStatus}
-        lap={state?.lap ?? null}
-        atMs={replay.atMs}
-        neutralizationStartMs={replay.neutralizationStartMs}
-        greenFlag={replay.greenFlag}
-        greenFlagText={replay.greenFlagText}
-      />
-      {(replay.error || replay.feedError) && (
-        <div className="feed-error">{replay.error || replay.feedError}</div>
-      )}
-
-      {/* Mobile tab bar — CSS shows only on <768px */}
-      <div className="mob-tabbar">
-        <div className="mob-tabbar-inner">
-          {MOB_TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
-              onClick={() => setMobTab(tab)}
-            >{tab}</button>
-          ))}
-        </div>
-      </div>
-
-      <div className="wrap" data-mob-tab={mobTab}>
-        <TimingTower
-          rows={rows}
-          battles={replay.battles}
-          selectedIds={selectedIds}
-          onSelectDriver={handleSelectDriver}
-        />
-
-        <div className="col col-center">
-          <TrackMap
-            sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
+      {(mode === 'replay' || isLiveActive) && (
+        <>
+          <StatusStrip
+            status={sessionStatus}
+            lap={state?.lap ?? null}
             atMs={replay.atMs}
-            playing={replay.playing}
-            playbackSpeed={replay.speed}
-            drivers={state?.drivers ?? {}}
-            classification={state?.classification ?? []}
-            sessionStatus={sessionStatus}
             neutralizationStartMs={replay.neutralizationStartMs}
-            selectedIds={selectedIds}
-            positionsData={effectivePositionsData}
-            battles={replay.battles}
-            recentPasses={replay.recentPasses}
+            greenFlag={replay.greenFlag}
+            greenFlagText={replay.greenFlagText}
           />
-          {/* Center always keeps map + tabs — selecting drivers must never hide
-              forecast/win%. Driver focus moves to the right column instead. */}
-          <div className="ctr-bottom">
-            <CenterTabs
-              activeTab={centerTab}
-              showForecast={projection && (mode === 'replay' ? !!sessionId : isLiveActive)}
-              showWinProb={winProb && (mode === 'replay' ? !!sessionId : isLiveActive)}
-              showStrategy={mode === 'replay' && !!sessionId}
-              onTab={setCenterTab}
-            />
-            <div className="ctr-pane">
-              {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
-              {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
-                <StintTimeline sessionId={sessionId} order={state?.classification} />
-              )}
-              {centerTab === 'PACE' && projection && (
-                mode === 'replay'
-                  ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
-                  : isLiveActive && <ForecastStrip live atMs={replay.atMs} />
-              )}
-              {centerTab === 'GAP' && winProb && (
-                mode === 'replay'
-                  ? sessionId && <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
-                  : isLiveActive && <WinProbGraph live atMs={replay.atMs} />
-              )}
+          {(replay.error || replay.feedError) && (
+            <div className="feed-error">{replay.error || replay.feedError}</div>
+          )}
+
+          {/* Mobile tab bar — CSS shows only on <768px */}
+          <div className="mob-tabbar">
+            <div className="mob-tabbar-inner">
+              {MOB_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
+                  onClick={() => setMobTab(tab)}
+                >{tab}</button>
+              ))}
             </div>
           </div>
-        </div>
 
-        {/* Right column: driver focus when 1-2 selected, else insights feed. */}
-        {hasFocus ? (
-          <div className="col col-insights col-focus">
-            <div className="label">DRIVER FOCUS</div>
-            <FocusPanel
+          <div className="wrap" data-mob-tab={mobTab}>
+            <TimingTower
+              rows={rows}
+              battles={replay.battles}
               selectedIds={selectedIds}
-              drivers={state?.drivers ?? {}}
-              sessionId={mode === 'replay' ? sessionId : null}
-              live={mode === 'live' && isLiveActive}
-              atMs={replay.atMs}
+              onSelectDriver={handleSelectDriver}
             />
-          </div>
-        ) : (
-          <InsightPanel
-            key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
-            insights={replay.insights}
-            commentary={replay.commentary}
-            selectedIds={selectedIds}
-            sessionStatus={sessionStatus}
-            sessionId={mode === 'replay' ? sessionId : null}
-            atMs={replay.atMs}
-          />
-        )}
-      </div>
 
-        <ReplayDeck
-        timeline={timeline}
-        atMs={replay.atMs}
-        playing={replay.playing}
-        speed={replay.speed}
-        frameMs={replay.frameMs}
-        markers={replay.markers}
-        lang={replay.lang}
-        canScrub={replay.canScrub}
-        liveLabel={mode === 'live' ? liveLabel : null}
-        onScrub={replay.scrub}
-        onPlay={replay.play}
-        onPause={replay.pause}
-        onSpeed={replay.setSpeed}
-        />
-      </>}
+            <div className="col col-center">
+              <TrackMap
+                sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
+                atMs={replay.atMs}
+                playing={replay.playing}
+                playbackSpeed={replay.speed}
+                drivers={state?.drivers ?? {}}
+                classification={state?.classification ?? []}
+                sessionStatus={sessionStatus}
+                neutralizationStartMs={replay.neutralizationStartMs}
+                selectedIds={selectedIds}
+                positionsData={effectivePositionsData}
+                battles={replay.battles}
+                recentPasses={replay.recentPasses}
+              />
+              {/* Center always keeps map + tabs — selecting drivers must never hide
+                  forecast/win%. Driver focus moves to the right column instead. */}
+              <div className="ctr-bottom">
+                <CenterTabs
+                  activeTab={centerTab}
+                  showForecast={projection && (mode === 'replay' ? !!sessionId : isLiveActive)}
+                  showWinProb={winProb && (mode === 'replay' ? !!sessionId : isLiveActive)}
+                  showStrategy={mode === 'replay' && !!sessionId}
+                  onTab={setCenterTab}
+                />
+                <div className="ctr-pane">
+                  {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
+                  {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
+                    <StintTimeline sessionId={sessionId} order={state?.classification} />
+                  )}
+                  {centerTab === 'PACE' && projection && (
+                    mode === 'replay'
+                      ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+                      : isLiveActive && <ForecastStrip live atMs={replay.atMs} />
+                  )}
+                  {centerTab === 'GAP' && winProb && (
+                    mode === 'replay'
+                      ? sessionId && <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
+                      : isLiveActive && <WinProbGraph live atMs={replay.atMs} />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right column: driver focus when 1-2 selected, else insights feed. */}
+            {hasFocus ? (
+              <div className="col col-insights col-focus">
+                <div className="label">DRIVER FOCUS</div>
+                <FocusPanel
+                  selectedIds={selectedIds}
+                  drivers={state?.drivers ?? {}}
+                  sessionId={mode === 'replay' ? sessionId : null}
+                  live={mode === 'live' && isLiveActive}
+                  atMs={replay.atMs}
+                />
+              </div>
+            ) : (
+              <InsightPanel
+                key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
+                insights={replay.insights}
+                commentary={replay.commentary}
+                selectedIds={selectedIds}
+                sessionStatus={sessionStatus}
+                sessionId={mode === 'replay' ? sessionId : null}
+                atMs={replay.atMs}
+              />
+            )}
+          </div>
+
+          <ReplayDeck
+            timeline={timeline}
+            atMs={replay.atMs}
+            playing={replay.playing}
+            speed={replay.speed}
+            frameMs={replay.frameMs}
+            markers={replay.markers}
+            lang={replay.lang}
+            canScrub={replay.canScrub}
+            liveLabel={mode === 'live' ? liveLabel : null}
+            onScrub={replay.scrub}
+            onPlay={replay.play}
+            onPause={replay.pause}
+            onSpeed={replay.setSpeed}
+          />
+        </>
+      )}
     </>
   )
 }
