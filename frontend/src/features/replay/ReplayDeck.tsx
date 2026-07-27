@@ -239,6 +239,10 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
 
   return (
     <div className="deck">
+      <div className="deck-mobile-meta" aria-hidden="true">
+        <span>{canScrub ? (currentLap !== null ? `LAP ${currentLap}` : 'REPLAY') : (liveLabel ?? 'LIVE')}</span>
+        <strong>{canScrub ? sessionTime : 'LIVE TIMING'}</strong>
+      </div>
       {/* Phase strip — flush above rail */}
       <div className="phase">
         {visiblePhases.map((seg) => {
