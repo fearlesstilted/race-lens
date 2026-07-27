@@ -11,7 +11,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, ClassVar
 
 from racelens.preparations import QueueFullError, SESSION_ID
 
@@ -67,7 +67,7 @@ def _safe_key(key: str) -> str:
 class StorageConfig:
     """Validated S3-compatible connection settings from the process environment."""
 
-    _FIELDS = {
+    _FIELDS: ClassVar[dict[str, str]] = {
         "endpoint": "RACELENS_S3_ENDPOINT",
         "region": "RACELENS_S3_REGION",
         "bucket": "RACELENS_S3_BUCKET",
