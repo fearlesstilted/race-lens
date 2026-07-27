@@ -7,7 +7,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/ping
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     envVars:
       - key: PORT
         value: "7860"
