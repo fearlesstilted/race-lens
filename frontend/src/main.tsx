@@ -22,6 +22,9 @@ import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
 import { useReplay } from './features/replay/useReplay'
 import './style.css'
+import './styles/dashboard.css'
+import './styles/responsive.css'
+import './styles/features.css'
 
 // ── Live status pill ──────────────────────────────────────────────────────────
 

@@ -1,0 +1,1000 @@
+/* ── timing tower ─────────────────────────────────────────────── */
+/* columns: POS | bar | DRV | TYR | AGE(opt) | LAST | trend | GAP | INT(opt) | PIT(opt) */
+.trow-hdr {
+  display: grid;
+  grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 38px 22px;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px 0 14px;
+  font: 600 10px var(--cond);
+  letter-spacing: 0.22em;
+  color: var(--dim);
+  border-bottom: 1px solid var(--hair);
+}
+.trow {
+  /* All rows share the tower body height equally (flex) and shrink to fit when
+     the field is full — no scroll, ever. Capped at 46px so a short grid on a
+     tall screen doesn't stretch into giant rows. overflow:hidden clips the
+     fixed-size badges when a full field forces very short rows. */
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 46px;
+  display: grid;
+  grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 38px 22px;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 0 10px 0 14px;
+  border-top: 1px solid #ffffff0a;
+  font-variant-numeric: tabular-nums;
+}
+/* Adaptive by the COLUMN's own width (container query), not the window — the
+   tower is a sized container (container-name: tower). Drop the least-important
+   columns first as the column narrows, so nothing overflows / truncates. */
+@container tower (max-width: 360px) {
+  .trow-hdr,
+  .trow {
+    grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 0 0;
+  }
+  .col-int,
+  .col-pit {
+    display: none;
+  }
+}
+@container tower (max-width: 300px) {
+  .trow-hdr,
+  .trow {
+    grid-template-columns: 24px 4px 40px 22px 0 66px 12px 44px 0 0;
+  }
+  .col-age {
+    display: none;
+  }
+}
+.trow:first-of-type {
+  border-top: 0;
+}
+.trow.lead {
+  /* Navy base wash, subtle red breath at mid-row, clean edge.
+     The RB-yellow hairline is the focal anchor — keep it 2px, crisp. */
+  background: linear-gradient(
+    90deg,
+    #1b264fcc 0%,
+    #1b264f88 30%,
+    #e8002d0d 55%,
+    transparent 82%
+  );
+  box-shadow: inset 2px 0 0 var(--rb-yellow);
+}
+/* pit tag inside code cell */
+.pit-tag {
+  display: inline-block;
+  margin-left: 5px;
+  font: 700 9px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--amber);
+  vertical-align: middle;
+  line-height: 1;
+}
+/* last lap column — wide enough for m:ss.mmm */
+.last-lap {
+  font: 600 17px var(--cond);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  letter-spacing: 0.01em;
+}
+/* pit count */
+.pits-count {
+  font: 600 14px var(--cond);
+  color: var(--dim);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.pos {
+  font: italic 800 19px var(--cond);
+  background: var(--ink);
+  color: #000;
+  text-align: center;
+  line-height: 26px;
+  transform: skewX(-8deg);
+  font-variant-numeric: tabular-nums;
+}
+.trow.lead .pos {
+  background: var(--red);
+  color: #fff;
+}
+/* Gained/lost peek — the GAINED/LOST button cross-fades the LAST column into
+   big ▲/▼ deltas vs the start, then fades back on its own. */
+.label-row {
+  justify-content: space-between;
+  gap: 8px;
+}
+.delta-btn {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  background: #ffffff10;
+  border: 1px solid #ffffff22;
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 200ms ease, background 200ms ease;
+}
+.delta-btn:hover { color: #fff; background: #ffffff1e; }
+.delta-btn.on { color: #fff; background: #00d2be33; border-color: #00d2be66; }
+.last-swap { position: relative; }
+.swap-layer {
+  transition: opacity 420ms ease;
+  opacity: 1;
+}
+.swap-hidden { opacity: 0; }
+.swap-delta {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  font: 700 14px var(--cond);
+  color: var(--dim);
+  pointer-events: none;
+}
+.swap-delta.up { color: #39b54a; }
+.swap-delta.down { color: var(--red); }
+@media (prefers-reduced-motion: reduce) {
+  .swap-layer { transition: none; }
+}
+.tbar {
+  height: min(26px, 100%);
+}
+.code {
+  font: italic 700 21px var(--cond);
+  letter-spacing: 0.05em;
+}
+/* gapline removed — replaced by INT column */
+.ty {
+  font: 800 17px var(--cond);
+  text-align: center;
+}
+.ty.M { color: var(--med); }
+.ty.H { color: var(--hard); }
+.ty.S { color: var(--soft); }
+.ty.I { color: #39b54a; }
+.ty.W { color: #0067ff; }
+/* tyre age — separate column */
+.tyre-age {
+  font: 600 12px var(--cond);
+  color: var(--dim);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* fresh tyre accent — just out of pits */
+.tyre-age.fresh {
+  color: var(--amber);
+  font-weight: 800;
+}
+.gap {
+  font: 600 18px var(--cond);
+  text-align: right;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.gap.dim {
+  color: var(--dim);
+}
+.battle-tick {
+  position: relative;
+}
+.battle-tick::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--amber);
+}
+.trow.retired {
+  opacity: 0.45;
+}
+.trow-empty {
+  padding: var(--s4) 18px;
+  color: var(--dim);
+  font: 600 12px var(--cond);
+  letter-spacing: 0.2em;
+}
+
+/* ── centre column: map + feed ────────────────────────────────── */
+.col-center {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.map {
+  height: 46vh;
+  min-height: 260px;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  border-bottom: 1px solid var(--hair);
+  position: relative;
+  flex-shrink: 0;
+  padding: 4px;
+  overflow: hidden;
+}
+.map svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.map .note {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  font: 600 11px var(--cond);
+  letter-spacing: 0.25em;
+  color: #55555f;
+  z-index: 2;
+  pointer-events: none;
+}
+/* feed scroll area: takes remaining height, internal scroll on hover */
+.col-center .ev-scroll {
+  flex: 1;
+  overflow-y: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.col-center .ev-scroll:hover {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 transparent;
+}
+/* RACE FEED label — matches column label height/style */
+.col-center .ev-scroll > .label {
+  flex-shrink: 0;
+}
+/* Focus now lives in the right column (replaces WHAT TO WATCH on selection). */
+.col-focus {
+  display: flex;
+  flex-direction: column;
+}
+.col-focus .focus-panel,
+.col-focus .focus-panel-h2h {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: none;
+  border-top: none;
+}
+/* H2H stacks vertically in the narrower right column instead of side-by-side. */
+.col-focus .h2h-body {
+  flex-direction: column;
+}
+.col-focus .h2h-divider {
+  width: auto;
+  height: 1px;
+  background: var(--hair);
+  margin: var(--s2) 0;
+}
+.ev {
+  display: grid;
+  grid-template-columns: 38px 72px 1fr;
+  gap: var(--s2);
+  padding: var(--s2) var(--s5);
+  border-top: 1px solid #ffffff0a;
+  font-size: 16px;
+}
+.ev-lap {
+  font: 700 14px var(--cond);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.ev .t {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  font: 600 13px var(--cond);
+  letter-spacing: 0.04em;
+}
+.ev.crit {
+  box-shadow: inset 3px 0 var(--red);
+}
+.ev.fast .x {
+  color: var(--amber);
+}
+.ev .x b {
+  font-weight: 600;
+}
+
+/* feed tag chips */
+.ev-tag {
+  display: inline-block;
+  font: 700 11px/1 var(--cond);
+  letter-spacing: 0.12em;
+  padding: 2px 5px;
+  margin-right: 7px;
+  vertical-align: middle;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.ev-tag-flag  { background: #e8002d33; color: var(--red); }
+.ev-tag-pit   { background: #f2a90033; color: var(--amber); }
+.ev-tag-fastest { background: #b388ff22; color: #b388ff; }
+.ev-tag-info  { background: #ffffff11; color: var(--dim); }
+.ev-tag-finish { background: #ffffff1c; color: #fff; }
+.ev-tag-pass  { background: #00d2be33; color: #00d2be; }
+
+/* whisper transcript under a radio feed row */
+.ev-transcript {
+  display: block;
+  margin-top: 2px;
+  font-style: italic;
+  color: var(--dim);
+  font-size: 16px;
+  line-height: 1.25;
+  white-space: pre-line;
+}
+
+/* radio play/stop button in feed rows */
+.ev-radio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 7px;
+  padding: 0;
+  vertical-align: middle;
+  flex-shrink: 0;
+  border: 1px solid #ffffff22;
+  border-radius: 50%;
+  background: #ffffff11;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ev-radio-btn:hover {
+  color: var(--ink);
+  border-color: #ffffff44;
+}
+.ev-radio-btn.playing {
+  background: #e8002d33;
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* new-event flash */
+@keyframes ev-flash {
+  0%   { background: #ffffff14; }
+  100% { background: transparent; }
+}
+.ev-flash {
+  animation: ev-flash 2s ease-out forwards;
+}
+
+/* ── insights: type filter chips ─────────────────────────────── */
+.ins-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px var(--s5) 6px;
+  border-bottom: 1px solid var(--hair);
+}
+.ins-filter .tog {
+  font-size: 9px;
+  padding: 2px 6px;
+}
+.ins-filter .tog:first-child {
+  border-right: 1px solid #ffffff22;
+}
+
+/* ── insights: lower-thirds ───────────────────────────────────── */
+.col-insights {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Fixed width — never shrinks due to content changes */
+  flex-shrink: 0;
+  width: 360px;
+}
+.ins {
+  margin: 0 0 1px;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid #ffffff0a;
+  position: relative;
+  /* Smooth max-height collapse on exit */
+  overflow: hidden;
+}
+.ins::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;   /* uniform severity bar width */
+  background: var(--amber);
+}
+.ins.high::before {
+  background: var(--red);
+}
+.ins.pace::before {
+  background: #ffffff42;
+}
+.ins.ins-sc-pit {
+  border-top: 1px solid var(--amber);
+}
+.ins.ins-sc-pit::before {
+  background: var(--amber);
+  width: 3px;
+}
+.ins h4 {
+  font: italic 700 20px var(--cond);
+  letter-spacing: 0.05em;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.ins h4 small {
+  font: 600 10px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  flex-shrink: 0;
+}
+.ins.high h4 small {
+  color: var(--red);
+}
+.ins p {
+  color: #c4c4cd;
+  font-size: 16px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ins .data {
+  margin-top: var(--s2);
+  display: flex;
+  gap: var(--s5);
+  font: 600 14px var(--cond);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.ins .data b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ── insight card animations ─────────────────────────────────── */
+@keyframes ins-enter {
+  from { opacity: 0; max-height: 0; margin-bottom: 0; }
+  to   { opacity: 1; max-height: 400px; }
+}
+@keyframes ins-leave {
+  from { opacity: 1; max-height: 400px; margin-bottom: 1px; }
+  to   { opacity: 0; max-height: 0; margin-bottom: 0; }
+}
+.ins-entering {
+  animation: ins-enter 250ms ease forwards;
+}
+.ins-leaving {
+  animation: ins-leave 350ms ease forwards;
+  pointer-events: none;
+}
+
+/* 'also' subordinate type line */
+.ins-also {
+  font: 600 10px var(--cond);
+  letter-spacing: 0.18em;
+  color: var(--dim);
+  margin-top: 2px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* ── deck: replay controls ─────────────────────────────────────── */
+/* Target total height ~72px: phase(4) + rail(30) + deckrow(38) */
+/* Lock deck to bottom — never pushed by content above */
+.deck {
+  padding: 0 calc(var(--s6) + env(safe-area-inset-right))
+    calc(var(--s2) + env(safe-area-inset-bottom))
+    calc(var(--s6) + env(safe-area-inset-left));
+  border-top: 1px solid var(--hair);
+  flex-shrink: 0;
+  /* Prevent any ancestor's min-height from pushing this down */
+  align-self: end;
+}
+.deck-mobile-meta {
+  display: none;
+}
+/* Phase strip: 4px, flush above rail */
+.phase {
+  display: flex;
+  height: 4px;
+  margin-bottom: 0;
+}
+.phase i {
+  height: 100%;
+}
+.ph-g { background: #3a3a44; }
+.ph-r { background: var(--red); }
+.ph-s { background: var(--amber); }
+.ph-vsc { background: repeating-linear-gradient(90deg, #f5c842 0px, #f5c842 4px, transparent 4px, transparent 8px); }
+.ph-neutral { background: #1d1d24; }
+
+/* Rail: compact, no minor ticks */
+.rail {
+  position: relative;
+  height: 30px;
+  cursor: pointer;
+}
+.rail .line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 13px;
+  height: 4px;
+  background: #2c2c34;
+  border-radius: 2px;
+}
+.rail .played {
+  position: absolute;
+  left: 0;
+  top: 13px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7a0a1f, var(--red));
+  box-shadow: 0 0 8px #e8002d55;
+}
+/* Lap labels at every 10 laps, below the rail */
+.lap-label {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  font: 600 10px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.rail .cursor {
+  position: absolute;
+  top: 2px;
+  width: 3px;
+  height: 24px;
+  background: var(--red);
+  border-radius: 2px;
+  box-shadow: 0 0 6px #e8002daa;
+  transform: translateX(-1.5px);
+}
+.rail .cursor::after {
+  content: attr(data-lap);
+  position: absolute;
+  top: -15px;
+  left: -18px;
+  font: italic 700 11px var(--cond);
+  color: var(--red);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.deckrow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+.b {
+  font: 600 15px var(--cond);
+  letter-spacing: 0.2em;
+  background: none;
+  border: 1px solid #ffffff2b;
+  color: var(--ink);
+  /* uniform button height across all deck controls */
+  height: 40px;
+  padding: 0 var(--s5);
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: border-color .15s ease, color .15s ease,
+              background-color .15s ease, transform .08s ease;
+}
+.b:hover:not(:disabled) {
+  border-color: var(--rb-yellow);
+  background: #ffc5000f;
+}
+.b:active:not(:disabled) { transform: translateY(1px); }
+.b:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.b.primary {
+  background: var(--ink);
+  color: #000;
+  border-color: var(--ink);
+}
+.b.primary:hover:not(:disabled) { background: #fff; border-color: #fff; }
+.b.on {
+  border-color: var(--red);
+  color: #fff;
+  background: #e8002d1a;
+  box-shadow: inset 0 -2px 0 var(--red);
+}
+.b.on:hover:not(:disabled) { border-color: var(--red); background: #e8002d2a; }
+.clock {
+  margin-left: auto;
+  font: italic 700 18px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.clock small {
+  color: var(--dim);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  margin-right: 10px;
+  font-style: normal;
+}
+.sp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 11px var(--cond);
+  letter-spacing: 0.22em;
+  color: var(--dim);
+  cursor: pointer;
+  user-select: none;
+}
+.sw {
+  width: 30px;
+  height: 16px;
+  border: 1px solid #ffffff2b;
+  position: relative;
+  flex-shrink: 0;
+}
+.sw::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  bottom: 2px;
+  width: 10px;
+  background: #555;
+  transition: background 0.15s;
+}
+.sw.sw-on::after {
+  background: var(--red);
+}
+
+/* trend column width defined in .trow declaration above */
+
+/* pace trend arrow */
+.pace-trend {
+  font: 800 12px var(--cond);
+  text-align: center;
+  line-height: 1;
+}
+.pace-trend.up   { color: #39b54a; }
+.pace-trend.down { color: var(--red); }
+
+/* fastest lap purple dot */
+.fl-dot {
+  color: #b388ff;
+  font-size: 10px;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+/* ── Position-change accent bar ─────────────────────────────────
+   Broadcast approach: a sharp left-edge bar that blooms in fast then
+   recedes slowly. The row background stays clean — only the bar reads.
+   The ::before pseudo is repurposed here (battle-tick uses it when
+   both classes are absent, so no conflict on simultaneous states). */
+
+@keyframes pos-bar-up {
+  /* bar: materialise at full opacity, then fade out by 2.2s */
+  0%   { opacity: 1;   transform: scaleY(1); }
+  60%  { opacity: 0.9; transform: scaleY(1); }
+  100% { opacity: 0;   transform: scaleY(0.6); }
+}
+@keyframes pos-bar-down {
+  0%   { opacity: 1;   transform: scaleY(1); }
+  60%  { opacity: 0.9; transform: scaleY(1); }
+  100% { opacity: 0;   transform: scaleY(0.6); }
+}
+
+.trow-pos-up,
+.trow-pos-down {
+  position: relative;
+  /* The row itself stays visually clean — no background tint. */
+}
+
+/* left-edge bar via ::after so it doesn't conflict with ::before (battle-tick) */
+.trow-pos-up::after,
+.trow-pos-down::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 3px;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.trow-pos-up::after {
+  background: var(--green);
+  animation: pos-bar-up 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.trow-pos-down::after {
+  background: var(--red);
+  animation: pos-bar-down 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Reduced-motion: no bar animation at all */
+@media (prefers-reduced-motion: reduce) {
+  .trow-pos-up::after,
+  .trow-pos-down::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* selected driver row */
+.trow-selected {
+  box-shadow: inset 2px 0 0 #fff;
+}
+
+/* ── focus panel ──────────────────────────────────────────────── */
+.focus-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--hair);
+  padding: var(--s2) var(--s4) var(--s3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+/* H2H panel — same padding scale */
+.focus-panel-h2h {
+  padding: var(--s2) var(--s3) var(--s3);
+}
+.focus-h2h-label {
+  font: italic 800 11px var(--cond);
+  letter-spacing: 0.35em;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.focus-cards {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+.focus-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.focus-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-left: 3px solid var(--dim);
+  padding-left: 6px;
+  flex-wrap: wrap;
+}
+.focus-code {
+  font: italic 800 22px/1 var(--cond);
+  letter-spacing: 0.04em;
+}
+.focus-pos {
+  font: italic 700 16px var(--cond);
+  letter-spacing: 0.1em;
+}
+.focus-gap {
+  font: 600 12px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+.focus-tyre {
+  font: 800 12px var(--cond);
+}
+.focus-pits {
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  margin-left: auto;
+}
+.focus-laps {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.focus-lap-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.focus-lap-time {
+  font: 700 14px var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.focus-lap-delta {
+  font: 600 12px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.focus-lap-delta.up   { color: #39b54a; }
+.focus-lap-delta.down { color: var(--red); }
+.focus-int {
+  font: 600 12px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+.focus-int b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ── H2H redesign ─────────────────────────────────────────────── */
+.h2h-body {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.h2h-half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.h2h-half:last-child {
+  align-items: flex-end;
+  text-align: right;
+}
+.h2h-divider {
+  width: 1px;
+  background: var(--hair);
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+.h2h-code {
+  font: italic 800 24px/1 var(--cond);
+  letter-spacing: 0.04em;
+}
+.h2h-meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.h2h-half:last-child .h2h-meta {
+  flex-direction: row-reverse;
+}
+.h2h-pos {
+  font: italic 700 14px var(--cond);
+  letter-spacing: 0.1em;
+}
+.h2h-gap {
+  font: 600 12px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+.h2h-laps {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.h2h-half:last-child .h2h-laps {
+  flex-direction: row-reverse;
+}
+.h2h-lap-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 56px;
+}
+.h2h-half:last-child .h2h-lap-cell {
+  align-items: flex-end;
+}
+.h2h-lap-time {
+  font: 700 13px var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.h2h-lap-delta {
+  font: 600 12px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.h2h-lap-delta.up   { color: #39b54a; }
+.h2h-lap-delta.down { color: var(--red); }
+.h2h-tyre-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font: 600 12px var(--cond);
+}
+.h2h-half:last-child .h2h-tyre-row {
+  flex-direction: row-reverse;
+}
+.h2h-pits {
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+/* Bottom delta row */
+.h2h-deltas {
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid var(--hair);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.h2h-delta-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.h2h-delta-label {
+  font: 600 12px var(--cond);
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.h2h-delta-val {
+  font: italic 700 18px/1 var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.h2h-delta-who {
+  font: 600 10px var(--cond);
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+
+/* ── IN PIT amber badge in focus panel ───────────────────────── */
+.focus-inpit-badge {
+  display: inline-block;
+  font: 800 13px/1 var(--cond);
+  letter-spacing: 0.18em;
+  color: #000;
+  background: var(--amber);
+  padding: 2px 7px;
+  vertical-align: middle;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
+/* ── PIT LAP annotation next to lap time ─────────────────────── */
+.focus-pitlap-ann {
+  font: 700 11px/1 var(--cond);
+  letter-spacing: 0.14em;
+  color: var(--amber);
+  margin-top: 1px;
+}
+
+/* ── H2H delta labels ─────────────────────────────────────────── */
+.h2h-delta-who {
+  font: 600 13px var(--cond);
+  color: #f4f4f6;
+  letter-spacing: 0.08em;
+}
+.h2h-delta-faster {
+  font-weight: 700;
+}
+
+/* ── focused insight card ─────────────────────────────────────── */
+.ins-focused {
+  outline: 1px solid #fff;
+  outline-offset: -1px;
+}
+
