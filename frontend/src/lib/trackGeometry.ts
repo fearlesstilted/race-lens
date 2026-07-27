@@ -5,6 +5,9 @@
 import type { PositionsData } from './liveGaps'
 import { DEFAULT_LAP_MS } from './liveGaps'
 
+/** Smooth short forward-filled telemetry gaps; longer gaps may be a genuinely stopped car. */
+const MAX_INTERPOLATION_GAP_TICKS = 10
+
 /** Interpolate a real position from positions data at atMs.
  * Returns null if no data or null frame. */
 export function interpolateRealPos(
@@ -20,17 +23,38 @@ export function interpolateRealPos(
   if (relMs < 0) return null
   const fi = relMs / tick
   const i0 = Math.floor(fi)
-  const i1 = Math.ceil(fi)
   if (i0 >= frames.length) return frames[frames.length - 1]
-  const f0 = frames[i0]
-  if (f0 === null) return null
-  if (i0 === i1 || i1 >= frames.length) return f0
-  const f1 = frames[i1]
-  if (f1 === null) return f0
-  const alpha = fi - i0
+  const point = frames[i0]
+  if (point === null) return null
+
+  // FastF1 positions are commonly forward-filled for a few ticks. Treat that
+  // short repeated run as one sparse sample instead of holding, then jumping.
+  let segmentStart = i0
+  while (
+    segmentStart > 0 &&
+    frames[segmentStart - 1]?.[0] === point[0] &&
+    frames[segmentStart - 1]?.[1] === point[1]
+  ) {
+    segmentStart -= 1
+  }
+
+  const maxEnd = Math.min(frames.length - 1, segmentStart + MAX_INTERPOLATION_GAP_TICKS)
+  let segmentEnd = segmentStart + 1
+  while (
+    segmentEnd <= maxEnd &&
+    (frames[segmentEnd] === null ||
+      (frames[segmentEnd]?.[0] === point[0] && frames[segmentEnd]?.[1] === point[1]))
+  ) {
+    segmentEnd += 1
+  }
+
+  if (segmentEnd > maxEnd) return point
+  const nextPoint = frames[segmentEnd]
+  if (nextPoint === null) return point
+  const alpha = Math.min(Math.max((fi - segmentStart) / (segmentEnd - segmentStart), 0), 1)
   return [
-    Math.round((f0[0] + alpha * (f1[0] - f0[0])) * 10) / 10,
-    Math.round((f0[1] + alpha * (f1[1] - f0[1])) * 10) / 10,
+    Math.round((point[0] + alpha * (nextPoint[0] - point[0])) * 10) / 10,
+    Math.round((point[1] + alpha * (nextPoint[1] - point[1])) * 10) / 10,
   ]
 }
 

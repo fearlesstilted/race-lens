@@ -1217,6 +1217,9 @@ body {
   /* Prevent any ancestor's min-height from pushing this down */
   align-self: end;
 }
+.deck-mobile-meta {
+  display: none;
+}
 /* Phase strip: 4px, flush above rail */
 .phase {
   display: flex;
@@ -1902,7 +1905,7 @@ body {
     display: block;
     padding: 0;
     overflow: hidden;
-    height: 100%;
+    height: auto;
     min-height: 0;
   }
 
@@ -1936,9 +1939,9 @@ body {
   }
 
   .wrap[data-mob-tab="MAP"] .map {
-    flex: 1;
-    height: auto;
-    min-height: 0;
+    flex: 0 0 38dvh;
+    height: 38dvh;
+    min-height: 250px;
   }
   /* Show tab bar and settings btn on mobile */
   .mob-tabbar {
@@ -1990,11 +1993,56 @@ body {
     display: none;
   }
 
-  /* Deck simplified on mobile — full-width touch targets */
+  /* Mobile replay is a full-width control panel, not a tiny desktop footer. */
   .deck {
-    padding: 0 calc(var(--s4) + env(safe-area-inset-right))
-      calc(var(--s2) + env(safe-area-inset-bottom))
+    width: 100%;
+    padding: 8px calc(var(--s4) + env(safe-area-inset-right))
+      calc(10px + env(safe-area-inset-bottom))
       calc(var(--s4) + env(safe-area-inset-left));
+    background: #09090f;
+    box-shadow: 0 -12px 30px #0008;
+    align-self: stretch;
+  }
+  .deck-mobile-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 7px;
+    color: var(--dim);
+    font: 700 11px var(--cond);
+    letter-spacing: 0.18em;
+  }
+  .deck-mobile-meta strong {
+    color: var(--ink);
+    font: italic 800 17px var(--cond);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.06em;
+  }
+  .deck .phase {
+    height: 6px;
+  }
+  .deck .rail {
+    height: 44px;
+  }
+  .deck .rail .line,
+  .deck .rail .played {
+    top: 15px;
+    height: 6px;
+  }
+  .deck .rail .cursor {
+    top: 4px;
+    height: 28px;
+  }
+  .deck .rail .cursor::after {
+    display: none;
+  }
+  .deck .lap-label {
+    top: 26px;
+    font-size: 10px;
+  }
+  .deck .rail-marker {
+    top: 3px;
+    height: 30px;
   }
   .b {
     padding: 0 var(--s3);
@@ -2003,18 +2051,23 @@ body {
   .deckrow {
     flex-wrap: nowrap;
     gap: var(--s1);
+    margin-top: 0;
   }
   .deckrow .b {
     padding: 0 8px;
     letter-spacing: 0.08em;
   }
   .deckrow .sp {
-    min-width: 44px;
+    min-width: 72px;
     min-height: 44px;
     margin-left: auto;
     justify-content: center;
-    gap: 0;
-    font-size: 0;
+    gap: 5px;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+  .deckrow .sw {
+    width: 24px;
   }
   .deckrow .clock {
     display: none;
@@ -2053,12 +2106,15 @@ body {
     display: flex;
     flex: 1;
   }
-  /* MAP tab: hide ctr-bottom (map only) */
+  /* MAP tab keeps a compact event/strategy pane under the full track. */
   .wrap[data-mob-tab="MAP"] .col-center .ctr-bottom {
-    display: none;
+    display: flex;
+    flex: 1;
+    min-height: 0;
   }
   .col-center .ctr-bottom {
     display: flex;
+    max-height: none;
     margin-top: 0;
     box-shadow: none;
   }
@@ -2066,7 +2122,7 @@ body {
 
 @media (max-width: 767px) and (min-height: 501px) {
   .wrap[data-mob-tab="MAP"] .map svg {
-    transform: scale(2);
+    transform: none;
   }
 }
 
@@ -2853,6 +2909,7 @@ body {
 .stints {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   padding: 0 12px 8px;
