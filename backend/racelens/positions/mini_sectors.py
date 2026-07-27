@@ -114,7 +114,7 @@ def compute_gap_events(
                         t0_v = st_ms[i - 1]
                         t1_v = st_ms[i]
                         if t0_v is not None and t1_v is not None:
-                            t_cross = int(round(t0_v + frac * (t1_v - t0_v)))
+                            t_cross = round(t0_v + frac * (t1_v - t0_v))
                             key = (lap_no, gate_idx)
                             crossings.setdefault(key, []).append((t_cross, abbr))
                     gate_idx += 1
@@ -124,7 +124,7 @@ def compute_gap_events(
     events: list[Any] = []
     src = "mini_sectors"
 
-    for (lap_no, gate_idx), cars in crossings.items():
+    for (lap_no, _gate_idx), cars in crossings.items():
         cars.sort(key=lambda x: x[0])
         leader_t = cars[0][0]
         prev_t = leader_t
@@ -138,7 +138,7 @@ def compute_gap_events(
                 event(
                     session_id,
                     "GapUpdated",
-                    int(t),
+                    t,
                     drv,
                     lap=lap_no,
                     source=src,
@@ -149,7 +149,7 @@ def compute_gap_events(
                 event(
                     session_id,
                     "IntervalUpdated",
-                    int(t),
+                    t,
                     drv,
                     lap=lap_no,
                     source=src,

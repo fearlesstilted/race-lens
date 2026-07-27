@@ -37,9 +37,8 @@ def stint_timeline(events: list[Any], total_laps: int) -> dict[str, list[dict]]:
     for drv, stints in raw.items():
         # Collapse multiple entries that share a start lap (e.g. starting-tyre
         # event + a lap-1 pit) — the last compound seen is the one actually run.
-        by_start: dict[int, str] = {}
-        for start, compound in stints:  # event order preserved → last wins
-            by_start[start] = compound
+        # dict() preserves event order, so duplicate starts keep the last value.
+        by_start = dict(stints)
         ordered = sorted(by_start.items())
         drv_end = min(total_laps, last_lap.get(drv, total_laps) or total_laps)
         rows: list[dict] = []
