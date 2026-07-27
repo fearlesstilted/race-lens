@@ -239,24 +239,6 @@
   z-index: 2;
   pointer-events: none;
 }
-/* feed scroll area: takes remaining height, internal scroll on hover */
-.col-center .ev-scroll {
-  flex: 1;
-  overflow-y: hidden;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-.col-center .ev-scroll:hover {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #3a3a44 transparent;
-}
-/* RACE FEED label — matches column label height/style */
-.col-center .ev-scroll > .label {
-  flex-shrink: 0;
-}
 /* Focus now lives in the right column (replaces WHAT TO WATCH on selection). */
 .col-focus {
   display: flex;
@@ -697,13 +679,8 @@
    The ::before pseudo is repurposed here (battle-tick uses it when
    both classes are absent, so no conflict on simultaneous states). */
 
-@keyframes pos-bar-up {
+@keyframes pos-bar {
   /* bar: materialise at full opacity, then fade out by 2.2s */
-  0%   { opacity: 1;   transform: scaleY(1); }
-  60%  { opacity: 0.9; transform: scaleY(1); }
-  100% { opacity: 0;   transform: scaleY(0.6); }
-}
-@keyframes pos-bar-down {
   0%   { opacity: 1;   transform: scaleY(1); }
   60%  { opacity: 0.9; transform: scaleY(1); }
   100% { opacity: 0;   transform: scaleY(0.6); }
@@ -730,12 +707,12 @@
 
 .trow-pos-up::after {
   background: var(--green);
-  animation: pos-bar-up 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: pos-bar 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .trow-pos-down::after {
   background: var(--red);
-  animation: pos-bar-down 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: pos-bar 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* Reduced-motion: no bar animation at all */
@@ -955,12 +932,6 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
 }
-.h2h-delta-who {
-  font: 600 10px var(--cond);
-  color: var(--dim);
-  letter-spacing: 0.08em;
-}
-
 /* ── IN PIT amber badge in focus panel ───────────────────────── */
 .focus-inpit-badge {
   display: inline-block;
@@ -997,4 +968,3 @@
   outline: 1px solid #fff;
   outline-offset: -1px;
 }
-

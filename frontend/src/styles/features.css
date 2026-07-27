@@ -339,6 +339,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
 }
 .ctr-pane .ev-scroll:hover {
   overflow-y: auto;
@@ -350,10 +351,8 @@
     overflow-y: auto;
   }
 }
-/* Override: hide the old col-center ev-scroll rules for ctr-pane */
-.col-center .ctr-bottom .ev-scroll {
-  flex: 1;
-  display: flex;
+.ctr-pane .ev-scroll > .label {
+  flex-shrink: 0;
 }
 
 /* ── Win Probability Graph ──────────────────────────────────────── */
