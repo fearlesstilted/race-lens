@@ -1,0 +1,825 @@
+/* ── Live mode UI ─────────────────────────────────────────────── */
+.live-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 20px;
+  background: #0a0a0a;
+  border-bottom: 1px solid #ffffff0f;
+}
+.live-lobby-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.live-lobby-controls .live-year { flex: 0 0 4rem; }
+.live-lobby-controls .live-event { flex: 1 1 9rem; }
+.live-lobby-controls .live-session { flex: 1 1 7rem; }
+.live-input {
+  font: 600 13px var(--cond);
+  letter-spacing: 0.1em;
+  background: none;
+  border: 1px solid #ffffff2b;
+  color: var(--ink);
+  padding: 6px 10px;
+  outline: none;
+}
+.live-input:focus {
+  border-color: var(--red);
+}
+.b.danger {
+  border-color: #c00;
+  color: #ff4444;
+}
+.b.danger:hover {
+  background: #c00;
+  color: #fff;
+}
+.live-pill {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+}
+.live-pill-good  { color: #39b54a; }
+.live-pill-warn  { color: #f5a623; }
+.live-pill-bad   { color: #ff4444; }
+.live-err {
+  font: 600 12px var(--cond);
+  color: #ff4444;
+  letter-spacing: 0.1em;
+}
+.live-badge {
+  font: 800 13px var(--cond);
+  letter-spacing: 0.25em;
+  color: #ff4444;
+  animation: blink 1.4s step-start infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+.rail-disabled {
+  cursor: default;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ── Forecast strip ─────────────────────────────────────────────── */
+.forecast-strip {
+  border-top: 1px solid var(--hair);
+  padding: var(--s3) var(--s4) var(--s4);
+  background: #0e0e14;
+  flex: 1;
+  overflow-y: auto;
+}
+.forecast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: var(--s3);
+}
+.forecast-label {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.34em;
+  color: var(--dim);
+  height: var(--col-label-h);
+  display: flex;
+  align-items: center;
+}
+.forecast-model {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.16em;
+  color: var(--amber);
+}
+.forecast-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+}
+.forecast-row {
+  display: grid;
+  grid-template-columns: 28px 42px 1fr 42px;
+  align-items: center;
+  gap: var(--s1);
+  font: 600 15px var(--cond);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  padding: var(--s2) var(--s3);
+  background: #ffffff05;
+  border-left: 2px solid #ffffff16;
+}
+.forecast-pos {
+  color: var(--dim);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-id {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.forecast-gap {
+  color: #c8c8d2;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-delta {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.proj-up { color: #00c853; }
+.proj-dn { color: var(--red); }
+.proj-eq { color: var(--dim); }
+.forecast-movers {
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hair);
+}
+.forecast-movers-title {
+  margin-bottom: var(--s2);
+  font: 700 10px var(--cond);
+  letter-spacing: 0.24em;
+  color: var(--dim);
+}
+.forecast-mover-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.forecast-mover {
+  display: grid;
+  grid-template-columns: 38px auto 32px;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 150px;
+  padding: var(--s2) var(--s3);
+  background: #15151d;
+  border: 1px solid var(--hair);
+  font: 600 14px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.forecast-route {
+  color: #c8c8d2;
+}
+.forecast-stable {
+  font: 600 13px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+/* ── Pit sim card ───────────────────────────────────────────────── */
+.focus-pit-row {
+  margin-top: 8px;
+  border-top: 1px solid var(--hair);
+  padding-top: 8px;
+}
+.pit-now-btn {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.2em;
+  background: none;
+  border: 1px solid #ffffff22;
+  color: var(--ink);
+  padding: 4px 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.pit-now-btn:hover { border-color: var(--amber); color: var(--amber); }
+.pit-now-btn:disabled { opacity: 0.4; cursor: default; }
+.pit-sim-card {
+  padding: 6px 0;
+}
+.pit-sim-verdict {
+  font: italic 800 17px var(--cond);
+  letter-spacing: 0.1em;
+  margin-bottom: 5px;
+}
+.pit-sim-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 600 11px var(--cond);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+/* ── What-If section ──────────────────────────────────────────── */
+.focus-whatif-section {
+  border-top: 1px solid var(--hair);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.focus-whatif-label {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.25em;
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+.focus-whatif-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.whatif-btn {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  background: none;
+  border: 1px solid #ffffff22;
+  color: var(--ink);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+}
+.whatif-btn:hover { border-color: var(--rb-yellow); color: var(--rb-yellow); }
+.whatif-btn.active { border-color: var(--red); color: #fff; background: #e8002d22; }
+.whatif-btn:disabled { opacity: 0.4; cursor: default; }
+.what-if-card {
+  padding: 6px 0;
+}
+.what-if-summary {
+  font: italic 700 14px var(--cond);
+  letter-spacing: 0.08em;
+  color: #b39ddb;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.what-if-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 5px;
+}
+.what-if-diff-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 11px var(--cond);
+  letter-spacing: 0.10em;
+}
+.what-if-driver { font-weight: 800; min-width: 32px; }
+.what-if-pos-from { color: var(--dim); }
+.what-if-arrow { color: var(--dim); }
+.what-if-pos-to { color: var(--ink); font-weight: 700; }
+.what-if-delta.up { color: #00c853; }
+.what-if-delta.down { color: #f44336; }
+.what-if-note {
+  font: 500 10px var(--body);
+  color: var(--dim);
+  opacity: 0.6;
+}
+
+/* ── Overtake % in insight cards ───────────────────────────────── */
+.ins-overtake {
+  font: 700 11px var(--cond);
+  letter-spacing: 0.18em;
+  color: #00c853;
+  margin-top: var(--s1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Center bottom: segmented tabs ─────────────────────────────── */
+.ctr-bottom {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  margin-top: -10px;
+  background: var(--bg);
+  box-shadow: 0 -12px 28px #070912cc;
+}
+.ctr-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--hair);
+  background: #0c0c12;
+}
+.ctr-tab {
+  flex: 1;
+  height: 28px;
+  border: none;
+  border-right: 1px solid var(--hair);
+  background: transparent;
+  color: var(--dim);
+  font: 700 10px var(--cond);
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.ctr-tab:last-child { border-right: none; }
+.ctr-tab:hover { color: var(--ink); background: #16161e; }
+.ctr-tab.ctr-tab-on {
+  color: var(--ink);
+  background: #18181f;
+  border-bottom: 2px solid var(--amber);
+}
+.ctr-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* Remove top border from forecast/winprob when inside ctr-pane */
+.ctr-pane .forecast-strip { border-top: none; }
+.ctr-pane .win-prob-graph { border-top: none; }
+/* Feed inside ctr-pane fills its height */
+.ctr-pane .ev-scroll {
+  flex: 1;
+  overflow-y: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ctr-pane .ev-scroll:hover {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 transparent;
+}
+@media (hover: none) {
+  .ctr-pane .ev-scroll {
+    overflow-y: auto;
+  }
+}
+/* Override: hide the old col-center ev-scroll rules for ctr-pane */
+.col-center .ctr-bottom .ev-scroll {
+  flex: 1;
+  display: flex;
+}
+
+/* ── Win Probability Graph ──────────────────────────────────────── */
+.win-prob-graph {
+  position: relative;
+  background: var(--bg);
+  border-top: 1px solid var(--hair);
+  padding: var(--s1) 0 var(--s1) 0;
+}
+.win-prob-label {
+  font: 700 10px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  padding: 0 0 var(--s1) 34px;
+  font-variant-numeric: tabular-nums;
+}
+.win-prob-loading {
+  position: absolute;
+  top: 8px;
+  right: 60px;
+  font: 600 11px var(--cond);
+  color: var(--dim);
+}
+.win-prob-svg {
+  display: block;
+  width: 100%;
+  height: 140px;
+}
+.win-prob-axis {
+  font: 600 9px var(--cond);
+  fill: #ffffff44;
+  font-variant-numeric: tabular-nums;
+}
+.win-prob-driver {
+  font: 700 9px var(--cond);
+  letter-spacing: 0.06em;
+}
+
+/* ── top-panels: highlights + dotd container ─────────────────── */
+.top-panels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  position: relative;
+}
+
+/* ── drawer panels group (HIGHLIGHTS + DOTD inside settings drawer) ── */
+.drawer-panels-group {
+  /* shown only on mobile/tablet via media query */
+  display: none;
+}
+.drawer-panels-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Inside drawer the hl-wrap/dotd-wrap trigger buttons fill full width */
+.drawer-panels-inner .hl-wrap,
+.drawer-panels-inner .dotd-wrap {
+  width: 100%;
+}
+.drawer-panels-inner .hl-wrap > .tog,
+.drawer-panels-inner .dotd-wrap > .tog {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+/* Panels inside drawer: static position, full width, no shadow/border-radius */
+.drawer-panels-inner .hl-panel,
+.drawer-panels-inner .dotd-panel {
+  position: static;
+  width: 100%;
+  max-height: 320px;
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 4px;
+}
+
+/* ── Highlights panel ─────────────────────────────────────────── */
+.hl-wrap {
+  position: relative;
+}
+.hl-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 340px;
+  background: #111117;
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px #00000088;
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+}
+.hl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--hair);
+  flex-shrink: 0;
+}
+.hl-title {
+  font: italic 800 12px var(--cond);
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.hl-play-btn {
+  font-size: 11px !important;
+  padding: 3px 10px !important;
+  height: auto !important;
+}
+.hl-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+.hl-empty {
+  padding: 16px 12px;
+  color: var(--dim);
+  font: 600 12px var(--cond);
+  letter-spacing: 0.1em;
+}
+.hl-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s1) var(--s3);
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font: 13px var(--body);
+  transition: background 0.1s;
+}
+.hl-item:hover {
+  background: var(--hair);
+}
+.hl-item-active {
+  background: #1a1a2e !important;
+  outline: 1px solid #4444aa;
+}
+.hl-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+.hl-time {
+  font: 600 11px var(--cond);
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  flex-shrink: 0;
+  width: 52px;
+}
+.hl-lap {
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  flex-shrink: 0;
+  width: 28px;
+}
+.hl-text {
+  font: 13px var(--body);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Driver of the Day panel ──────────────────────────────────── */
+.dotd-wrap {
+  position: relative;
+}
+.dotd-gate-hint {
+  display: block;
+  font: 600 9px var(--cond);
+  letter-spacing: 0.15em;
+  color: var(--dim);
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-top: 3px;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.dotd-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  background: #111117;
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px #00000088;
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+}
+.dotd-header {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--hair);
+  flex-shrink: 0;
+}
+.dotd-title {
+  font: italic 800 12px var(--cond);
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.dotd-sub {
+  font: 11px var(--body);
+  color: #555566;
+  margin-top: 2px;
+}
+.dotd-empty {
+  padding: 16px 12px;
+  color: var(--dim);
+  font: 600 12px var(--cond);
+  letter-spacing: 0.1em;
+}
+.dotd-hero {
+  margin: var(--s2) var(--s3) var(--s1);
+  padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--dim);
+  background: #0c0c14;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  flex-shrink: 0;
+}
+.dotd-hero-code {
+  font: italic 800 26px/1 var(--cond);
+  letter-spacing: 0.06em;
+}
+.dotd-hero-label {
+  font: 600 10px var(--cond);
+  letter-spacing: 0.25em;
+  color: var(--dim);
+}
+.dotd-hero-note {
+  font: 12px var(--body);
+  color: var(--dim);
+  margin-top: 2px;
+}
+.dotd-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+.dotd-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s1) var(--s3);
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font: 13px var(--body);
+  transition: background 0.1s;
+}
+.dotd-row:hover {
+  background: var(--hair);
+}
+.dotd-row-voted {
+  background: #0e1a0e !important;
+}
+.dotd-code {
+  font: italic 800 14px var(--cond);
+  letter-spacing: 0.06em;
+  width: 34px;
+  flex-shrink: 0;
+}
+.dotd-bar-wrap {
+  flex: 1;
+  height: 4px;
+  background: var(--hair);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.dotd-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+.dotd-score {
+  font: 600 11px var(--cond);
+  color: var(--dim);
+  width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.dotd-check {
+  font: 600 10px var(--cond);
+  color: #44aa44;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.dotd-footer {
+  padding: 6px 12px 8px;
+  font: 10px var(--body);
+  color: #444455;
+  border-top: 1px solid var(--hair);
+  flex-shrink: 0;
+}
+
+/* ── Timeline markers ───────────────────────────────────────────── */
+/* All marker shapes are SVG-rendered in ReplayDeck.tsx.
+   These classes provide hover lift and severe-event emphasis. */
+
+.rail-marker {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  transition: transform 0.12s ease-out, opacity 0.12s ease-out;
+}
+.rail-marker:hover {
+  /* Subtle lift — the marker pops ~2px above the rail line */
+  transform: translateX(-50%) translateY(-2px);
+  opacity: 1 !important;
+}
+/* CRASH / INCIDENT / OFF_TRACK: static (no strobe). The SVG already renders these
+   red + a touch larger; a blinking timeline read as a seizure hazard. */
+.rail-marker-severe {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-marker:hover {
+    transform: translateX(-50%);
+  }
+}
+
+/* ── Motion design ──────────────────────────────────────────────── */
+/* Broadcast-style polish: cards present, panes crossfade, states ease.
+   All gated behind prefers-reduced-motion so it never fights accessibility. */
+@media (prefers-reduced-motion: no-preference) {
+  .tog, .b, .layer-toggle, .mob-tab, .ctr-tab, .settings-btn {
+    transition: background-color .15s ease, color .15s ease,
+                border-color .15s ease, box-shadow .15s ease, opacity .15s ease;
+  }
+  /* Card / panel entrance: fade + slide-up, like a TV lower-third. */
+  .ins, .focus-card, .h2h-half, .pit-sim-card, .what-if-card {
+    animation: rl-rise .28s ease-out both;
+  }
+  /* Center tab content crossfades when you switch FEED / FORECAST / WIN%. */
+  .ctr-pane > * { animation: rl-fade .22s ease-out both; }
+  .forecast-row { animation: rl-fade .2s ease-out both; }
+  /* Fastest-lap dot quietly pulses. */
+  .fl-dot { animation: rl-pulse 1.6s ease-in-out infinite; }
+  /* Overtake attention ring: sonar-ping pulse on the driver who just passed. */
+  .overtake-ring { animation: rl-overtake-ping 1s ease-out 3; }
+}
+@keyframes rl-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes rl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes rl-overtake-ping {
+  0%   { transform: scale(1); opacity: 0.95; }
+  70%  { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+/* Overtake ring, always present in the DOM for OVERTAKE_FLASH_MS; the keyframe
+   animation above (gated behind prefers-reduced-motion: no-preference) does the
+   pulsing — under reduced motion it just renders as a brief static ring. */
+.overtake-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* ── Tyre strategy timeline ─────────────────────────────────────── */
+.stints {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 12px 8px;
+}
+.stints-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 2px 6px;
+  font: italic 800 11px var(--cond);
+  letter-spacing: 0.3em;
+  color: var(--dim);
+}
+.stints-laps { font-style: normal; font-weight: 600; letter-spacing: 0.14em; }
+.stints-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.stint-row {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.stint-drv { font: italic 800 13px var(--cond); letter-spacing: 0.04em; }
+.stint-bar { display: flex; height: 16px; width: 100%; border: 1px solid var(--hair); }
+.stint-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  overflow: hidden;
+  border-right: 1px solid #00000099;
+}
+.stint-seg:last-child { border-right: none; }
+.stint-seg-lbl {
+  font: 700 9px var(--cond);
+  color: #000000bb;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+/* Declared last because the segmented center tabs are defined after the main
+   responsive block above. */
+@media (max-width: 1023px) {
+  .deckrow .b,
+  .deckrow .sp,
+  .catalog-open,
+  .settings-group .tog,
+  .ctr-tab,
+  .ins-filter .tog,
+  .settings-close,
+  .ev-radio-btn,
+  .rail-marker {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  .rail {
+    height: 44px;
+  }
+  .rail .line,
+  .rail .played {
+    top: 20px;
+  }
+  .rail .cursor {
+    top: 4px;
+    height: 36px;
+  }
+  .lap-label {
+    top: 26px;
+  }
+  .ctr-tab {
+    height: 44px;
+  }
+}
