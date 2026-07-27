@@ -40,16 +40,11 @@ html, body, #root {
   overflow: hidden;
 }
 
-html {
-  overflow-x: hidden;
-}
-
 body {
   background: var(--bg);
   color: var(--ink);
   font: 15px/1.5 var(--body);
   overflow: hidden;
-  overflow-x: hidden;
 }
 
 /* ── error screen ─────────────────────────────────────────────── */
@@ -385,13 +380,9 @@ body {
   overflow: hidden;
   margin: 0 auto;
 }
-.wrap {
-  flex: 1;
-  min-height: 0;
-}
-
 /* ── layout grid ──────────────────────────────────────────────── */
 .wrap {
+  flex: 1;
   display: grid;
   grid-template-columns: 380px 1fr 370px;
   /* Constrain the row to the container height (not content), so columns get a
@@ -704,4 +695,3 @@ body {
   z-index: 1;
   border-bottom: 1px solid var(--hair);
 }
-
