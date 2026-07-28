@@ -151,7 +151,6 @@ body {
   border: none;
   color: var(--ink);
   cursor: pointer;
-  outline: none;
   padding: 0;
   text-transform: uppercase;
 }
