@@ -107,8 +107,14 @@ export function RaceFeed({ items }: { items: FeedItem[] }) {
       return
     }
     radioAudio.src = url
+    setPlayingUrl(null)
     void radioAudio.play()
-    setPlayingUrl(url)
+      .then(() => {
+        if (radioAudio.src === url) setPlayingUrl(url)
+      })
+      .catch(() => {
+        if (radioAudio.src === url) setPlayingUrl(null)
+      })
   }
 
   useEffect(() => {
