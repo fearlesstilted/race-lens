@@ -31,18 +31,33 @@ export function SettingsDrawer({
   sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const drawerRef = useRef<HTMLDivElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
     previousFocus.current = document.activeElement as HTMLElement | null
     closeRef.current?.focus()
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
+      if (event.key !== 'Tab' || !drawerRef.current) return
+      const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+      ))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('keydown', handleKey)
     return () => {
-      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('keydown', handleKey)
       previousFocus.current?.focus()
     }
   }, [open, onClose])
@@ -50,7 +65,7 @@ export function SettingsDrawer({
   return (
     <div className={`settings-overlay${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="settings-backdrop" onClick={onClose} />
-      <div className="settings-drawer" role="dialog" aria-modal="true" aria-label="Settings">
+      <div ref={drawerRef} className="settings-drawer" role="dialog" aria-modal="true" aria-label="Settings">
         <div className="settings-drawer-hdr">
           <span>SETTINGS</span>
           <button ref={closeRef} type="button" className="settings-close" onClick={onClose} aria-label="Close">&#215;</button>
