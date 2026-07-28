@@ -40,12 +40,17 @@ def stint_timeline(events: list[Any], total_laps: int) -> dict[str, list[dict]]:
         # dict() preserves event order, so duplicate starts keep the last value.
         by_start = dict(stints)
         ordered = sorted(by_start.items())
-        drv_end = min(total_laps, last_lap.get(drv, total_laps) or total_laps)
+        drv_end = min(total_laps, last_lap.get(drv, 0))
+        if drv_end < 1:
+            continue
         rows: list[dict] = []
         for i, (start, compound) in enumerate(ordered):
-            end = ordered[i + 1][0] - 1 if i + 1 < len(ordered) else drv_end
-            if end < start:
-                end = start
+            if start > drv_end:
+                break
+            end = min(
+                ordered[i + 1][0] - 1 if i + 1 < len(ordered) else drv_end,
+                drv_end,
+            )
             rows.append({
                 "compound": compound,
                 "start_lap": start,
