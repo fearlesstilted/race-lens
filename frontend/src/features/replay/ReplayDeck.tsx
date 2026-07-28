@@ -263,12 +263,12 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
         ref={railRef}
         onClick={handleRailClick}
         onKeyDown={handleRailKeyDown}
-        role="slider"
+        role={canScrub ? 'slider' : undefined}
         tabIndex={canScrub ? 0 : -1}
-        aria-label="Replay position"
-        aria-valuemin={startMs}
-        aria-valuemax={endMs}
-        aria-valuenow={atMs}
+        aria-label={canScrub ? 'Replay position' : undefined}
+        aria-valuemin={canScrub ? startMs : undefined}
+        aria-valuemax={canScrub ? endMs : undefined}
+        aria-valuenow={canScrub ? atMs : undefined}
       >
         <div className="line" />
         <div
