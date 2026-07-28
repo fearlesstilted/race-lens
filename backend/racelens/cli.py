@@ -135,7 +135,7 @@ def _cmd_track_progress(args: argparse.Namespace) -> None:
     pos_path = fixtures_dir / f"{args.session_id}.positions.json"
     pos = json.loads(pos_path.read_text(encoding="utf-8"))
     pos["progress"] = compute_progress(args.year, args.gp, args.session, args.session_id)
-    pos_path.write_text(json.dumps(pos), encoding="utf-8")
+    pos_path.write_text(json.dumps(pos, separators=(",", ":")), encoding="utf-8")
     covered = sum(1 for arr in pos["progress"].values() if any(v is not None for v in arr))
     print(f"track-progress: {covered}/{len(pos['progress'])} drivers → {pos_path}", file=sys.stderr)
 
