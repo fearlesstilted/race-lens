@@ -45,6 +45,15 @@ _WATERMARK_OVERLAP_S = 5 * 60
 _FULL_RECONCILE_POLLS = 50
 
 
+def _parse_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
 def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
@@ -94,7 +103,9 @@ def find_session(year: int, country_or_circuit: str, session_name: str = "Race")
         if (needle in str(row.get("country_name", "")).lower()
                 or needle in str(row.get("circuit_short_name", "")).lower()
                 or needle in str(row.get("location", "")).lower()):
-            return int(row["session_key"])
+            session_key = _parse_int(row.get("session_key"))
+            if session_key is not None:
+                return session_key
     available = sorted({str(row.get("country_name", "")) for row in rows if row.get("country_name")})
     raise ValueError(
         f"No OpenF1 session found for year={year}, location={country_or_circuit!r}, "
@@ -130,6 +141,9 @@ def list_sessions(year: int, country: str | None = None) -> list[dict]:
 
     result = []
     for row in rows:
+        session_key = _parse_int(row.get("session_key"))
+        if session_key is None:
+            continue
         date_start = str(row.get("date_start") or "")
         # OpenF1 date_start can arrive WITHOUT a timezone (it's track-local wall
         # time). Glue on gmt_offset (e.g. "02:00:00" → "+02:00") so the frontend
@@ -142,7 +156,7 @@ def list_sessions(year: int, country: str | None = None) -> list[dict]:
         ts = _parse_iso(date_start) if date_start else None
         result.append({
             "session_name": str(row.get("session_name") or ""),
-            "session_key": int(row["session_key"]),
+            "session_key": session_key,
             "session_type": str(row.get("session_type") or ""),
             "date_start": date_start,
             "gmt_offset": gmt,
@@ -215,10 +229,10 @@ def _build_driver_map(driver_rows: list[dict]) -> dict[int, str]:
     """Drivers → {driver_number: acronym}."""
     driver_map: dict[int, str] = {}
     for row in driver_rows:
-        dn = row.get("driver_number")
+        dn = _parse_int(row.get("driver_number"))
         acronym = row.get("name_acronym") or row.get("broadcast_name") or str(dn)
         if dn is not None:
-            driver_map[int(dn)] = str(acronym)
+            driver_map[dn] = str(acronym)
     return driver_map
 
 
@@ -240,7 +254,7 @@ def _compute_t0(lap_rows: list[dict]) -> float | None:
     """t0 rebase anchor: earliest date_start of lap 1 across all drivers (POSIX seconds)."""
     t0_posix: float | None = None
     for row in lap_rows:
-        if row.get("lap_number") == 1 and row.get("date_start"):
+        if _parse_int(row.get("lap_number")) == 1 and row.get("date_start"):
             ts = _parse_iso(row["date_start"])
             if ts is not None and (t0_posix is None or ts < t0_posix):
                 t0_posix = ts
@@ -269,12 +283,11 @@ def _laps_to_events(
     """Laps → LapCompleted."""
     events: list[Event] = []
     for row in lap_rows:
-        dn = row.get("driver_number")
-        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
-        lap_no = row.get("lap_number")
-        if lap_no is None:
+        dn = _parse_int(row.get("driver_number"))
+        lap_no = _parse_int(row.get("lap_number"))
+        if dn is None or lap_no is None:
             continue
-        lap_no = int(lap_no)
+        drv = driver_map.get(dn, str(dn))
 
         duration = row.get("lap_duration")
         date_start = _parse_iso(row.get("date_start"))
@@ -314,12 +327,11 @@ def _position_to_events(
     events: list[Event] = []
     last_pos: dict[str, int] = {}  # driver → last seen position
     for row in pos_rows:
-        dn = row.get("driver_number")
-        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
-        pos = row.get("position")
-        if pos is None or drv is None:
+        dn = _parse_int(row.get("driver_number"))
+        pos = _parse_int(row.get("position"))
+        if dn is None or pos is None:
             continue
-        pos = int(pos)
+        drv = driver_map.get(dn, str(dn))
         ts = _parse_iso(row.get("date"))
         if ts is None:
             continue
@@ -340,9 +352,12 @@ def _pits_to_events(
     """Pits → PitIn / PitOut."""
     events: list[Event] = []
     for row in pit_rows:
-        dn = row.get("driver_number")
-        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
-        lap_no = int(row["lap_number"]) if row.get("lap_number") is not None else None
+        dn = _parse_int(row.get("driver_number"))
+        lap_value = row.get("lap_number")
+        lap_no = _parse_int(lap_value)
+        if dn is None or (lap_value is not None and lap_no is None):
+            continue
+        drv = driver_map.get(dn, str(dn))
         pit_duration = row.get("pit_duration")
         date = _parse_iso(row.get("date"))
         if date is None:
@@ -370,28 +385,35 @@ def _stints_to_events(
     """Stints → TyreStintUpdated."""
     events: list[Event] = []
     for row in stint_rows:
-        dn = row.get("driver_number")
-        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
+        dn = _parse_int(row.get("driver_number"))
         compound = row.get("compound")
-        tyre_age = row.get("tyre_age_at_start")
-        lap_start = row.get("lap_start")
+        tyre_age_value = row.get("tyre_age_at_start")
+        tyre_age = _parse_int(tyre_age_value)
+        lap_start = _parse_int(row.get("lap_start"))
 
-        if compound is None:
+        if (
+            dn is None
+            or compound is None
+            or lap_start is None
+            or (tyre_age_value is not None and tyre_age is None)
+        ):
             continue
+        drv = driver_map.get(dn, str(dn))
 
         # Use lap_start to anchor t (best approximation without exact timestamp)
         # We'll look up the earliest LapCompleted time for this driver on lap_start
         # If lap_start == 1, t = 0 (pre-race); otherwise find it from laps
         if lap_start == 1:
             t_ms = 0
-        elif lap_start is None:
-            continue
         else:
             # Find the LapCompleted for previous lap from lap_rows for this driver
             t_ms = None
             ref_lap = lap_start - 1
             for lr in lap_rows:
-                if (lr.get("driver_number") == dn and lr.get("lap_number") == ref_lap):
+                if (
+                    _parse_int(lr.get("driver_number")) == dn
+                    and _parse_int(lr.get("lap_number")) == ref_lap
+                ):
                     ds = _parse_iso(lr.get("date_start"))
                     dur = lr.get("lap_duration")
                     if ds is not None and dur is not None:
@@ -402,9 +424,9 @@ def _stints_to_events(
                 continue
 
         events.append(mk(sid, "TyreStintUpdated", t_ms, drv,
-                         lap=int(lap_start) if lap_start else None,
+                         lap=lap_start or None,
                          compound=str(compound),
-                         age_laps=int(tyre_age) if tyre_age is not None else 0))
+                         age_laps=tyre_age or 0))
     return events
 
 
@@ -440,10 +462,10 @@ def _intervals_to_events(
     last_interval_row: dict[str, tuple[int, Any, Any]] = {}  # driver → (t_ms, gap, interval)
 
     for row in interval_rows:
-        dn = row.get("driver_number")
-        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
-        if drv is None:
+        dn = _parse_int(row.get("driver_number"))
+        if dn is None:
             continue
+        drv = driver_map.get(dn, str(dn))
         date = _parse_iso(row.get("date"))
         if date is None:
             continue

@@ -292,6 +292,45 @@ def test_empty_endpoints_dont_crash():
     assert events[0].type == "SessionStarted"
 
 
+def test_malformed_provider_integer_fields_skip_only_their_rows():
+    malformed = {
+        "/drivers": [{"driver_number": "bad"}, *_DRIVERS],
+        "/laps": [
+            {"driver_number": "bad", "lap_number": 1, "date_start": _T0},
+            {"driver_number": 1, "lap_number": "bad", "date_start": _T0},
+            *_LAPS,
+        ],
+        "/position": [
+            {"driver_number": "bad", "position": 1, "date": _T0},
+            {"driver_number": 1, "position": "bad", "date": _T0},
+            *_POSITIONS,
+        ],
+        "/pit": [
+            {"driver_number": 1, "lap_number": "bad", "date": _T0},
+            *_PITS,
+        ],
+        "/stints": [
+            {
+                "driver_number": 1, "lap_start": "bad",
+                "compound": "MEDIUM", "tyre_age_at_start": 0,
+            },
+            {
+                "driver_number": 1, "lap_start": 1,
+                "compound": "MEDIUM", "tyre_age_at_start": "bad",
+            },
+            *_STINTS,
+        ],
+        "/intervals": [
+            {"driver_number": "bad", "date": _T0, "gap_to_leader": 1},
+            *_INTERVALS,
+        ],
+    }
+
+    assert {event.event_id for event in _ingest(malformed)} == {
+        event.event_id for event in _ingest()
+    }
+
+
 def test_find_session_mock():
     """find_session resolves case-insensitively by country_name substring."""
     with patch.object(_mod, "_get", _make_mock_get()):
