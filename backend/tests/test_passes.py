@@ -68,3 +68,18 @@ def test_fixture_smoke() -> None:
     assert 30 <= len(ps) <= 90
     assert ("ANT", "HAM") in {(p.ahead, p.behind) for p in ps}  # known lap-11 pass
     assert all(p.kind in (KIND_ON_TRACK, KIND_UNDERCUT) for p in ps)
+
+
+def test_future_pit_and_retirement_do_not_reclassify_a_pass() -> None:
+    evs = _grid("B", "A")
+    evs.extend([
+        event(SID, "LapCompleted", 90_000, "A", lap=1, lap_time_ms=90_000),
+        event(SID, "PositionChanged", 200_000, "A", position=1),
+        event(SID, "PositionChanged", 200_000, "B", position=2),
+        event(SID, "PitOut", 210_000, "A", lap=3),
+        event(SID, "RetirementDetected", 215_000, "B", lap=3),
+    ])
+
+    assert [(p.ahead, p.behind, p.kind) for p in detect_passes(evs)] == [
+        ("A", "B", KIND_ON_TRACK),
+    ]
