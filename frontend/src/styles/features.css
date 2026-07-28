@@ -696,6 +696,9 @@
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
+  .live-badge {
+    animation: none;
+  }
   .rail-marker:hover {
     transform: translateX(-50%);
   }
