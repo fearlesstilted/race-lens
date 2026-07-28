@@ -19,7 +19,7 @@ from threading import Lock
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
@@ -951,7 +951,7 @@ def track(session_id: str) -> dict:
 
 
 @app.get("/api/sessions/{session_id}/positions")
-def positions(session_id: str) -> dict:
+def positions(session_id: str) -> FileResponse:
     """Return resampled car positions from Rust race-core pipeline.
 
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
@@ -960,7 +960,7 @@ def positions(session_id: str) -> dict:
     path = _fixture_root(session_id, ".positions.json") / f"{session_id}.positions.json"
     if not path.is_file():
         raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return FileResponse(path, media_type="application/json")
 
 
 @app.get("/api/sessions/{session_id}/feed")
