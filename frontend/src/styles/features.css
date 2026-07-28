@@ -790,7 +790,7 @@
 
 /* Declared last because the segmented center tabs are defined after the main
    responsive block above. */
-@media (max-width: 1023px) {
+@media (max-width: 1024px) {
   .deckrow .b,
   .deckrow .sp,
   .catalog-open,

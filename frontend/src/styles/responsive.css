@@ -4,7 +4,7 @@
     height: 44vh;
   }
 }
-/* ── laptop 1024–1439px ─────────────────────────────────────────── */
+/* ── laptop 1025–1439px ─────────────────────────────────────────── */
 @media (max-width: 1439px) {
   .wrap {
     grid-template-columns: clamp(280px, 22vw, 380px) 1fr clamp(240px, 20vw, 340px);
@@ -32,8 +32,8 @@
   }
 }
 
-/* ── tablet 768–1023px ──────────────────────────────────────────── */
-@media (max-width: 1023px) {
+/* ── tablet 768–1024px ──────────────────────────────────────────── */
+@media (max-width: 1024px) {
   .sess {
     flex: 1;
     min-width: 0;
@@ -133,7 +133,7 @@
 }
 
 /* ── mobile <768px ──────────────────────────────────────────────── */
-@media (max-width: 767px), (max-width: 1023px) and (max-height: 500px) {
+@media (max-width: 767px), (max-width: 1024px) and (max-height: 500px) {
   .error-screen {
     padding: 24px;
   }
@@ -456,4 +456,3 @@
     font-size: clamp(23px, 1.1vw, 27px);
   }
 }
-
