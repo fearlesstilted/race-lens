@@ -336,6 +336,20 @@ def test_offtrack_single_driver_detected():
     assert off[0]["severity"] == SEV_HIGH
 
 
+@pytest.mark.parametrize("status", ["safety_car", "vsc", "red_flag"])
+def test_offtrack_not_inferred_during_neutralisation(status):
+    events = _offtrack_events(["VER", "NOR"], spin_lap=7, spin_drivers=["VER"])
+    events.extend([
+        event(SID, "SessionStatusChanged", 629_999, status=status),
+        event(SID, "SessionStatusChanged", 631_000, status="started"),
+    ])
+
+    assert not [
+        marker for marker in significant_events(events)
+        if marker["kind"] == KIND_OFF_TRACK
+    ]
+
+
 def test_offtrack_fieldwide_filtered_as_safety_car():
     # 4 of 4 drivers slow on the same lap → track-wide (SC/yellow), not an off.
     drivers = ["VER", "NOR", "LEC", "HAM"]
