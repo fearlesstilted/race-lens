@@ -211,6 +211,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 .map {
   height: 46vh;
@@ -491,13 +492,14 @@
 /* Target total height ~72px: phase(4) + rail(30) + deckrow(38) */
 /* Lock deck to bottom — never pushed by content above */
 .deck {
+  width: 100%;
   padding: 0 calc(var(--s6) + env(safe-area-inset-right))
     calc(var(--s2) + env(safe-area-inset-bottom))
     calc(var(--s6) + env(safe-area-inset-left));
+  background: linear-gradient(180deg, #07091200, #090b16 32%);
   border-top: 1px solid var(--hair);
   flex-shrink: 0;
-  /* Prevent any ancestor's min-height from pushing this down */
-  align-self: end;
+  align-self: stretch;
 }
 .deck-mobile-meta {
   display: none;

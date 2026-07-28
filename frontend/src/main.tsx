@@ -5,6 +5,7 @@ import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
 import { LiveLobby } from './features/replay/LiveLobby'
+import { BroadcastOverlay } from './features/replay/BroadcastOverlay'
 import { ForecastStrip } from './features/replay/ForecastStrip'
 import { StintTimeline } from './features/replay/StintTimeline'
 import { WinProbGraph } from './features/replay/WinProbGraph'
@@ -439,6 +440,16 @@ function App() {
             />
 
             <div className="col col-center">
+              {mode === 'replay' && (
+                <BroadcastOverlay
+                  atMs={replay.atMs}
+                  playing={replay.playing}
+                  speed={replay.speed}
+                  lang={replay.lang}
+                  markers={replay.markers}
+                  feed={replay.feed}
+                />
+              )}
               <TrackMap
                 key={mode === 'replay' ? sessionId ?? 'replay' : state?.session_id ?? 'live'}
                 sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}

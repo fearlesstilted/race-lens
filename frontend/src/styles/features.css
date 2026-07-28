@@ -695,12 +695,74 @@
 .rail-marker-severe {
   opacity: 1;
 }
+
+/* One editorial event at a time, over the replay map like a broadcast lower-third. */
+.broadcast-overlay {
+  --broadcast-accent: var(--red);
+  position: absolute;
+  z-index: 20;
+  top: 18px;
+  left: 18px;
+  width: min(460px, calc(100% - 36px));
+  padding: 12px 34px 13px 16px;
+  border: 1px solid #ffffff24;
+  border-left: 4px solid var(--broadcast-accent);
+  background: linear-gradient(110deg, #0c0f1df5 0 88%, transparent 88%);
+  filter: drop-shadow(0 12px 24px #000a);
+  pointer-events: none;
+}
+.broadcast-overlay--strategy { --broadcast-accent: var(--amber); }
+.broadcast-overlay--incident { --broadcast-accent: #ff304f; }
+.broadcast-overlay--radio { --broadcast-accent: #00d2be; }
+.broadcast-overlay__kicker,
+.broadcast-overlay small {
+  display: block;
+  font: 700 10px var(--cond);
+  letter-spacing: .22em;
+  color: var(--broadcast-accent);
+}
+.broadcast-overlay strong {
+  display: -webkit-box;
+  margin: 3px 0 5px;
+  overflow: hidden;
+  color: var(--ink);
+  font: italic 800 24px/1.05 var(--cond);
+  letter-spacing: .025em;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.broadcast-overlay small {
+  color: var(--dim);
+  letter-spacing: .14em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .broadcast-overlay {
+    animation: broadcast-enter .26s ease-out both;
+  }
+}
+@keyframes broadcast-enter {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(0); }
+}
 @media (prefers-reduced-motion: reduce) {
   .live-badge {
     animation: none;
   }
   .rail-marker:hover {
     transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 767px) {
+  .broadcast-overlay {
+    top: 8px;
+    left: 8px;
+    width: calc(100% - 16px);
+    padding: 10px 26px 10px 12px;
+  }
+  .broadcast-overlay strong {
+    font-size: 19px;
   }
 }
 
