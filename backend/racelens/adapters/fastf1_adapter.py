@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from racelens.adapters._common import message_to_status
+from racelens.adapters._common import fastf1_lap1_start, message_to_status
 from racelens.events.models import Event, event, make_event_id
 
 
@@ -194,10 +194,10 @@ def session_to_events(ses, sid: str, src: str = "fastf1") -> list[Event]:
                 )
 
     # Rebase to race start: FastF1 session time begins with the data feed,
-    # ~1.5h before lights out. t0 = earliest lap-1 start (Time - LapTime).
+    # ~1.5h before lights out. LapTime can be missing on lap 1, while
+    # LapStartTime remains the authoritative start anchor.
     lap1 = ses.laps[ses.laps["LapNumber"] == 1]
-    starts = (lap1["Time"] - lap1["LapTime"]).dropna()
-    t0_ms = _ms(starts.min()) if len(starts) else 0
+    t0_ms = _ms(fastf1_lap1_start(lap1)) or 0
     if t0_ms:
         for e in events:
             e.session_time_ms = max(e.session_time_ms - t0_ms, 0)

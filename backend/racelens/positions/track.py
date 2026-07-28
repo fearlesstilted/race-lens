@@ -127,9 +127,10 @@ def export_raw_positions(year: int, gp: str, session: str, out: Path) -> int:
     if t0_ms is not None:
         print(f"launch detected → t0 = {t0_ms} ms", file=sys.stderr)
     else:
+        from racelens.adapters._common import fastf1_lap1_start
+
         lap1 = ses.laps[ses.laps["LapNumber"] == 1]
-        starts = (lap1["Time"] - lap1["LapTime"]).dropna()
-        t0_td = starts.min() if len(starts) else pd.Timedelta(0)
+        t0_td = fastf1_lap1_start(lap1)
         t0_ms = int(t0_td.total_seconds() * 1000) if not pd.isna(t0_td) else 0
         print("launch NOT detected — fell back to lap-1 start", file=sys.stderr)
 

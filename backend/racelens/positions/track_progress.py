@@ -48,9 +48,11 @@ def compute_progress(year: int, gp: str, session: str, session_id: str) -> dict[
     from racelens.positions.launch import detect_launch_ms
     t0_ms = detect_launch_ms(ses)
     if t0_ms is None:
+        from racelens.adapters._common import fastf1_lap1_start
+
         lap1 = ses.laps[ses.laps["LapNumber"] == 1]
-        starts = (lap1["Time"] - lap1["LapTime"]).dropna()
-        t0_ms = starts.min().total_seconds() * 1000 if len(starts) else 0.0
+        start = fastf1_lap1_start(lap1)
+        t0_ms = start.total_seconds() * 1000 if start is not None else 0.0
 
     out: dict[str, list] = {}
     for drv in ses.drivers:
