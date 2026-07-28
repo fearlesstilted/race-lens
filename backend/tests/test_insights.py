@@ -1,4 +1,5 @@
 from racelens.insights.traffic import detect_traffic_risk
+from racelens.insights.registry import detect_all
 from racelens.replay.engine import ReplayEngine
 
 from tests.test_replay import mini_race
@@ -27,3 +28,29 @@ def test_insights_are_deterministic_and_spoiler_free():
     assert detect_traffic_risk(engine.state_at(247_000)) == detect_traffic_risk(
         engine.state_at(247_000)
     )
+
+
+def test_registry_only_emits_neutralization_insights_under_safety_car():
+    state = {
+        "at_ms": 800_000,
+        "lap": 20,
+        "total_laps": 60,
+        "session_status": "safety_car",
+        "classification": ["A", "B"],
+        "drivers": {
+            "A": {
+                "position": 1, "gap_s": None, "interval_s": None,
+                "last_lap_ms": 80_000, "tyre_age_laps": 15,
+                "in_pit": False, "retired": False,
+            },
+            "B": {
+                "position": 2, "gap_s": 0.8, "interval_s": 0.8,
+                "last_lap_ms": 79_000, "tyre_age_laps": 15,
+                "in_pit": False, "retired": False,
+            },
+        },
+    }
+
+    assert {item["type"] for item in detect_all(state)} == {"SC_PIT_WINDOW"}
+    state["session_status"] = "vsc"
+    assert detect_all(state) == []
