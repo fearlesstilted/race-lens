@@ -195,7 +195,7 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
                     className={`catalog-session is-${session.status}`}
                     key={session.session_id}
                     disabled={
-                      busy === session.session_id
+                      busy !== null
                       || session.status === 'queued'
                       || session.status === 'processing'
                     }

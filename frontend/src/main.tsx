@@ -439,6 +439,7 @@ function App() {
 
             <div className="col col-center">
               <TrackMap
+                key={mode === 'replay' ? sessionId ?? 'replay' : state?.session_id ?? 'live'}
                 sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
                 atMs={replay.atMs}
                 playing={replay.playing}
