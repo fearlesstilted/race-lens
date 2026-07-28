@@ -69,6 +69,7 @@ const FeedRow = React.memo(function FeedRow({
         {item.text}
         {item.transcript && (
           <span className="ev-transcript">
+            <small>AUTO TRANSCRIPT · MAY BE INACCURATE</small>
             “{item.transcript.replace(/([.!?])\s+/g, '$1\n')}”
           </span>
         )}
