@@ -82,11 +82,11 @@ def detect_passes(events: list[Event]) -> list[Pass]:
         if e.type == "RetirementDetected":
             retired[e.driver_id] = e.session_time_ms
 
-    def near(times: list[int] | None, t: int, window: int) -> bool:
+    def recent(times: list[int] | None, t: int, window: int) -> bool:
         if not times:
             return False
         i = bisect.bisect_left(times, t - window)
-        return i < len(times) and times[i] <= t + window
+        return i < len(times) and times[i] <= t
 
     passes: list[Pass] = []
     pos: dict[str, int] = {}  # current snapshot (baseline = first batch, no passes)
@@ -119,11 +119,11 @@ def detect_passes(events: list[Event]) -> list[Pass]:
                 if y == x or y not in pos:
                     continue
                 if before[x] > y_before and pos[x] < pos[y]:  # order inverted: X now ahead
-                    if near(retired.get(y) and [retired[y]], t, _RETIRE_WINDOW_MS):
+                    if recent(retired.get(y) and [retired[y]], t, _RETIRE_WINDOW_MS):
                         continue  # Y dropping out, not a pass
-                    if near(pit_out.get(x), t, _PIT_WINDOW_MS):
+                    if recent(pit_out.get(x), t, _PIT_WINDOW_MS):
                         continue  # X rejoining traffic — position churn, not a pass
-                    if near(pit_any.get(y), t, _PIT_WINDOW_MS):
+                    if recent(pit_any.get(y), t, _PIT_WINDOW_MS):
                         # Y is in its pit cycle. Undercut only if X's fresh
                         # tyres earned it; otherwise X just inherited the spot.
                         x_outs = pit_out.get(x)
@@ -158,6 +158,6 @@ def detect_passes(events: list[Event]) -> list[Pass]:
     def sinking(p: Pass) -> bool:
         times = by_behind[p.behind]
         i = bisect.bisect_left(times, p.at_ms - _SINK_WINDOW_MS)
-        j = bisect.bisect_right(times, p.at_ms + _SINK_WINDOW_MS)
+        j = bisect.bisect_right(times, p.at_ms)
         return j - i >= _SINK_COUNT
     return [p for p in out if not sinking(p)]
