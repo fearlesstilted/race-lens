@@ -43,6 +43,29 @@ def test_fetch_returns_empty_while_feed_missing(tmp_path):
     assert fetch() == []
 
 
+def test_fetch_reuses_unchanged_snapshot(tmp_path, monkeypatch):
+    from racelens.adapters import f1live_adapter
+
+    feed = tmp_path / "feed.txt"
+    feed.write_text("first\n", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(
+        f1live_adapter,
+        "ingest_f1live",
+        lambda *args, **kwargs: calls.append(args) or [],
+    )
+
+    fetch = make_signalr_fetch(feed, 2026, "Silverstone", "R")
+    fetch()
+    fetch()
+    assert len(calls) == 1
+
+    with feed.open("a", encoding="utf-8") as handle:
+        handle.write("second\n")
+    fetch()
+    assert len(calls) == 2
+
+
 def test_live_start_signalr_wires_runner_and_capture(tmp_path, monkeypatch):
     """source=signalr: starts capture + runner; state flows; stop kills both."""
     import racelens.api as api

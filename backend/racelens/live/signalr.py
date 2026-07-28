@@ -76,9 +76,18 @@ def make_signalr_fetch(
 
     session_id = f"{gp}_{year}_{session}".lower().replace(" ", "_")
 
+    signature: tuple[int, int] | None = None
+    cached: list[Event] = []
+
     def fetch() -> list[Event]:
+        nonlocal signature, cached
         if not feed_path.is_file() or feed_path.stat().st_size == 0:
             return []
-        return ingest_f1live(str(feed_path), session_id=session_id)
+        stat = feed_path.stat()
+        current = (stat.st_size, stat.st_mtime_ns)
+        if current != signature:
+            cached = ingest_f1live(str(feed_path), session_id=session_id)
+            signature = current
+        return cached
 
     return fetch

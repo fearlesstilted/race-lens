@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from racelens.recorder import feed as feed_module
 from racelens.recorder.feed import inspect_feed, isolate_session, session_info_matches
 from racelens.recorder.schedule import ScheduledSession
 
@@ -78,6 +79,29 @@ def test_repeated_target_session_info_does_not_cut_earlier_capture(tmp_path):
 
     assert early in destination.read_text(encoding="utf-8")
     assert inspect_feed(source, SESSION).finished
+
+
+def test_inspection_only_parses_appended_rows(tmp_path, monkeypatch):
+    source = tmp_path / "raw.txt"
+    source.write_text(_line("SessionInfo", _info()) + "\n", encoding="utf-8")
+    seen = []
+    parse = feed_module._row
+    monkeypatch.setattr(
+        feed_module,
+        "_row",
+        lambda raw: (seen.append(raw), parse(raw))[1],
+    )
+
+    inspection = inspect_feed(source, SESSION)
+    seen.clear()
+    inspection = inspect_feed(source, SESSION, inspection)
+    assert seen == []
+
+    with source.open("a", encoding="utf-8") as handle:
+        handle.write(_line("SessionStatus", {"Status": "Finished"}) + "\n")
+    inspection = inspect_feed(source, SESSION, inspection)
+    assert inspection.finished
+    assert len(seen) == 1
 
 
 def test_next_session_bounds_target_segment(tmp_path):
