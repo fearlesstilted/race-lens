@@ -87,7 +87,9 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('session'),
+  )
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
@@ -144,8 +146,7 @@ function App() {
         const requestedSession = items.find((item) => item.session_id === requested)
         const initialSession = requestedSession?.session_id ?? items[0]?.session_id ?? null
         setSessionId((current) => (
-          current
-          ?? initialSession
+          items.some((item) => item.session_id === current) ? current : initialSession
         ))
         if (requested && !requestedSession && initialSession) {
           setSessionNotice(
