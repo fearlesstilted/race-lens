@@ -165,7 +165,7 @@ class LiveRunner:
                 self._all[e.event_id] = e
                 new_count += 1
 
-        if self._all:
+        if self._all and (new_count or self.engine is None):
             self.engine = ReplayEngine(self._all.values())
         if new_count:
             self._last_new_event_unix = time.time()

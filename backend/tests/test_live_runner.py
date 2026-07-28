@@ -73,10 +73,12 @@ def test_incremental_dedup():
     assert runner.status()["events_total"] == total
     assert runner.status()["new_last_poll"] == total - 12
 
+    engine = runner.engine
     runner._poll_once()
     assert runner.polls == 4
     assert runner.status()["events_total"] == total
     assert runner.status()["new_last_poll"] == 0, "4th poll must yield 0 new events"
+    assert runner.engine is engine
 
 
 def test_ingest_seq_monotonic():

@@ -175,11 +175,12 @@ class Recorder:
         ]
         process = subprocess.Popen(command, start_new_session=True)
         finished_at: datetime | None = None
+        inspection = prior
         try:
             while True:
                 self._beat()
                 now = self.now()
-                inspection = inspect_feed(raw, session)
+                inspection = inspect_feed(raw, session, inspection)
                 if inspection.finished and finished_at is None:
                     finished_at = now
                 if finished_at is not None and now >= finished_at + FINISH_GRACE:
@@ -197,7 +198,7 @@ class Recorder:
         finally:
             self._stop(process)
 
-        inspection = inspect_feed(raw, session)
+        inspection = inspect_feed(raw, session, inspection)
         if not inspection.matched:
             raise RuntimeError("live feed never matched the scheduled session")
         isolate_session(raw, clean, session)

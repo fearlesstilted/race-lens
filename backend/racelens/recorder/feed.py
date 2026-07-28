@@ -21,6 +21,8 @@ class FeedInspection:
     finished: bool
     target_line: int | None
     line_count: int
+    byte_offset: int = 0
+    segment_ended: bool = False
 
 
 def _row(raw: str) -> tuple[str, dict[str, Any], str] | None:
@@ -72,36 +74,56 @@ def _has_identity(payload: dict[str, Any]) -> bool:
     return isinstance(payload.get("Meeting"), dict) and bool(payload.get("Name"))
 
 
-def inspect_feed(path: Path, session: ScheduledSession) -> FeedInspection:
-    """Inspect only statuses after the latest matching SessionInfo marker."""
+def inspect_feed(
+    path: Path,
+    session: ScheduledSession,
+    previous: FeedInspection | None = None,
+) -> FeedInspection:
+    """Inspect only new append-only rows after a matching SessionInfo marker."""
     if not path.is_file():
         return FeedInspection(False, False, None, 0)
-    lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
-    parsed = [_row(line) for line in lines]
-    target = None
-    for index, item in enumerate(parsed):
-        if item and item[0] == "SessionInfo" and session_info_matches(item[1], session):
-            target = index
-            break
-    if target is None:
-        return FeedInspection(False, False, None, len(lines))
+    size = path.stat().st_size
+    if previous is None or previous.byte_offset > size:
+        previous = FeedInspection(False, False, None, 0)
+    if previous.finished or previous.segment_ended or previous.byte_offset == size:
+        return previous
 
-    finished = False
-    for item in parsed[target:]:
-        if not item:
-            continue
-        category, payload, _ = item
-        if (
-            category == "SessionInfo"
-            and _has_identity(payload)
-            and not session_info_matches(payload, session)
-        ):
-            break
-        if category == "SessionStatus" and payload.get("Status") in FINISHED_STATUSES:
-            finished = True
-        if category == "SessionInfo" and payload.get("SessionStatus") in FINISHED_STATUSES:
-            finished = True
-    return FeedInspection(True, finished, target, len(lines))
+    matched = previous.matched
+    finished = previous.finished
+    target = previous.target_line
+    line_count = previous.line_count
+    segment_ended = previous.segment_ended
+    with path.open("rb") as handle:
+        handle.seek(previous.byte_offset)
+        for raw in handle:
+            index = line_count
+            line_count += 1
+            item = _row(raw.decode("utf-8-sig", errors="replace"))
+            if not item:
+                continue
+            category, payload, _ = item
+            is_target = category == "SessionInfo" and session_info_matches(payload, session)
+            if not matched and is_target:
+                matched = True
+                target = index
+            elif (
+                matched
+                and category == "SessionInfo"
+                and _has_identity(payload)
+                and not is_target
+            ):
+                segment_ended = True
+                break
+            if matched and (
+                category == "SessionStatus" and payload.get("Status") in FINISHED_STATUSES
+                or category == "SessionInfo"
+                and payload.get("SessionStatus") in FINISHED_STATUSES
+            ):
+                finished = True
+        byte_offset = handle.tell()
+    return FeedInspection(
+        matched, finished, target, line_count, byte_offset, segment_ended
+    )
 
 
 def isolate_session(source: Path, destination: Path, session: ScheduledSession) -> None:
