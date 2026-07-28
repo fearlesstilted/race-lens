@@ -118,6 +118,7 @@ export const TrackMap = React.memo(function TrackMap({
 
   const { pathRef, registerCar } = useTrackAnimation({
     atMs, playing, playbackSpeed, drivers, classification, sessionStatus, positionsData,
+    progressPath: trackData?.progress_points,
   })
 
   // Fetch track data whenever session changes

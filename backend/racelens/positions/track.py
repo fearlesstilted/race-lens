@@ -6,10 +6,12 @@ export_raw_positions: per-driver raw X/Y rows as JSONL for the Rust resampler.
 """
 from __future__ import annotations
 
+from bisect import bisect_right
 import json
 import sys
 from math import isfinite
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 # Telemetry kept before lights-out (t=0) so the formation lap / grid forming is
@@ -21,6 +23,63 @@ SESSION_NAME_MAP = {
     "R": "Race", "Q": "Qualifying",
     "FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3",
 }
+
+
+def progress_path(
+    relative_distance,
+    xs,
+    ys,
+    *,
+    extent: tuple[float, float, float, float],
+    viewbox: tuple[float, float] = (600, 400),
+    padding: float = 20,
+    bins: int = 400,
+) -> list[list[float]]:
+    """Sample a lap by RelativeDistance so frontend progress follows its curves."""
+    if bins < 2:
+        raise ValueError("progress path requires at least two bins")
+    samples = []
+    for progress, x, y in zip(relative_distance, xs, ys):
+        try:
+            sample = float(progress), float(x), float(y)
+        except (TypeError, ValueError):
+            continue
+        if all(isfinite(value) for value in sample):
+            samples.append(sample)
+    samples.sort()
+    if len(samples) < 2:
+        raise ValueError("progress path requires usable lap telemetry")
+    distances = [sample[0] for sample in samples]
+    x_min, y_min, x_max, y_max = extent
+    width, height = viewbox
+    available_width = width - 2 * padding
+    available_height = height - 2 * padding
+    scale = min(
+        available_width / (x_max - x_min or 1),
+        available_height / (y_max - y_min or 1),
+    )
+    offset_x = padding + (available_width - (x_max - x_min) * scale) / 2
+    offset_y = padding + (available_height - (y_max - y_min) * scale) / 2
+    points = []
+    for index in range(bins):
+        target = index / bins
+        after = bisect_right(distances, target)
+        if after == 0:
+            x, y = samples[0][1:]
+        elif after == len(samples):
+            x, y = samples[-1][1:]
+        else:
+            before_progress, before_x, before_y = samples[after - 1]
+            after_progress, after_x, after_y = samples[after]
+            span = after_progress - before_progress
+            ratio = (target - before_progress) / span if span else 0
+            x = before_x + (after_x - before_x) * ratio
+            y = before_y + (after_y - before_y) * ratio
+        points.append([
+            round(offset_x + (x - x_min) * scale, 1),
+            round(height - (offset_y + (y - y_min) * scale), 1),
+        ])
+    return points
 
 
 def _load_session(year: int, gp: str, session: str):
@@ -40,12 +99,39 @@ def _load_session(year: int, gp: str, session: str):
     return ses
 
 
+def _position_trace_is_clean(xs, ys) -> bool:
+    points = [
+        (float(x), float(y))
+        for x, y in zip(xs, ys)
+        if isfinite(float(x)) and isfinite(float(y))
+    ]
+    if len(points) < 100 or len(set(points)) / len(points) < 0.9:
+        return False
+    steps = [
+        ((after[0] - before[0]) ** 2 + (after[1] - before[1]) ** 2) ** 0.5
+        for before, after in zip(points, points[1:])
+        if after != before
+    ]
+    return bool(steps) and max(steps) <= median(steps) * 10
+
+
+def _geometry_lap(session):
+    """Prefer the fastest lap whose position trace has no feed jumps or holds."""
+    for _, lap in session.laps.sort_values("LapTime").iterlaps():
+        positions = lap.get_pos_data()
+        if positions is not None and _position_trace_is_clean(
+            positions["X"], positions["Y"]
+        ):
+            return lap, positions
+    lap = session.laps.pick_fastest()
+    return lap, lap.get_pos_data()
+
+
 def build_track_outline(year: int, gp: str, session: str, session_id: str) -> dict[str, Any]:
     """Fastest-lap X/Y → the .track.json payload (outline points + corners)."""
     ses = _load_session(year, gp, session)
 
-    lap = ses.laps.pick_fastest()
-    pos = lap.get_pos_data()
+    lap, pos = _geometry_lap(ses)
 
     xs = pos["X"].to_numpy()
     ys = pos["Y"].to_numpy()
@@ -73,6 +159,22 @@ def build_track_outline(year: int, gp: str, session: str, session_id: str) -> di
     # Center the smaller axis
     offset_x = PAD + (avail_w - x_range * scale) / 2
     offset_y = PAD + (avail_h - y_range * scale) / 2
+    telemetry = lap.get_telemetry()
+    import numpy as np
+
+    telemetry_time = telemetry["SessionTime"].dt.total_seconds().to_numpy()
+    telemetry_progress = telemetry["RelativeDistance"].to_numpy()
+    usable = np.isfinite(telemetry_time) & np.isfinite(telemetry_progress)
+    position_time = pos["SessionTime"].dt.total_seconds().to_numpy()
+    relative_distance = np.interp(
+        position_time,
+        telemetry_time[usable],
+        telemetry_progress[usable],
+    )
+    progress_points = progress_path(
+        relative_distance, pos["X"], pos["Y"],
+        extent=(x_min, y_min, x_max, y_max),
+    )
 
     points = []
     for x, y in zip(xs, ys):
@@ -103,6 +205,7 @@ def build_track_outline(year: int, gp: str, session: str, session_id: str) -> di
         "extent_dm": [x_min, y_min, x_max, y_max],
         "padding": PAD,
         "points": points,
+        "progress_points": progress_points,
         "corners": corners,
     }
 

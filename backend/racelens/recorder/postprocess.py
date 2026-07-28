@@ -308,12 +308,20 @@ def validate_archive(
 
     track = _json_object(Path(track_path), "track")
     points = track.get("points")
+    progress_points = track.get("progress_points")
     viewbox = track.get("viewbox")
     if not isinstance(points, list) or len(points) < 2 or not all(
         isinstance(point, list) and len(point) == 2 and all(_number(v) for v in point)
         for point in points
     ):
         raise ArchiveValidationError("track.points must contain numeric x/y pairs")
+    if not isinstance(progress_points, list) or len(progress_points) < 2 or not all(
+        isinstance(point, list) and len(point) == 2 and all(_number(v) for v in point)
+        for point in progress_points
+    ):
+        raise ArchiveValidationError(
+            "track.progress_points must contain numeric x/y pairs"
+        )
     if not isinstance(viewbox, list) or len(viewbox) != 2 or not all(
         _number(value) and value > 0 for value in viewbox
     ):

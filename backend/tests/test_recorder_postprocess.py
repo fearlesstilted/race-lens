@@ -28,7 +28,9 @@ def _archive(tmp_path, *, progress=True):
     _write(fixture, events)
     track.write_text(json.dumps({
         "session_id": "race", "viewbox": [600, 400],
-        "points": [[0, 0], [1, 1]], "corners": [],
+        "points": [[0, 0], [1, 1]],
+        "progress_points": [[0, 0], [1, 1]],
+        "corners": [],
     }), encoding="utf-8")
     positions.write_text(json.dumps({
         "session_id": "race", "tick_ms": 1000, "start_ms": 0,

@@ -62,7 +62,13 @@ export const getCommentary = (sessionId: string, atMs: number, lang = 'en', leve
   json<CommentaryResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/commentary?at_ms=${atMs}&lang=${lang}&level=${level}`)
 
 export type TrackCorner = { number: number; x: number; y: number }
-export type TrackData = { session_id: string; viewbox: [number, number]; points: [number, number][]; corners?: TrackCorner[] }
+export type TrackData = {
+  session_id: string
+  viewbox: [number, number]
+  points: [number, number][]
+  progress_points?: [number, number][]
+  corners?: TrackCorner[]
+}
 
 export const getTrack = (sessionId: string) =>
   json<TrackData>(`/api/sessions/${encodeURIComponent(sessionId)}/track`)
