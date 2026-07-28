@@ -310,11 +310,13 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                     continue
                 text = str(m["Message"])
                 lap_no = m.get("Lap") if isinstance(m.get("Lap"), int) else None
-                events.append(event(sid, "RaceControlMessage", t_ms, lap=lap_no,
+                message_posix = _parse_iso(str(m.get("Utc") or ""))
+                message_ms = to_ms(message_posix) if message_posix is not None else t_ms
+                events.append(event(sid, "RaceControlMessage", message_ms, lap=lap_no,
                                     category=str(m.get("Category", "")), message=text))
                 status = message_to_status(text)
                 if status is not None:
-                    emit_status(status, t_ms)
+                    emit_status(status, message_ms)
         elif cat == "TeamRadio":
             caps = payload.get("Captures")
             items = caps.values() if isinstance(caps, dict) else (caps or [])
