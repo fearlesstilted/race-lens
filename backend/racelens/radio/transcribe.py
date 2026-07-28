@@ -22,6 +22,7 @@ from functools import lru_cache
 from pathlib import Path
 
 MODEL_NAME = "medium"  # spike winner; large-v3-int8 was slower AND noisier
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 
 @lru_cache(maxsize=1)
@@ -41,7 +42,10 @@ def transcribe(url: str) -> str | None:
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3") as tmp:
             with urllib.request.urlopen(url, timeout=30) as resp:
-                tmp.write(resp.read())
+                audio = resp.read(MAX_AUDIO_BYTES + 1)
+                if len(audio) > MAX_AUDIO_BYTES:
+                    raise ValueError("radio clip exceeds byte limit")
+                tmp.write(audio)
             tmp.flush()
             segments, _ = model.transcribe(tmp.name, language="en", vad_filter=True)
             text = "\n".join(s.text.strip() for s in segments if s.text.strip()).strip()
