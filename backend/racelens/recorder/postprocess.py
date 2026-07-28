@@ -103,7 +103,7 @@ def _read_events(path: Path, *, allow_empty: bool = False) -> list[Event]:
     return events
 
 
-def _atomic_write(path: Path, text: str) -> None:
+def atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_name: str | None = None
     try:
@@ -200,7 +200,7 @@ def merge_captured_radio(
     if not captured_radio:
         written = destination != canonical_path
         if written:
-            _atomic_write(destination, dump_jsonl(canonical))
+            atomic_write_text(destination, dump_jsonl(canonical))
         return MergeReport(len(canonical), len(captured), 0, 0, destination, written)
 
     groups: dict[tuple[object, ...], list[tuple[bool, Event]]] = {}
@@ -230,7 +230,7 @@ def merge_captured_radio(
             radio = radio.model_copy(update={"lap": max(1, inferred)})
         radios.append(radio)
     merged = sorted(fixed + radios, key=lambda event_: (event_.session_time_ms, event_.event_id))
-    _atomic_write(destination, dump_jsonl(merged))
+    atomic_write_text(destination, dump_jsonl(merged))
     return MergeReport(
         canonical_events=len(canonical),
         captured_events=len(captured),

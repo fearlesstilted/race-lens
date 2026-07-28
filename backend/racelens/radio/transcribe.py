@@ -84,6 +84,7 @@ def enrich_fixture(path: Path) -> int:
     import json
 
     from racelens.events.models import dump_jsonl, load_jsonl, make_event_id
+    from racelens.recorder.postprocess import atomic_write_text
 
     lines = path.read_text(encoding="utf-8").splitlines()
     done = 0
@@ -103,9 +104,9 @@ def enrich_fixture(path: Path) -> int:
                 lines[i] = json.dumps(e, ensure_ascii=False, separators=(",", ":"))
                 # Write after every clip: a killed run keeps its progress and a
                 # re-run resumes from the first missing transcript.
-                path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                atomic_write_text(path, "\n".join(lines) + "\n")
                 print(f"  {e.get('driver_id')}: {text[:70]}", file=sys.stderr)
     events = load_jsonl("\n".join(lines))
     events.sort(key=lambda event_: (event_.session_time_ms, event_.event_id))
-    path.write_text(dump_jsonl(events), encoding="utf-8")
+    atomic_write_text(path, dump_jsonl(events))
     return done
