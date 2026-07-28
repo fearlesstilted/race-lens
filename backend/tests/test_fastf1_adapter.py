@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from racelens.adapters._common import fastf1_lap1_start
 from racelens.adapters.fastf1_adapter import best_lap_position_events
 from racelens.replay.engine import ReplayEngine
@@ -36,6 +38,17 @@ def test_lap1_start_falls_back_for_legacy_fastf1_data():
     }
 
     assert fastf1_lap1_start(lap1) == timedelta(seconds=40)
+
+
+def test_lap1_start_refuses_an_unrebased_archive():
+    lap1 = {
+        "LapStartTime": _Series([None]),
+        "Time": _Series([timedelta(minutes=58)]),
+        "LapTime": _Series([None]),
+    }
+
+    with pytest.raises(ValueError, match="refusing unrebased archive"):
+        fastf1_lap1_start(lap1)
 
 
 def test_practice_positions_follow_each_drivers_best_lap():

@@ -41,4 +41,6 @@ def fastf1_lap1_start(lap1):
         if len(explicit):
             return explicit.min()
     derived = (lap1["Time"] - lap1["LapTime"]).dropna()
-    return derived.min() if len(derived) else None
+    if len(derived):
+        return derived.min()
+    raise ValueError("FastF1 lap 1 has no usable start time; refusing unrebased archive")
