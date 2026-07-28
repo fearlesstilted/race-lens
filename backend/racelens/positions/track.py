@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sys
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -159,6 +160,8 @@ def export_raw_positions(year: int, gp: str, session: str, out: Path) -> int:
                     x = float(row.X)
                     y = float(row.Y)
                 except Exception:
+                    continue
+                if not isfinite(x) or not isfinite(y):
                     continue
                 line = json.dumps({"driver": drv_abbr, "t_ms": t_ms, "x": x, "y": y})
                 fh.write(line + "\n")
