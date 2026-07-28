@@ -16,6 +16,8 @@ type Props = {
   frameMs: number
   markers?: RaceMarker[]
   lang?: Lang
+  /** Lap currently in progress, shared with the header. */
+  currentLap?: number | null
   /** When false (live mode) the scrub rail is disabled and speed controls hidden. */
   canScrub?: boolean
   /** Session clock string shown in live mode (e.g. "LAP 42"). */
@@ -64,17 +66,6 @@ function buildPhase(markers: RaceMarker[], startMs: number, endMs: number): Phas
   }
 
   return segments.length > 0 ? segments : [{ kind: 'green', pct: 100 }]
-}
-
-function lapFromTimeline(timeline: Timeline, atMs: number): number | null {
-  let lap: number | null = null
-  for (const [lapStr, lapMs] of Object.entries(timeline.lap_marks)) {
-    if (lapMs <= atMs) {
-      const n = parseInt(lapStr, 10)
-      if (lap === null || n > lap) lap = n
-    }
-  }
-  return lap
 }
 
 /** Compute lap label positions at every 10 laps from timeline.lap_marks */
@@ -145,7 +136,7 @@ function clusterMarkers(
   return groups
 }
 
-export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
+export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', currentLap = null, canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
     try { return localStorage.getItem(SPOILER_KEY) !== '0' } catch { return true }
   })
@@ -157,8 +148,6 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
 
   const progress = Math.min(Math.max((atMs - startMs) / duration, 0), 1)
   const cursorPct = progress * 100
-  const currentLap = timeline ? lapFromTimeline(timeline, atMs) : null
-
   const phases = useMemo(() => {
     if (!timeline) return [{ kind: 'green' as const, pct: 100 }]
     return buildPhase(markers, startMs, endMs)
