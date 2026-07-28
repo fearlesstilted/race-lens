@@ -4,6 +4,31 @@ import json
 import pandas as pd
 
 
+def test_progress_path_is_indexed_by_relative_distance():
+    from racelens.positions.track import progress_path
+
+    assert progress_path(
+        [0, 0.25, 0.5, 0.75],
+        [0, 10, 10, 0],
+        [0, 0, 10, 10],
+        extent=(0, 0, 10, 10),
+        viewbox=(100, 100),
+        padding=0,
+        bins=4,
+    ) == [[0, 100], [100, 100], [100, 0], [0, 0]]
+
+
+def test_track_geometry_rejects_position_feed_jumps():
+    from racelens.positions.track import _position_trace_is_clean
+
+    smooth = list(range(120))
+    jumped = smooth.copy()
+    jumped[60] = 10_000
+
+    assert _position_trace_is_clean(smooth, smooth)
+    assert not _position_trace_is_clean(jumped, smooth)
+
+
 def test_detect_launch_ms_uses_session_clock(monkeypatch):
     from racelens.positions import launch
 

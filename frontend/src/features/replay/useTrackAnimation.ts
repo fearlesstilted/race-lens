@@ -9,6 +9,7 @@ import type { DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
 import { DEFAULT_LAP_MS } from '../../lib/liveGaps'
 import { interpolateRealPos, median } from '../../lib/trackGeometry'
+import { progressPathPosition } from '../../lib/trackInterpolation'
 import { advanceFraction, computeTargetFractions, statusDrMultiplier } from '../../lib/deadReckoning'
 
 type Args = {
@@ -19,6 +20,7 @@ type Args = {
   classification: string[]
   sessionStatus?: string
   positionsData: PositionsData | null
+  progressPath?: [number, number][]
 }
 
 export type TrackAnimation = {
@@ -30,6 +32,7 @@ export type TrackAnimation = {
 
 export function useTrackAnimation({
   atMs, playing, playbackSpeed, drivers, classification, sessionStatus, positionsData,
+  progressPath,
 }: Args): TrackAnimation {
   const pathRef = useRef<SVGPathElement>(null)
 
@@ -65,6 +68,9 @@ export function useTrackAnimation({
   const positionsDataRef = useRef<PositionsData | null>(null)
   useEffect(() => { positionsDataRef.current = positionsData }, [positionsData])
 
+  const progressPathRef = useRef<[number, number][] | undefined>(undefined)
+  useEffect(() => { progressPathRef.current = progressPath }, [progressPath])
+
   const atMsRef = useRef(atMs)
   useEffect(() => { atMsRef.current = atMs }, [atMs])
 
@@ -74,7 +80,12 @@ export function useTrackAnimation({
     if (posData) {
       const queryMs = overrideAtMs ?? localAtMsRef.current
       for (const [driverId, groupEl] of carGroupRefs.current) {
-        const xy = interpolateRealPos(posData, driverId, queryMs)
+        const frameIndex = (queryMs - posData.start_ms) / posData.tick_ms
+        const progressFrames = posData.progress?.[driverId]
+        const tracked = progressFrames && progressPathRef.current
+          ? progressPathPosition(progressFrames, progressPathRef.current, frameIndex)
+          : null
+        const xy = tracked ?? interpolateRealPos(posData, driverId, queryMs)
         if (xy === null) {
           groupEl.setAttribute('visibility', 'hidden')
         } else {
