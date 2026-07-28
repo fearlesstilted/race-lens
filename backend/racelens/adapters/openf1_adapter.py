@@ -34,6 +34,8 @@ from racelens.events.models import Event, event
 
 _BASE = "https://api.openf1.org/v1"
 _TIMEOUT = 30
+_POLL_TIMEOUT_S = 60
+_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 _MAX_RETRIES = 4
 # OpenF1's free tier limits to 3 req/s and 30 req/min. When exceeded it throttles
 # with 429 — and, when sustained, with 401 (it has NO real auth, so a 401 here can
@@ -56,7 +58,30 @@ def _parse_int(value: Any) -> int | None:
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
+def _remaining_timeout(deadline: float | None) -> float:
+    if deadline is None:
+        return _TIMEOUT
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("OpenF1 poll deadline exceeded")
+    return min(_TIMEOUT, remaining)
+
+
+def _retry_sleep(seconds: float, deadline: float | None) -> None:
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("OpenF1 poll deadline exceeded")
+        seconds = min(seconds, remaining)
+    time.sleep(max(0, seconds))
+
+
+def _get(
+    path: str,
+    params: dict[str, Any] | None = None,
+    *,
+    deadline: float | None = None,
+) -> list[dict]:
     """GET JSON from OpenF1 with exponential-backoff retries on rate-limit /
     transient server errors (429, 502, 503, 504) and network errors."""
     url = _BASE + path
@@ -64,10 +89,19 @@ def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
         url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
 
     for attempt in range(_MAX_RETRIES + 1):
+        timeout = _remaining_timeout(deadline)
         try:
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                content_length = _parse_int(
+                    getattr(resp, "headers", {}).get("Content-Length")
+                )
+                if content_length is not None and content_length > _MAX_RESPONSE_BYTES:
+                    raise ValueError("OpenF1 response exceeds byte limit")
+                body = resp.read(_MAX_RESPONSE_BYTES + 1)
+                if len(body) > _MAX_RESPONSE_BYTES:
+                    raise ValueError("OpenF1 response exceeds byte limit")
+                data = json.loads(body.decode("utf-8"))
                 return data if isinstance(data, list) else []
         except urllib.error.HTTPError as exc:
             # Honour Retry-After if present, else exponential backoff. Only retry
@@ -78,13 +112,13 @@ def _get(path: str, params: dict[str, Any] | None = None) -> list[dict]:
                     wait = float(retry_after) if retry_after else _BACKOFF_BASE_S * (2 ** attempt)
                 except ValueError:
                     wait = _BACKOFF_BASE_S * (2 ** attempt)
-                time.sleep(min(wait, 20))
+                _retry_sleep(min(wait, 20), deadline)
                 continue
             raise
         except (urllib.error.URLError, OSError):
             # Network-level errors may be transient — back off and retry.
             if attempt < _MAX_RETRIES:
-                time.sleep(_BACKOFF_BASE_S * (2 ** attempt))
+                _retry_sleep(_BACKOFF_BASE_S * (2 ** attempt), deadline)
                 continue
             raise
     return []
@@ -600,14 +634,15 @@ def ingest_openf1(session_key: int) -> list[Event]:
     This always fetches the complete session data (no incremental state).
     For live polling use OpenF1IncrementalIngester instead.
     """
-    driver_rows = _get("/drivers", {"session_key": session_key}) or []
-    session_rows = _get("/sessions", {"session_key": session_key}) or []
-    lap_rows = _get("/laps", {"session_key": session_key}) or []
-    pos_rows = _get("/position", {"session_key": session_key}) or []
-    pit_rows = _get("/pit", {"session_key": session_key}) or []
-    stint_rows = _get("/stints", {"session_key": session_key}) or []
-    interval_rows = _get("/intervals", {"session_key": session_key}) or []
-    rc_rows = _get("/race_control", {"session_key": session_key}) or []
+    deadline = time.monotonic() + _POLL_TIMEOUT_S
+    driver_rows = _get("/drivers", {"session_key": session_key}, deadline=deadline) or []
+    session_rows = _get("/sessions", {"session_key": session_key}, deadline=deadline) or []
+    lap_rows = _get("/laps", {"session_key": session_key}, deadline=deadline) or []
+    pos_rows = _get("/position", {"session_key": session_key}, deadline=deadline) or []
+    pit_rows = _get("/pit", {"session_key": session_key}, deadline=deadline) or []
+    stint_rows = _get("/stints", {"session_key": session_key}, deadline=deadline) or []
+    interval_rows = _get("/intervals", {"session_key": session_key}, deadline=deadline) or []
+    rc_rows = _get("/race_control", {"session_key": session_key}, deadline=deadline) or []
 
     return _rows_to_events(
         driver_rows,
@@ -696,7 +731,12 @@ class OpenF1IncrementalIngester:
             if prev is None or latest > prev:
                 self._latest[endpoint] = latest
 
-    def _fetch_timeseries(self, endpoint: str) -> list[dict]:
+    def _fetch_timeseries(
+        self,
+        endpoint: str,
+        *,
+        deadline: float | None = None,
+    ) -> list[dict]:
         """Fetch rows for a time-series endpoint, including the last-seen boundary."""
         params: dict[str, Any] = {"session_key": self._session_key}
         prev_latest = self._latest.get(endpoint)
@@ -715,17 +755,22 @@ class OpenF1IncrementalIngester:
                 if timestamp is not None
                 else prev_latest
             )
-        return _get(endpoint, params) or []
+        return _get(endpoint, params, deadline=deadline) or []
 
     def fetch(self) -> list[Event]:
         """Fetch (incrementally after first call) and return the full event list.
 
         Returns the same result as ingest_openf1() for the same total data set.
         """
+        deadline = time.monotonic() + _POLL_TIMEOUT_S
         if not self._initialized:
             # First call: full fetch for all endpoints including static ones
-            self._driver_rows = _get("/drivers", {"session_key": self._session_key}) or []
-            self._session_rows = _get("/sessions", {"session_key": self._session_key}) or []
+            self._driver_rows = _get(
+                "/drivers", {"session_key": self._session_key}, deadline=deadline,
+            ) or []
+            self._session_rows = _get(
+                "/sessions", {"session_key": self._session_key}, deadline=deadline,
+            ) or []
         # Always re-fetch time-series endpoints (full on first call, incremental thereafter)
         for endpoint, store_attr in (
             ("/laps", "_lap_rows"),
@@ -735,7 +780,7 @@ class OpenF1IncrementalIngester:
             ("/intervals", "_interval_rows"),
             ("/race_control", "_rc_rows"),
         ):
-            new_rows = self._fetch_timeseries(endpoint)
+            new_rows = self._fetch_timeseries(endpoint, deadline=deadline)
             if new_rows:
                 seen = self._seen_rows[endpoint]
                 unique_rows = []
