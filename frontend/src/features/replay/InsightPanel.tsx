@@ -13,7 +13,7 @@ type Props = {
   atMs?: number
 }
 
-/** Cache overtake probabilities per replay session and driver pair. */
+/** Cache overtake probabilities per replay moment and driver pair. */
 const overtakeCache = new Map<string, number>()
 
 const MIN_VISIBLE_MS = 6000
@@ -332,7 +332,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
         if (!existing) {
           const [ahead, behind] = group.primary.driver_ids
           const cached = sessionId && group.primary.driver_ids.length === 2
-            ? overtakeCache.get(`${sessionId}:${ahead}:${behind}`) ?? null
+            ? overtakeCache.get(`${sessionId}:${atMs}:${ahead}:${behind}`) ?? null
             : null
           next.set(key, {
             ins: group.primary,
@@ -397,7 +397,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
         isBattleType(card.ins.type) && card.ins.driver_ids.length === 2
       ) {
         const [ahead, behind] = card.ins.driver_ids
-        const cacheKey = `${sessionId}:${ahead}:${behind}`
+        const cacheKey = `${sessionId}:${atMs}:${ahead}:${behind}`
         if (overtakeInFlightRef.current.has(cacheKey)) continue
         overtakeInFlightRef.current.add(cacheKey)
         getOvertake(sessionId, atMs, ahead, behind)
