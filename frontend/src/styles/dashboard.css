@@ -319,6 +319,13 @@
   line-height: 1.25;
   white-space: pre-line;
 }
+.ev-transcript small {
+  display: block;
+  color: #6f7388;
+  font: 700 9px var(--cond);
+  font-style: normal;
+  letter-spacing: 0.12em;
+}
 
 /* radio play/stop button in feed rows */
 .ev-radio-btn {
