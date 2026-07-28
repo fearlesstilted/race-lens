@@ -206,6 +206,18 @@ def test_stream_speed_zero_returns_422(client):
     assert r.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "path,params",
+    [
+        ("/api/sessions/2024_mini_race/feed", {"until_ms": 250_000}),
+        ("/api/live/feed", {}),
+    ],
+)
+@pytest.mark.parametrize("limit", [-1, 0, 101])
+def test_feed_limit_is_bounded(client, path, params, limit):
+    assert client.get(path, params={**params, "limit": limit}).status_code == 422
+
+
 def test_track_endpoint(tmp_path, monkeypatch):
     import json as _json
     import racelens.api as api

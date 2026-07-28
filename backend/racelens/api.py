@@ -740,7 +740,10 @@ async def live_stream(
 
 
 @app.get("/api/live/feed")
-async def live_feed(lang: str = "en", limit: int = 30) -> list:
+async def live_feed(
+    lang: str = "en",
+    limit: int = Query(default=30, ge=1, le=100),
+) -> list:
     """Event feed for the frontend during live mode (no session_id to scope by)."""
     if _live is None or _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
@@ -968,7 +971,7 @@ def feed(
     session_id: str,
     until_ms: int = Query(),
     lang: str = "en",
-    limit: int = 30,
+    limit: int = Query(default=30, ge=1, le=100),
 ) -> list:
     """Event feed for the frontend: spoiler-free, newest-first human-readable items."""
     eng = _engine(session_id)
