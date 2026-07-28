@@ -20,6 +20,7 @@ import { TopBar } from './features/replay/TopBar'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
 import { useReplay } from './features/replay/useReplay'
+import { sessionLabel } from './lib/format'
 import './style.css'
 import './styles/dashboard.css'
 import './styles/responsive.css'
@@ -87,6 +88,7 @@ function App() {
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
   const [isLiveActive, setIsLiveActive] = useState(false)
@@ -139,12 +141,22 @@ function App() {
         window.clearTimeout(wakeTimer)
         setSessions(items)
         const requested = new URLSearchParams(window.location.search).get('session')
+        const requestedSession = items.find((item) => item.session_id === requested)
+        const initialSession = requestedSession?.session_id ?? items[0]?.session_id ?? null
         setSessionId((current) => (
           current
-          ?? items.find((item) => item.session_id === requested)?.session_id
-          ?? items[0]?.session_id
-          ?? null
+          ?? initialSession
         ))
+        if (requested && !requestedSession && initialSession) {
+          setSessionNotice(
+            `Replay "${requested}" is unavailable · showing ${sessionLabel(initialSession)}`,
+          )
+          const url = new URL(window.location.href)
+          url.searchParams.set('session', initialSession)
+          window.history.replaceState(null, '', url)
+        } else {
+          setSessionNotice(null)
+        }
         setBackendPhase('ready')
       })
       .catch((err: unknown) => {
@@ -233,6 +245,7 @@ function App() {
   const handleSessionChange = (id: string) => {
     replay.pause()
     setSelectedIds([])
+    setSessionNotice(null)
     setSessionId(id)
     const url = new URL(window.location.href)
     url.searchParams.set('session', id)
@@ -395,6 +408,9 @@ function App() {
             greenFlag={replay.greenFlag}
             greenFlagText={replay.greenFlagText}
           />
+          {sessionNotice && (
+            <div className="feed-error" role="status">{sessionNotice}</div>
+          )}
           {(replay.error || replay.feedError) && (
             <div className="feed-error">{replay.error || replay.feedError}</div>
           )}
