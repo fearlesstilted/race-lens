@@ -12,10 +12,10 @@ from pathlib import Path
 def _write_events(events, out: str) -> None:
     """Shared tail of every ingest command: dump events, report to stderr."""
     from racelens.events.models import dump_jsonl
+    from racelens.recorder.postprocess import atomic_write_text
 
     out_path = Path(out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(dump_jsonl(events), encoding="utf-8")
+    atomic_write_text(out_path, dump_jsonl(events))
     print(f"{len(events)} events → {out_path}", file=sys.stderr)
 
 
@@ -79,6 +79,7 @@ def _cmd_ingest_live(args: argparse.Namespace) -> None:
 
 def _cmd_track(args: argparse.Namespace) -> None:
     from racelens.positions.track import build_track_outline
+    from racelens.recorder.postprocess import atomic_write_text
 
     # Build session_id from the output file stem
     out_path = Path(args.out)
@@ -86,8 +87,7 @@ def _cmd_track(args: argparse.Namespace) -> None:
     session_id = stem[:-len(".track")] if stem.endswith(".track") else stem
 
     data = build_track_outline(args.year, args.gp, args.session, session_id)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(data), encoding="utf-8")
+    atomic_write_text(out_path, json.dumps(data))
     print(f"{len(data['points'])} points → {out_path}", file=sys.stderr)
 
 
@@ -104,21 +104,31 @@ def _cmd_mini_sectors(args: argparse.Namespace) -> None:
 
     from racelens.events.models import dump_jsonl, load_jsonl
     from racelens.positions.mini_sectors import compute_gap_events
+    from racelens.recorder.postprocess import atomic_write_text
 
     fixtures_dir = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
     fixture_path = fixtures_dir / f"{args.session_id}.jsonl"
     existing = load_jsonl(fixture_path.read_text(encoding="utf-8"))
     before = len(existing)
 
-    # Drop existing per-lap gap/interval events; keep everything else
-    kept = [e for e in existing if e.type not in {"GapUpdated", "IntervalUpdated"}]
-    dropped = before - len(kept)
-
     new_events = compute_gap_events(args.year, args.gp, args.session, args.session_id)
+    if {e.type for e in new_events} != {"GapUpdated", "IntervalUpdated"} or any(
+        e.session_id != args.session_id
+        or e.source != "mini_sectors"
+        for e in new_events
+    ):
+        raise SystemExit("mini-sectors: invalid empty or mismatched replacement")
+
+    kept = [
+        e for e in existing
+        if e.source != "mini_sectors"
+        or e.type not in {"GapUpdated", "IntervalUpdated"}
+    ]
+    dropped = before - len(kept)
     combined = kept + new_events
     combined.sort(key=lambda e: (e.session_time_ms, e.event_id))
 
-    fixture_path.write_text(dump_jsonl(combined), encoding="utf-8")
+    atomic_write_text(fixture_path, dump_jsonl(combined))
     after = len(combined)
     print(
         f"before={before} dropped_gap={dropped} new_gap={len(new_events)} after={after} → {fixture_path}",
@@ -130,12 +140,13 @@ def _cmd_track_progress(args: argparse.Namespace) -> None:
     import os
 
     from racelens.positions.track_progress import compute_progress
+    from racelens.recorder.postprocess import atomic_write_text
 
     fixtures_dir = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
     pos_path = fixtures_dir / f"{args.session_id}.positions.json"
     pos = json.loads(pos_path.read_text(encoding="utf-8"))
     pos["progress"] = compute_progress(args.year, args.gp, args.session, args.session_id)
-    pos_path.write_text(json.dumps(pos, separators=(",", ":")), encoding="utf-8")
+    atomic_write_text(pos_path, json.dumps(pos, separators=(",", ":")))
     covered = sum(1 for arr in pos["progress"].values() if any(v is not None for v in arr))
     print(f"track-progress: {covered}/{len(pos['progress'])} drivers → {pos_path}", file=sys.stderr)
 
@@ -150,6 +161,7 @@ def _cmd_radio_fetch(args: argparse.Namespace) -> None:
         _build_driver_map, _compute_t0, _get, _parse_iso, find_session,
     )
     from racelens.events.models import event
+    from racelens.recorder.postprocess import atomic_write_text
 
     path = Path(args.fixture)
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -190,7 +202,7 @@ def _cmd_radio_fetch(args: argparse.Namespace) -> None:
         added += 1
 
     lines.sort(key=lambda ln: (json.loads(ln)["session_time_ms"], json.loads(ln)["event_id"]))
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    atomic_write_text(path, "\n".join(lines) + "\n")
     print(f"radio-fetch: +{added} radio events → {path}", file=sys.stderr)
 
 
