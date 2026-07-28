@@ -32,3 +32,13 @@ def message_to_status(text: str, table: tuple[tuple[str, str], ...] = STATUS_TAB
         if needle in upper:
             return status
     return None
+
+
+def fastf1_lap1_start(lap1):
+    """Return FastF1's earliest explicit lap-1 start, with legacy fallback."""
+    if "LapStartTime" in lap1:
+        explicit = lap1["LapStartTime"].dropna()
+        if len(explicit):
+            return explicit.min()
+    derived = (lap1["Time"] - lap1["LapTime"]).dropna()
+    return derived.min() if len(derived) else None

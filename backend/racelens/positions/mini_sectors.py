@@ -55,12 +55,11 @@ def compute_gap_events(
     ses = fastf1.get_session(year, gp, session_name)
     ses.load(telemetry=True, weather=False, messages=False)
 
-    # Rebase to race start — identical to fastf1_adapter
+    # Rebase to race start — identical to fastf1_adapter.
+    from racelens.adapters._common import fastf1_lap1_start
+
     lap1 = ses.laps[ses.laps["LapNumber"] == 1]
-    starts = (lap1["Time"] - lap1["LapTime"]).dropna()
-    t0_ms = _ms(starts.min()) if len(starts) else 0
-    if t0_ms is None:
-        t0_ms = 0
+    t0_ms = _ms(fastf1_lap1_start(lap1)) or 0
 
     gates = [i / K for i in range(1, K + 1)]  # 0.05, 0.10, …, 1.00
 
