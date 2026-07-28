@@ -129,7 +129,7 @@ def _make_mock_get(overrides: dict | None = None):
     if overrides:
         data.update(overrides)
 
-    def _get(path, params=None):
+    def _get(path, params=None, *, deadline=None):
         return list(data.get(path, []))
 
     return _get
@@ -143,6 +143,46 @@ def _ingest(overrides=None):
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────
+
+def test_get_bounds_response_body_and_deadline(monkeypatch):
+    class Response:
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        @staticmethod
+        def read(limit):
+            assert limit == 5
+            return b"12345"
+
+    monkeypatch.setattr(_mod, "_MAX_RESPONSE_BYTES", 4)
+    monkeypatch.setattr(_mod.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(ValueError, match="byte limit"):
+        _mod._get("/laps")
+
+    monkeypatch.setattr(_mod.time, "monotonic", lambda: 2)
+    with pytest.raises(TimeoutError, match="deadline"):
+        _mod._get("/laps", deadline=1)
+
+
+def test_poll_uses_one_aggregate_deadline(monkeypatch):
+    deadlines = []
+
+    def mock_get(path, params=None, *, deadline=None):
+        deadlines.append(deadline)
+        return []
+
+    monkeypatch.setattr(_mod.time, "monotonic", lambda: 100)
+    monkeypatch.setattr(_mod, "_get", mock_get)
+
+    _mod.OpenF1IncrementalIngester(_SESSION_KEY).fetch()
+
+    assert deadlines == [100 + _mod._POLL_TIMEOUT_S] * 8
+
 
 def test_event_types_present():
     events = _ingest()
@@ -418,7 +458,7 @@ def test_incremental_ingester_two_batches():
     call_log: list[tuple[str, dict]] = []
     call_counts: dict[str, int] = {}
 
-    def mock_get(path, params=None):
+    def mock_get(path, params=None, *, deadline=None):
         params = dict(params) if params else {}
         call_log.append((path, params))
         n = call_counts.get(path, 0)
@@ -491,7 +531,7 @@ def test_incremental_ingester_recovers_late_row_inside_overlap():
     position_calls = 0
     second_params = {}
 
-    def mock_get(path, params=None):
+    def mock_get(path, params=None, *, deadline=None):
         nonlocal position_calls, second_params
         if path == "/sessions":
             return _SESSIONS
@@ -523,7 +563,7 @@ def test_incremental_ingester_periodically_reconciles_full_history():
     ingester._polls = _mod._FULL_RECONCILE_POLLS
     ingester._latest["/position"] = "2024-05-26T13:10:00.000"
 
-    def mock_get(path, params=None):
+    def mock_get(path, params=None, *, deadline=None):
         params_seen.update(params or {})
         return []
 

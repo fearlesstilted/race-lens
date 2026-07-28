@@ -115,7 +115,7 @@ def _make_lap_null_duration_mock():
         "/intervals": [],
         "/race_control": [],
     }
-    return lambda path, params=None: list(data.get(path, []))
+    return lambda path, params=None, **_: list(data.get(path, []))
 
 
 def test_lap_null_duration_does_not_crash():
