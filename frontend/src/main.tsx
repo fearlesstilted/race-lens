@@ -464,7 +464,11 @@ function App() {
                 />
                 <div className="ctr-pane">
                   {centerTab === 'FEED' && (
-                    <RaceFeed key={mode === 'replay' ? sessionId : 'live'} items={replay.feed} />
+                    <RaceFeed
+                      key={mode === 'replay' ? sessionId : 'live'}
+                      items={replay.feed}
+                      loading={replay.loading}
+                    />
                   )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
                     <StintTimeline sessionId={sessionId} order={state?.classification} />

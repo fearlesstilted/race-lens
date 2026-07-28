@@ -81,7 +81,7 @@ function itemKey(item: FeedItem): string {
   return item.id
 }
 
-export function RaceFeed({ items }: { items: FeedItem[] }) {
+export function RaceFeed({ items, loading = false }: { items: FeedItem[]; loading?: boolean }) {
   const prevKeysRef = useRef<Set<string>>(new Set())
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set())
   const [playingUrl, setPlayingUrl] = useState<string | null>(null)
@@ -152,7 +152,7 @@ export function RaceFeed({ items }: { items: FeedItem[] }) {
         <div className="ev">
           <span className="ev-lap" />
           <span className="t">—</span>
-          <span className="x">No events yet</span>
+          <span className="x">{loading ? 'Loading events…' : 'No events yet'}</span>
         </div>
       )}
     </div>
