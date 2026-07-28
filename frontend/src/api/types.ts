@@ -136,6 +136,7 @@ export type InsightsResponse = {
 }
 
 export type FeedItem = {
+  id: string
   at_ms: number
   lap: number | null
   text: string

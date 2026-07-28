@@ -1,5 +1,6 @@
 """Tests for render_feed: event ticker for the frontend."""
 from racelens.commentary.feed import render_feed
+from racelens.events.models import event
 
 from tests.test_replay import mini_race
 
@@ -7,6 +8,34 @@ from tests.test_replay import mini_race
 def test_feed_newest_first():
     feed = render_feed(mini_race(), until_ms=300_000)
     assert feed == sorted(feed, key=lambda x: x["at_ms"], reverse=True)
+
+
+def test_feed_ids_distinguish_same_time_radio_clips():
+    events = [
+        event(
+            "radio",
+            "RaceControlMessage",
+            1_000,
+            "RUS",
+            category="Radio",
+            message="RADIO: RUS",
+            audio_url="https://audio/one.mp3",
+        ),
+        event(
+            "radio",
+            "RaceControlMessage",
+            1_000,
+            "RUS",
+            category="Radio",
+            message="RADIO: RUS",
+            audio_url="https://audio/two.mp3",
+        ),
+    ]
+
+    feed = render_feed(events, until_ms=1_000)
+
+    assert len(feed) == 2
+    assert len({item["id"] for item in feed}) == 2
 
 
 def test_feed_spoiler_free_no_future():
