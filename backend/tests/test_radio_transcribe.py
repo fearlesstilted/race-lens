@@ -17,6 +17,35 @@ def test_feed_carries_transcript() -> None:
     assert radio and radio[0]["transcript"] == "box box"
 
 
+def test_transcribe_rejects_oversized_radio_clip(monkeypatch) -> None:
+    class Model:
+        called = False
+
+        def transcribe(self, *_args, **_kwargs):
+            self.called = True
+            return [], None
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        @staticmethod
+        def read(limit):
+            assert limit == 5
+            return b"12345"
+
+    model = Model()
+    monkeypatch.setattr(rt, "MAX_AUDIO_BYTES", 4)
+    monkeypatch.setattr(rt, "_model", lambda: model)
+    monkeypatch.setattr(rt.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+
+    assert rt.transcribe("https://provider.test/radio.mp3") is None
+    assert not model.called
+
+
 def test_enrich_fixture_fills_and_skips(tmp_path, monkeypatch) -> None:
     fx = tmp_path / "r.jsonl"
     rows = [
