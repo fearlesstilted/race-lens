@@ -245,6 +245,18 @@ def _compute_t0(lap_rows: list[dict]) -> float | None:
     return t0_posix
 
 
+def _chronological(rows: list[dict], date_field: str) -> list[dict]:
+    def key(row: dict) -> tuple[bool, float, str]:
+        timestamp = _parse_iso(row.get(date_field))
+        return (
+            timestamp is None,
+            timestamp or 0,
+            json.dumps(row, sort_keys=True, separators=(",", ":"), default=str),
+        )
+
+    return sorted(rows, key=key)
+
+
 def _laps_to_events(
     lap_rows: list[dict],
     driver_map: dict[int, str],
@@ -520,6 +532,12 @@ def _rows_to_events(
 
     driver_map = _build_driver_map(driver_rows)
     sid = _derive_session_id(session_rows)
+    lap_rows = _chronological(lap_rows, "date_start")
+    pos_rows = _chronological(pos_rows, "date")
+    pit_rows = _chronological(pit_rows, "date")
+    stint_rows = _chronological(stint_rows, "date_start")
+    interval_rows = _chronological(interval_rows, "date")
+    rc_rows = _chronological(rc_rows, "date")
 
     events: list[Event] = [mk(sid, "SessionStarted", 0)]
 
