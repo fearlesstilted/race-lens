@@ -96,9 +96,12 @@ def inspect_feed(
     with path.open("rb") as handle:
         handle.seek(previous.byte_offset)
         for raw in handle:
+            item = _row(raw.decode("utf-8-sig", errors="replace"))
+            if not raw.endswith(b"\n") and item is None:
+                handle.seek(-len(raw), os.SEEK_CUR)
+                break
             index = line_count
             line_count += 1
-            item = _row(raw.decode("utf-8-sig", errors="replace"))
             if not item:
                 continue
             category, payload, _ = item

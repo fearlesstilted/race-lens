@@ -104,6 +104,27 @@ def test_inspection_only_parses_appended_rows(tmp_path, monkeypatch):
     assert len(seen) == 1
 
 
+def test_inspection_retries_a_partially_written_final_row(tmp_path):
+    source = tmp_path / "raw.txt"
+    info = _line("SessionInfo", _info()) + "\n"
+    finished = _line("SessionStatus", {"Status": "Finished"}) + "\n"
+    split = len(finished) // 2
+    source.write_text(info + finished[:split], encoding="utf-8")
+
+    inspection = inspect_feed(source, SESSION)
+    assert inspection.matched
+    assert not inspection.finished
+    assert inspection.line_count == 1
+    assert inspection.byte_offset == len(info.encode())
+
+    with source.open("a", encoding="utf-8") as handle:
+        handle.write(finished[split:])
+
+    inspection = inspect_feed(source, SESSION, inspection)
+    assert inspection.finished
+    assert inspection.line_count == 2
+
+
 def test_next_session_bounds_target_segment(tmp_path):
     source = tmp_path / "raw.txt"
     destination = tmp_path / "clean.txt"
