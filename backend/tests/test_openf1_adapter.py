@@ -438,9 +438,17 @@ def test_incremental_ingester_dedupes_rows_without_dates():
     assert len(ingester._stint_rows) == first_count
 
 
-def test_incremental_ingester_keeps_new_row_at_latest_timestamp():
-    first = {"driver_number": 1, "position": 1, "date": _T0}
-    second = {"driver_number": 16, "position": 2, "date": _T0}
+def test_incremental_ingester_recovers_late_row_inside_overlap():
+    first = {
+        "driver_number": 1,
+        "position": 1,
+        "date": "2024-05-26T13:10:00.000",
+    }
+    late = {
+        "driver_number": 16,
+        "position": 2,
+        "date": "2024-05-26T13:08:00.000",
+    }
     position_calls = 0
     second_params = {}
 
@@ -456,7 +464,7 @@ def test_incremental_ingester_keeps_new_row_at_latest_timestamp():
             position_calls += 1
             if position_calls == 2:
                 second_params = dict(params or {})
-                return [first, second]
+                return [late, first]
             return [first]
         return []
 
@@ -465,8 +473,25 @@ def test_incremental_ingester_keeps_new_row_at_latest_timestamp():
         ingester.fetch()
         ingester.fetch()
 
-    assert second_params["date>="] == _T0
-    assert ingester._pos_rows == [first, second]
+    assert _mod._parse_iso(second_params["date>="]) == _mod._parse_iso(first["date"]) - 300
+    assert ingester._pos_rows == [first, late]
+
+
+def test_incremental_ingester_periodically_reconciles_full_history():
+    params_seen = {}
+    ingester = _mod.OpenF1IncrementalIngester(_SESSION_KEY)
+    ingester._initialized = True
+    ingester._polls = _mod._FULL_RECONCILE_POLLS
+    ingester._latest["/position"] = "2024-05-26T13:10:00.000"
+
+    def mock_get(path, params=None):
+        params_seen.update(params or {})
+        return []
+
+    with patch.object(_mod, "_get", mock_get):
+        ingester._fetch_timeseries("/position")
+
+    assert params_seen == {"session_key": _SESSION_KEY}
 
 
 def test_rows_without_lap1_anchor_do_not_use_unix_epoch():

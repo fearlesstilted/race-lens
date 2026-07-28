@@ -41,6 +41,8 @@ _MAX_RETRIES = 4
 # transient → retry with exponential backoff; other 4xx (404) are real errors.
 _RETRYABLE_STATUS = {401, 429, 500, 502, 503, 504}
 _BACKOFF_BASE_S = 1.5
+_WATERMARK_OVERLAP_S = 5 * 60
+_FULL_RECONCILE_POLLS = 50
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -645,6 +647,7 @@ class OpenF1IncrementalIngester:
     def __init__(self, session_key: int) -> None:
         self._session_key = session_key
         self._initialized = False
+        self._polls = 0
 
         # Accumulated raw rows per endpoint
         self._driver_rows: list[dict] = []
@@ -675,11 +678,21 @@ class OpenF1IncrementalIngester:
         """Fetch rows for a time-series endpoint, including the last-seen boundary."""
         params: dict[str, Any] = {"session_key": self._session_key}
         prev_latest = self._latest.get(endpoint)
-        if self._initialized and prev_latest is not None:
+        if (
+            self._initialized
+            and self._polls % _FULL_RECONCILE_POLLS != 0
+            and prev_latest is not None
+        ):
             # OpenF1 accepts "date>=" as a literal param key name.
-            # Include the boundary: a new row can share the latest timestamp.
-            # _seen_rows removes the already-fetched boundary rows.
-            params["date>="] = prev_latest
+            # Five-minute overlap catches ordinary lag; periodic full polls catch the rest.
+            timestamp = _parse_iso(prev_latest)
+            params["date>="] = (
+                datetime.fromtimestamp(
+                    timestamp - _WATERMARK_OVERLAP_S, timezone.utc,
+                ).isoformat(timespec="milliseconds")
+                if timestamp is not None
+                else prev_latest
+            )
         return _get(endpoint, params) or []
 
     def fetch(self) -> list[Event]:
@@ -714,6 +727,7 @@ class OpenF1IncrementalIngester:
                     self._update_latest(endpoint, unique_rows)
 
         self._initialized = True
+        self._polls += 1
 
         return _rows_to_events(
             self._driver_rows,
