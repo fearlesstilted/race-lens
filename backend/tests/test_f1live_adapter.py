@@ -105,3 +105,28 @@ def test_keyframe_is_anchored_to_first_live_timestamp(tmp_path):
     events = ingest_f1live(str(feed), session_id="test")
     tyre = next(e for e in events if e.type == "TyreStintUpdated")
     assert tyre.session_time_ms == 300_000
+
+
+def test_race_control_keyframe_uses_each_message_timestamp(tmp_path):
+    lines = [
+        "['SessionData', {\"StatusSeries\": [{\"SessionStatus\": \"Started\", "
+        "\"Utc\": \"2026-07-05T15:00:00.000Z\"}]}, '']",
+        "['RaceControlMessages', {'Messages': {"
+        "'0': {'Utc': '2026-07-05T15:01:00.000Z', 'Category': 'Other', "
+        "'Message': 'FIRST'}, "
+        "'1': {'Utc': '2026-07-05T15:02:00.000Z', 'Category': 'Other', "
+        "'Message': 'SECOND'}}}, '']",
+        "['TimingData', {'Lines': {'44': {'Position': '1'}}}, "
+        "'2026-07-05T15:05:00.000Z']",
+    ]
+    feed = tmp_path / "midjoin.txt"
+    feed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    messages = [
+        event for event in ingest_f1live(str(feed), session_id="test")
+        if event.type == "RaceControlMessage"
+    ]
+    assert [(event.session_time_ms, event.payload["message"]) for event in messages] == [
+        (60_000, "FIRST"),
+        (120_000, "SECOND"),
+    ]
