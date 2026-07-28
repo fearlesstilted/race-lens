@@ -377,11 +377,22 @@ class Recorder:
 
     def run_once(self) -> str:
         now = self.now()
+        state = self.store.load()
+        protected = tuple(
+            f"{session_id}."
+            for session_id, item in state.sessions.items()
+            if item.phase in {Phase.RECORDING, Phase.CAPTURED, Phase.PROCESSING}
+            or item.retry_phase in {Phase.RECORDING, Phase.PROCESSING}
+        )
         cutoff = now.timestamp() - self.config.raw_retention_days * 86_400
         for path in self.config.raw_dir.iterdir():
-            if path.is_file() and not path.is_symlink() and path.stat().st_mtime < cutoff:
+            if (
+                path.is_file()
+                and not path.is_symlink()
+                and not path.name.startswith(protected)
+                and path.stat().st_mtime < cutoff
+            ):
                 path.unlink()
-        state = self.store.load()
         years = {now.year}
         if now.month == 12:
             years.add(now.year + 1)

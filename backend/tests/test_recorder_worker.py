@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -88,6 +89,26 @@ def test_capture_then_processing_retry_never_recaptures(tmp_path, monkeypatch):
     assert recorder.run_once().startswith("complete:")
     assert captures == [session.session_id]
     assert processes == [session.session_id, session.session_id]
+
+
+def test_retention_keeps_input_for_captured_work(tmp_path, monkeypatch):
+    now = datetime(2026, 7, 19, 15, tzinfo=UTC)
+    recorder = Recorder(_config(tmp_path), now=lambda: now)
+    recorder.store.transition(SESSION.session_id, Phase.RECORDING, now)
+    recorder.store.transition(SESSION.session_id, Phase.CAPTURED, now)
+    protected = recorder._paths(SESSION)["clean"]
+    orphan = recorder.config.raw_dir / "old-complete.clean.f1live"
+    for path in (protected, orphan):
+        path.write_text("capture", encoding="utf-8")
+        os.utime(path, (0, 0))
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule", lambda year: [SESSION]
+    )
+    monkeypatch.setattr(recorder, "process", lambda session: None)
+
+    assert recorder.run_once().startswith("complete:")
+    assert protected.exists()
+    assert not orphan.exists()
 
 
 def test_restart_resumes_persisted_processing_phase(tmp_path, monkeypatch):
