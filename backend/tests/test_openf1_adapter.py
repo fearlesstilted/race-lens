@@ -238,6 +238,22 @@ def test_position_changed_dedup():
     assert len(ver_pos) == 1
 
 
+def test_position_rows_are_transformed_chronologically():
+    rows = [
+        {"driver_number": 1, "position": 2, "date": "2024-05-26T13:00:20.000"},
+        {"driver_number": 1, "position": 1, "date": "2024-05-26T13:00:10.000"},
+        {"driver_number": 1, "position": 1, "date": _T0},
+    ]
+
+    events = _ingest({"/position": rows})
+    positions = [
+        (event.session_time_ms, event.payload["position"])
+        for event in events
+        if event.type == "PositionChanged" and event.driver_id == "VER"
+    ]
+    assert positions == [(0, 1), (20_000, 2)]
+
+
 def test_tyre_stints():
     events = _ingest()
     stint_evts = [e for e in events if e.type == "TyreStintUpdated"]
