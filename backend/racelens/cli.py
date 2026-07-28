@@ -158,7 +158,7 @@ def _cmd_radio_fetch(args: argparse.Namespace) -> None:
     (both the openf1 and fastf1 adapters anchor there).
     """
     from racelens.adapters.openf1_adapter import (
-        _build_driver_map, _compute_t0, _get, _parse_iso, find_session,
+        _build_driver_map, _compute_t0, _get, _parse_int, _parse_iso, find_session,
     )
     from racelens.events.models import event
     from racelens.recorder.postprocess import atomic_write_text
@@ -188,12 +188,13 @@ def _cmd_radio_fetch(args: argparse.Namespace) -> None:
     for row in _get("/team_radio", {"session_key": key}):
         url, dn = row.get("recording_url"), row.get("driver_number")
         ts = _parse_iso(row.get("date"))
-        if not url or ts is None or url in have_urls:
+        driver_number = _parse_int(dn)
+        if not url or ts is None or url in have_urls or driver_number is None:
             continue
         t_ms = round((ts - t0) * 1000)
         if t_ms < 0:
             continue  # pre-race garbage
-        drv = driver_map.get(int(dn), str(dn)) if dn is not None else None
+        drv = driver_map.get(driver_number, str(driver_number))
         marks = lap_marks.get(drv or "", [])
         lap = next((lp + 1 for tm, lp in reversed(marks) if tm <= t_ms), 1)
         ev = event(sid, "RaceControlMessage", t_ms, drv, lap=lap,
