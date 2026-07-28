@@ -366,12 +366,22 @@ def _detect_off_track(
 
     recent_laps: dict[str, list[int]] = {}
     candidates: list[tuple[int, int, str, float]] = []  # (at_ms, lap, drv, delta_s)
+    neutralisation_active = False
     for e in visible_sorted:
+        if e.type == "SessionStatusChanged":
+            status = e.payload.get("status")
+            if status in _STATUS_KIND:
+                neutralisation_active = True
+            elif status in _RESTART_STATUSES:
+                neutralisation_active = False
+            continue
         if e.type != "LapCompleted":
             continue
         drv = e.driver_id
         lap_ms = e.payload.get("lap_time_ms")
         if not drv or lap_ms is None:
+            continue
+        if neutralisation_active:
             continue
         hist = recent_laps.setdefault(drv, [])
         if len(hist) >= 3 and e.lap is not None and (drv, e.lap) not in pit_laps:
