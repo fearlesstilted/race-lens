@@ -81,6 +81,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null)
   const [markers, setMarkers] = useState<RaceMarker[]>([])
   const scrubTimeoutRef = useRef<number | null>(null)
+  const languageRequestSeq = useRef(0)
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setRecentPasses, setFeed, setCommentary,
@@ -108,6 +109,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   // Source change: reset everything, then load appropriately
   useEffect(() => {
+    languageRequestSeq.current++
     if (scrubTimeoutRef.current !== null) {
       window.clearTimeout(scrubTimeoutRef.current)
       scrubTimeoutRef.current = null
@@ -179,13 +181,24 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   // Re-fetch feed + commentary when lang/level change (without resetting position).
   useEffect(() => {
+    const seq = ++languageRequestSeq.current
     if (sessionId) {
       setFeedError(null)
       getFeed(sessionId, atMs, 30, lang)
-        .then((r) => { setFeed(r.items); setFeedError(null) })
-        .catch((err: unknown) => setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
+        .then((r) => {
+          if (seq === languageRequestSeq.current) {
+            setFeed(r.items)
+            setFeedError(null)
+          }
+        })
+        .catch((err: unknown) => {
+          if (seq === languageRequestSeq.current)
+            setFeedError(err instanceof Error ? err.message : 'Feed unavailable')
+        })
       getCommentary(sessionId, atMs, lang, level)
-        .then((r) => setCommentary(r.items))
+        .then((r) => {
+          if (seq === languageRequestSeq.current) setCommentary(r.items)
+        })
         .catch(() => undefined)
     }
 
