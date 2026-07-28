@@ -78,7 +78,7 @@ const FeedRow = React.memo(function FeedRow({
 })
 
 function itemKey(item: FeedItem): string {
-  return `${item.at_ms}|${item.kind}|${item.text.slice(0, 20)}`
+  return item.id
 }
 
 export function RaceFeed({ items }: { items: FeedItem[] }) {

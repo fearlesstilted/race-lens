@@ -215,6 +215,7 @@ def render_feed(
         # Lights-out opens lap 1; SessionStarted carries no lap of its own.
         item_lap = 1 if e.type == "SessionStarted" else e.lap
         item: dict[str, Any] = {
+            "id": e.event_id,
             "at_ms": e.session_time_ms,
             "lap": item_lap,
             "kind": e.type,
@@ -244,6 +245,9 @@ def render_feed(
                 else f"{p.ahead} passes {p.behind} for P{p.position}"
             )
         items.append({
+            "id": (
+                f"pass:{p.kind}:{p.at_ms}:{p.ahead}:{p.behind}:{p.position}"
+            ),
             "at_ms": p.at_ms,
             "lap": p.lap,
             "kind": p.kind,

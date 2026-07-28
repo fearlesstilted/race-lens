@@ -15,7 +15,7 @@ export function useVoiceAlerts(items: FeedItem[], enabled: boolean, lang: string
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    const keys = items.map((i) => `${i.at_ms}|${i.kind}|${i.text}`)
+    const keys = items.map((i) => i.id)
     if (seenRef.current === null) {
       seenRef.current = new Set(keys) // initial backlog stays silent
       return
