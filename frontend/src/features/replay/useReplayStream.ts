@@ -23,6 +23,7 @@ export function useReplayStream(
   set: ReplaySetters,
 ) {
   const sourceRef = useRef<EventSource | null>(null)
+  const streamSeqRef = useRef(0)
   // Throttle ONLY the network side-data (feed / battles / commentary) so we don't
   // flood the API at high speed. The table + scrubber + map are NOT throttled —
   // they must render the same frame, else the tower lags the track by up to
@@ -33,8 +34,10 @@ export function useReplayStream(
   const DATA_THROTTLE_MS = 600
 
   const closeStream = useCallback(() => {
+    streamSeqRef.current++
     sourceRef.current?.close()
     sourceRef.current = null
+    pendingRef.current = null
     if (trailRef.current) {
       clearTimeout(trailRef.current)
       trailRef.current = null
@@ -50,8 +53,10 @@ export function useReplayStream(
 
       const url = getStreamUrl(nextSpeed, startMs, nextLang, nextLevel)
       const source = new EventSource(url)
+      const seq = streamSeqRef.current
+      const isCurrent = () => streamSeqRef.current === seq && sourceRef.current === source
       sourceRef.current = source
-      source.onopen = () => set.setError(null)
+      source.onopen = () => { if (isCurrent()) set.setError(null) }
 
       // Network side-data (feed / battles / commentary). Throttled — these are
       // API round-trips, not the on-screen frame. The table/map are NOT here.
@@ -59,24 +64,38 @@ export function useReplayStream(
         lastDataRef.current = performance.now()
         const ms = st.at_ms
         if (sessionId) {
-          void getBattles(sessionId, ms).then((r) => set.setBattles(r.battles)).catch(() => undefined)
+          void getBattles(sessionId, ms)
+            .then((r) => { if (isCurrent()) set.setBattles(r.battles) })
+            .catch(() => undefined)
           void getFeed(sessionId, ms, 30, nextLang)
-            .then((r) => { set.setFeed(r.items); set.setFeedError(null) })
-            .catch((err: unknown) => set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
+            .then((r) => {
+              if (isCurrent()) { set.setFeed(r.items); set.setFeedError(null) }
+            })
+            .catch((err: unknown) => {
+              if (isCurrent())
+                set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable')
+            })
           void getCommentary(sessionId, ms, nextLang, nextLevel)
-            .then((r) => set.setCommentary(r.items)).catch(() => undefined)
+            .then((r) => { if (isCurrent()) set.setCommentary(r.items) })
+            .catch(() => undefined)
         } else {
           // Live mode has no session_id to scope by — feed comes from the live
           // engine's own event log. Commentary stays replay-only. Battles are
           // embedded directly in every live frame (see onmessage) — no REST
           // round-trip needed, so they are NOT fetched here.
           void getLiveFeed(30, nextLang)
-            .then((r) => { set.setFeed(r.items); set.setFeedError(null) })
-            .catch((err: unknown) => set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable'))
+            .then((r) => {
+              if (isCurrent()) { set.setFeed(r.items); set.setFeedError(null) }
+            })
+            .catch((err: unknown) => {
+              if (isCurrent())
+                set.setFeedError(err instanceof Error ? err.message : 'Feed unavailable')
+            })
         }
       }
 
       source.onmessage = (event) => {
+        if (!isCurrent()) return
         const raw = event.data as string
         // Live stream can send empty heartbeat `{}` while no data yet
         if (!raw || raw === '{}') return
@@ -112,11 +131,13 @@ export function useReplayStream(
       }
 
       source.addEventListener('end', () => {
+        if (!isCurrent()) return
         closeStream()
         set.setPlaying(false)
       })
 
       source.onerror = () => {
+        if (!isCurrent()) return
         // EventSource reconnects by itself unless explicitly closed.
         set.setError('Stream disconnected · reconnecting')
       }
