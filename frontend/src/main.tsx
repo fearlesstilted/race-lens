@@ -498,6 +498,7 @@ function App() {
             frameMs={replay.frameMs}
             markers={replay.markers}
             lang={replay.lang}
+            currentLap={racing ? currentLap : null}
             canScrub={replay.canScrub}
             liveLabel={mode === 'live' ? liveLabel : null}
             onScrub={replay.scrub}
