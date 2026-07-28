@@ -91,7 +91,12 @@ export function RaceFeed({ items }: { items: FeedItem[] }) {
     if (!radioAudio) return
     const onEnded = () => setPlayingUrl(null)
     radioAudio.addEventListener('ended', onEnded)
-    return () => radioAudio.removeEventListener('ended', onEnded)
+    return () => {
+      radioAudio.removeEventListener('ended', onEnded)
+      radioAudio.pause()
+      radioAudio.removeAttribute('src')
+      radioAudio.load()
+    }
   }, [])
 
   const handleToggleRadio = (url: string) => {

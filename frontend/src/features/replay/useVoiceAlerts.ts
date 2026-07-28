@@ -10,8 +10,25 @@ const SPOKEN_TAGS = new Set(['FASTEST', 'FLAG', 'PASS'])
 const MAX_SPOKEN_PER_TICK = 5
 
 /** Speak newly-arrived feed items via the built-in speechSynthesis. */
-export function useVoiceAlerts(items: FeedItem[], enabled: boolean, lang: string) {
+export function useVoiceAlerts(
+  items: FeedItem[],
+  enabled: boolean,
+  lang: string,
+  contextKey: string | null,
+) {
   const seenRef = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    seenRef.current = null
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    return () => window.speechSynthesis.cancel()
+  }, [contextKey])
+
+  useEffect(() => {
+    if (!enabled && typeof window !== 'undefined' && 'speechSynthesis' in window)
+      window.speechSynthesis.cancel()
+  }, [enabled])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return

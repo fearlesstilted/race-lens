@@ -124,7 +124,7 @@ function App() {
   }, [mode, sessionId, isLiveActive])
 
   const replay = useReplay(source)
-  useVoiceAlerts(replay.feed, voice, replay.lang)
+  useVoiceAlerts(replay.feed, voice, replay.lang, mode === 'replay' ? sessionId : 'live')
 
   const loadSessions = useCallback(() => {
     let cancelled = false
@@ -447,7 +447,9 @@ function App() {
                   onTab={setCenterTab}
                 />
                 <div className="ctr-pane">
-                  {centerTab === 'FEED' && <RaceFeed items={replay.feed} />}
+                  {centerTab === 'FEED' && (
+                    <RaceFeed key={mode === 'replay' ? sessionId : 'live'} items={replay.feed} />
+                  )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
                     <StintTimeline sessionId={sessionId} order={state?.classification} />
                   )}
