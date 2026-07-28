@@ -3,6 +3,9 @@ import os
 
 import pytest
 
+from racelens.events.models import event
+from racelens.tyre_stints import stint_timeline
+
 FIXTURES = os.environ.get("RACELENS_FIXTURES", "fixtures")
 
 
@@ -12,6 +15,23 @@ def _has_fixture(name: str) -> bool:
 
 
 SESSION = "miami_2026_race"
+
+
+def test_tyre_only_driver_has_no_phantom_stint():
+    events = [
+        event("race", "TyreStintUpdated", 0, "DNS", compound="SOFT"),
+        event("race", "TyreStintUpdated", 0, "RUN", compound="MEDIUM"),
+        event("race", "LapCompleted", 90_000, "RUN", lap=1),
+    ]
+
+    assert stint_timeline(events, 70) == {
+        "RUN": [{
+            "compound": "MEDIUM",
+            "start_lap": 1,
+            "end_lap": 1,
+            "laps": 1,
+        }],
+    }
 
 
 @pytest.mark.skipif(not _has_fixture(SESSION), reason="fixture not available")
