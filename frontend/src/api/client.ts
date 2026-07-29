@@ -127,10 +127,13 @@ export type LiveStartResult = { session_key: number; poll_interval_s: number; st
 export type LiveStatusResult = {
   is_running: boolean
   poll_count: number
-  last_poll_ok: boolean | null
-  last_poll_at: string | null
-  error_count: number
-  data_quality: string // 'good' | 'degraded' | 'stalled'
+  events_total: number
+  last_poll_ok: boolean
+  last_poll_unix: number | null
+  last_new_event_unix: number | null
+  last_error: string | null
+  capture_alive?: boolean
+  data_quality: 'good' | 'degraded' | 'stalled'
 }
 
 const post = async <T>(path: string): Promise<T> => {

@@ -20,10 +20,52 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Callable
 
 from racelens.events.models import Event
+from racelens.recorder.schedule import canonical_alias
+
+_FINISHED = {"Ends", "Finished", "Finalised"}
+
+
+def _name(value: object) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return " ".join(
+        "".join(char for char in normalized if char.isalnum() or char.isspace())
+        .lower()
+        .split()
+    )
+
+
+def _matches_target(
+    info: dict, year: int, gp: str, session: str,
+) -> bool:
+    meeting = info.get("Meeting")
+    if not isinstance(meeting, dict):
+        return False
+    requested = _name(gp)
+    circuit = meeting.get("Circuit")
+    country = meeting.get("Country")
+    candidates = [
+        meeting.get("Name"),
+        meeting.get("OfficialName"),
+        meeting.get("Location"),
+        circuit.get("ShortName") if isinstance(circuit, dict) else None,
+        country.get("Name") if isinstance(country, dict) else None,
+    ]
+    return (
+        str(info.get("StartDate") or "").startswith(str(year))
+        and canonical_alias(info.get("Name")) == canonical_alias(session)
+        and any(
+            requested == candidate
+            or len(requested) >= 3 and requested in candidate
+            or len(candidate) >= 3 and candidate in requested
+            for value in candidates
+            if (candidate := _name(value))
+        )
+    )
 
 
 class SignalRCapture:
@@ -72,7 +114,10 @@ def make_signalr_fetch(
     # Direct feed parser — fastf1's livedata path cannot build laps from a
     # live/mid-join recording (drops keyframes, archive-grade lap builder), so
     # live uses our own TimingData mapping. fastf1 stays for post-race replays.
-    from racelens.adapters.f1live_adapter import ingest_f1live
+    from racelens.adapters.f1live_adapter import (
+        current_f1live_session_info,
+        ingest_f1live,
+    )
 
     session_id = f"{gp}_{year}_{session}".lower().replace(" ", "_")
 
@@ -86,7 +131,18 @@ def make_signalr_fetch(
         stat = feed_path.stat()
         current = (stat.st_size, stat.st_mtime_ns)
         if current != signature:
-            cached = ingest_f1live(str(feed_path), session_id=session_id)
+            info = current_f1live_session_info(str(feed_path))
+            target_ready = info is not None and _matches_target(info, year, gp, session)
+            finished_before_join = (
+                not cached
+                and info is not None
+                and info.get("SessionStatus") in _FINISHED
+            )
+            cached = (
+                ingest_f1live(str(feed_path), session_id=session_id)
+                if target_ready and not finished_before_join
+                else []
+            )
             signature = current
         return cached
 

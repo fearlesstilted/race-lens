@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import type { RaceMarker, Timeline } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
+import type { LivePhase } from '../../lib/liveStatus'
 
 type Speed = 1 | 5 | 10
 const SPEEDS: Speed[] = [1, 5, 10]
@@ -22,6 +23,9 @@ type Props = {
   canScrub?: boolean
   /** Session clock string shown in live mode (e.g. "LAP 42"). */
   liveLabel?: string | null
+  livePhase?: LivePhase
+  liveBadge?: string
+  liveDetail?: string
   onScrub: (ms: number) => void
   onPlay: () => void
   onPause: () => void
@@ -120,7 +124,7 @@ function clusterMarkers(
   return groups
 }
 
-export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', currentLap = null, canScrub = true, liveLabel, onScrub, onPlay, onPause, onSpeed }: Props) {
+export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', currentLap = null, canScrub = true, liveLabel, livePhase = 'connecting', liveBadge = 'CONNECTING', liveDetail = 'OPENING LIVE TIMING', onScrub, onPlay, onPause, onSpeed }: Props) {
   const [spoilerFree, setSpoilerFree] = useState(() => {
     try { return localStorage.getItem(SPOILER_KEY) !== '0' } catch { return true }
   })
@@ -424,9 +428,9 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
         </div>
       ) : (
         <div className="deck-live-state" role="status">
-          <span className="live-badge">● LIVE</span>
-          <strong>{liveLabel ?? 'WAITING FOR TIMING'}</strong>
-          <small>PLAY-FORWARD · NO REPLAY SCRUB</small>
+          <span className={`live-badge live-badge--${livePhase}`}>{liveBadge}</span>
+          <strong>{liveLabel ?? liveDetail}</strong>
+          <small>{liveLabel ? liveDetail : 'PLAY-FORWARD · NO REPLAY SCRUB'}</small>
         </div>
       )}
     </div>

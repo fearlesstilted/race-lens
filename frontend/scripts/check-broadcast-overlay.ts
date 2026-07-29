@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { selectBroadcastCandidate } from '../src/lib/broadcastOverlay.ts'
+import { livePresentation } from '../src/lib/liveStatus.ts'
 
 const incident = {
   kind: 'CRASH' as const,
@@ -28,4 +29,19 @@ assert.equal(selectBroadcastCandidate({
   feed: [radio],
 })?.title, 'Crash')
 
-console.log('broadcast overlay check passed')
+const waitingStatus = {
+  is_running: true,
+  poll_count: 3,
+  events_total: 0,
+  last_poll_ok: true,
+  last_poll_unix: 1,
+  last_new_event_unix: null,
+  last_error: null,
+  data_quality: 'stalled' as const,
+}
+const waiting = livePresentation(waitingStatus, false, null)
+assert.equal(waiting.phase, 'waiting')
+assert.equal(livePresentation({ ...waitingStatus, capture_alive: false }, false, null).phase, 'stalled')
+assert.equal(livePresentation(null, true, 'offline').phase, 'reconnecting')
+
+console.log('replay/live UI checks passed')

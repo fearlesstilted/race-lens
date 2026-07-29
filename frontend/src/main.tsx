@@ -22,6 +22,7 @@ import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
 import { useReplay } from './features/replay/useReplay'
 import { sessionLabel } from './lib/format'
+import { livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
 import './styles/responsive.css'
@@ -29,14 +30,18 @@ import './styles/features.css'
 
 // ── Live status pill ──────────────────────────────────────────────────────────
 
-function LiveStatusPill({ status }: { status: LiveStatusResult | null }) {
-  if (!status) return null
-  const q = status.data_quality
-  const cls = q === 'good' ? 'live-pill-good' : q === 'degraded' ? 'live-pill-warn' : 'live-pill-bad'
+function LiveStatusPill({
+  presentation,
+}: {
+  presentation: ReturnType<typeof livePresentation>
+}) {
   return (
-    <span className={`live-pill ${cls}`}>
-      {q.toUpperCase()} · poll #{status.poll_count}
-    </span>
+    <>
+      <span className={`live-pill live-pill-${presentation.phase}`}>
+        {presentation.badge}
+      </span>
+      <span className="live-status-detail">{presentation.detail}</span>
+    </>
   )
 }
 
@@ -97,6 +102,7 @@ function App() {
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
   const [liveError, setLiveError] = useState<string | null>(null)
+  const [liveStopping, setLiveStopping] = useState(false)
   const [liveAvailable, setLiveAvailable] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
@@ -202,7 +208,7 @@ function App() {
 
   // Poll live status every 5 s when live is active
   useEffect(() => {
-    if (!isLiveActive) { setLiveStatusData(null); return }
+    if (!isLiveActive || mode !== 'live') return
     let cancelled = false
     const poll = () => {
       liveStatus()
@@ -212,7 +218,7 @@ function App() {
     poll()
     const id = window.setInterval(poll, 5000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [isLiveActive])
+  }, [isLiveActive, mode])
 
   // Esc to clear selection
   useEffect(() => {
@@ -237,8 +243,6 @@ function App() {
     if (next === 'live' && !liveAvailable) return
     replay.pause()
     setMode(next)
-    setIsLiveActive(false)
-    setLiveStatusData(null)
     setLiveError(null)
     setCenterTab('FEED')
     setSelectedIds([])
@@ -269,6 +273,7 @@ function App() {
   }, [state])
 
   const sessionStatus = state?.session_status ?? 'started'
+  const liveView = livePresentation(liveStatusData, state !== null, replay.error)
 
   if (sessionError) {
     return (
@@ -297,7 +302,7 @@ function App() {
   }
 
   // Build liveLabel for deck clock from current state lap
-  const liveLabel = state ? `LAP ${state.lap}` : null
+  const liveLabel = state && currentLap > 0 ? `LAP ${currentLap}` : null
 
   return (
     <>
@@ -361,7 +366,7 @@ function App() {
           signalrAvailable={signalrAvailable}
           onStart={async (y, c, sessionName, source) => {
             setLiveError(null)
-            await liveStart(y, c, sessionName, 12, source)
+            await liveStart(y, c, sessionName, 6, source)
             setIsLiveActive(true)
           }}
           onStop={() => { setIsLiveActive(false); setLiveStatusData(null) }}
@@ -369,12 +374,14 @@ function App() {
       )}
       {mode === 'live' && isLiveActive && (
         <div className="live-bar">
-          <LiveStatusPill status={liveStatusData} />
+          <LiveStatusPill presentation={liveView} />
           {liveError && <span className="live-err">{liveError}</span>}
           <button
             className="b danger"
             type="button"
+            disabled={liveStopping}
             onClick={async () => {
+              setLiveStopping(true)
               try {
                 await liveStop()
                 setIsLiveActive(false)
@@ -382,10 +389,12 @@ function App() {
                 setLiveError(null)
               } catch (error) {
                 setLiveError(error instanceof Error ? error.message : 'Failed to stop live session')
+              } finally {
+                setLiveStopping(false)
               }
             }}
           >
-            STOP
+            {liveStopping ? 'STOPPING…' : 'STOP'}
           </button>
         </div>
       )}
@@ -536,6 +545,9 @@ function App() {
             currentLap={racing ? currentLap : null}
             canScrub={replay.canScrub}
             liveLabel={mode === 'live' ? liveLabel : null}
+            livePhase={liveView.phase}
+            liveBadge={liveView.badge}
+            liveDetail={liveView.detail}
             onScrub={replay.scrub}
             onPlay={replay.play}
             onPause={replay.pause}
