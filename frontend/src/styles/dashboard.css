@@ -489,97 +489,168 @@
 }
 
 /* ── deck: replay controls ─────────────────────────────────────── */
-/* Target total height ~72px: phase(4) + rail(30) + deckrow(38) */
-/* Lock deck to bottom — never pushed by content above */
 .deck {
   width: 100%;
-  padding: 0 calc(var(--s6) + env(safe-area-inset-right))
-    calc(var(--s2) + env(safe-area-inset-bottom))
+  padding: 8px calc(var(--s6) + env(safe-area-inset-right))
+    calc(8px + env(safe-area-inset-bottom))
     calc(var(--s6) + env(safe-area-inset-left));
-  background: linear-gradient(180deg, #07091200, #090b16 32%);
+  background: linear-gradient(180deg, #0b0e1a, #070912);
   border-top: 1px solid var(--hair);
+  box-shadow: 0 -10px 28px #0005;
   flex-shrink: 0;
   align-self: stretch;
 }
-.deck-mobile-meta {
-  display: none;
+.deck-shell {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
 }
-/* Phase strip: 4px, flush above rail */
+.deck-transport {
+  width: 64px;
+  height: 48px;
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  background: var(--ink);
+  color: #070912;
+  font: italic 800 12px var(--cond);
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+.deck-transport svg {
+  width: 20px;
+  fill: currentColor;
+}
+.deck-transport.is-playing {
+  border-color: #ffffff38;
+  background: #ffffff0d;
+  color: var(--ink);
+}
+.deck-transport:hover:not(:disabled) {
+  border-color: var(--rb-yellow);
+}
+.deck-transport:disabled {
+  opacity: .4;
+  cursor: default;
+}
+.deck-timeline {
+  min-width: 0;
+  padding-top: 18px;
+}
 .phase {
   display: flex;
-  height: 4px;
-  margin-bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  background: #20232f;
 }
 .phase i {
   height: 100%;
 }
-.ph-g { background: #3a3a44; }
+.ph-g { background: #4a4d58; }
 .ph-r { background: var(--red); }
 .ph-s { background: var(--amber); }
 .ph-vsc { background: repeating-linear-gradient(90deg, #f5c842 0px, #f5c842 4px, transparent 4px, transparent 8px); }
-.ph-neutral { background: #1d1d24; }
+.ph-neutral { background: #20232f; }
 
-/* Rail: compact, no minor ticks */
 .rail {
   position: relative;
-  height: 30px;
+  height: 28px;
   cursor: pointer;
+  touch-action: none;
 }
 .rail .line {
   position: absolute;
   left: 0;
   right: 0;
-  top: 13px;
-  height: 4px;
-  background: #2c2c34;
-  border-radius: 2px;
+  top: 7px;
+  height: 2px;
+  background: #383b47;
 }
 .rail .played {
   position: absolute;
   left: 0;
-  top: 13px;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, #7a0a1f, var(--red));
-  box-shadow: 0 0 8px #e8002d55;
-}
-/* Lap labels at every 10 laps, below the rail */
-.lap-label {
-  position: absolute;
-  top: 18px;
-  transform: translateX(-50%);
-  font: 600 10px var(--cond);
-  color: var(--dim);
-  letter-spacing: 0.05em;
-  pointer-events: none;
-  white-space: nowrap;
+  top: 7px;
+  height: 2px;
+  background: var(--red);
 }
 .rail .cursor {
   position: absolute;
-  top: 2px;
-  width: 3px;
-  height: 24px;
+  top: 0;
+  width: 2px;
+  height: 16px;
   background: var(--red);
-  border-radius: 2px;
-  box-shadow: 0 0 6px #e8002daa;
-  transform: translateX(-1.5px);
+  box-shadow: 0 0 8px #e8002d99;
+  transform: translateX(-1px);
 }
-.rail .cursor::after {
-  content: attr(data-lap);
+.cursor-pill {
   position: absolute;
-  top: -15px;
-  left: -18px;
-  font: italic 700 11px var(--cond);
-  color: var(--red);
-  letter-spacing: 0.08em;
+  top: -19px;
+  padding: 2px 7px;
+  border: 1px solid #ffffff1f;
+  border-bottom-color: var(--red);
+  border-radius: 2px;
+  background: #111522;
+  color: var(--ink);
+  font: italic 800 11px var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .08em;
   white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
-
-.deckrow {
+.cursor-pill[data-anchor="start"] { transform: none; }
+.cursor-pill[data-anchor="end"] { transform: translateX(-100%); }
+.deck-options {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s2);
+  justify-content: flex-end;
+  gap: 12px;
+}
+.deck-speeds {
+  display: flex;
+}
+.deck-speed {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #ffffff24;
+  border-right: 0;
+  background: #ffffff06;
+  color: var(--dim);
+  font: 700 12px var(--cond);
+  cursor: pointer;
+}
+.deck-speed:first-child { border-radius: 3px 0 0 3px; }
+.deck-speed:last-child {
+  border-right: 1px solid #ffffff24;
+  border-radius: 0 3px 3px 0;
+}
+.deck-speed:hover,
+.deck-speed.on {
+  border-color: var(--red);
+  color: var(--ink);
+  background: #e8002d1a;
+}
+.deck-live-state {
+  min-height: 48px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.deck-live-state strong {
+  font: italic 800 18px var(--cond);
+  letter-spacing: .08em;
+}
+.deck-live-state small {
+  margin-left: auto;
+  color: var(--dim);
+  font: 700 10px var(--cond);
+  letter-spacing: .18em;
 }
 .b {
   font: 600 15px var(--cond);
@@ -620,22 +691,11 @@
   box-shadow: inset 0 -2px 0 var(--red);
 }
 .b.on:hover:not(:disabled) { border-color: var(--red); background: #e8002d2a; }
-.clock {
-  margin-left: auto;
-  font: italic 700 18px var(--cond);
-  font-variant-numeric: tabular-nums;
-}
-.clock small {
-  color: var(--dim);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  margin-right: 10px;
-  font-style: normal;
-}
 .sp {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 38px;
   font: 600 11px var(--cond);
   letter-spacing: 0.22em;
   color: var(--dim);
@@ -661,6 +721,20 @@
 }
 .sw.sw-on::after {
   background: var(--red);
+}
+.deck-transport:focus-visible,
+.deck-speed:focus-visible,
+.rail:focus-visible,
+.sp:focus-visible {
+  outline: 2px solid var(--rb-yellow);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail .played,
+  .rail .cursor,
+  .cursor-pill {
+    transition: none !important;
+  }
 }
 
 /* trend column width defined in .trow declaration above */

@@ -696,44 +696,58 @@
   opacity: 1;
 }
 
-/* One editorial event at a time, over the replay map like a broadcast lower-third. */
+/* One editorial event at a time, ranked by race importance. */
 .broadcast-overlay {
   --broadcast-accent: var(--red);
   position: absolute;
   z-index: 20;
-  top: 18px;
-  left: 18px;
-  width: min(460px, calc(100% - 36px));
-  padding: 12px 34px 13px 16px;
-  border: 1px solid #ffffff24;
-  border-left: 4px solid var(--broadcast-accent);
-  background: linear-gradient(110deg, #0c0f1df5 0 88%, transparent 88%);
-  filter: drop-shadow(0 12px 24px #000a);
+  top: 16px;
+  left: 16px;
+  width: min(420px, calc(100% - 32px));
+  border: 1px solid #ffffff20;
+  border-top: 2px solid var(--broadcast-accent);
+  background: #0b0f1df2;
+  box-shadow: 0 14px 34px #000a;
   pointer-events: none;
 }
 .broadcast-overlay--strategy { --broadcast-accent: var(--amber); }
 .broadcast-overlay--incident { --broadcast-accent: #ff304f; }
 .broadcast-overlay--radio { --broadcast-accent: #00d2be; }
-.broadcast-overlay__kicker,
-.broadcast-overlay small {
-  display: block;
+.broadcast-overlay__kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 25px;
+  padding: 4px 12px;
+  border-bottom: 1px solid #ffffff12;
+  background: #ffffff08;
   font: 700 10px var(--cond);
   letter-spacing: .22em;
   color: var(--broadcast-accent);
 }
+.broadcast-overlay__kicker i {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+.broadcast-overlay__body {
+  padding: 9px 14px 11px;
+}
 .broadcast-overlay strong {
   display: -webkit-box;
-  margin: 3px 0 5px;
   overflow: hidden;
   color: var(--ink);
-  font: italic 800 24px/1.05 var(--cond);
-  letter-spacing: .025em;
-  text-wrap: balance;
+  font: italic 800 21px/1.08 var(--cond);
+  letter-spacing: .02em;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 .broadcast-overlay small {
+  display: block;
+  margin-top: 6px;
   color: var(--dim);
+  font: 700 9px var(--cond);
   letter-spacing: .14em;
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -742,7 +756,7 @@
   }
 }
 @keyframes broadcast-enter {
-  from { transform: translateX(-18px); }
+  from { opacity: 0; transform: translateX(-12px); }
   to { transform: translateX(0); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -759,10 +773,29 @@
     top: 8px;
     left: 8px;
     width: calc(100% - 16px);
-    padding: 10px 26px 10px 12px;
+  }
+  .broadcast-overlay__kicker { min-height: 22px; padding: 3px 10px; }
+  .broadcast-overlay__body { padding: 7px 10px 9px; }
+  .broadcast-overlay strong {
+    font-size: 17px;
+  }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .broadcast-overlay {
+    width: min(320px, calc(100% - 16px));
+  }
+  .broadcast-overlay__kicker {
+    min-height: 20px;
+  }
+  .broadcast-overlay__body {
+    padding: 5px 10px 7px;
   }
   .broadcast-overlay strong {
-    font-size: 19px;
+    font-size: 16px;
+    -webkit-line-clamp: 1;
+  }
+  .broadcast-overlay small {
+    display: none;
   }
 }
 
@@ -856,8 +889,9 @@
 /* Declared last because the segmented center tabs are defined after the main
    responsive block above. */
 @media (max-width: 1024px) {
-  .deckrow .b,
-  .deckrow .sp,
+  .deck-transport,
+  .deck-speed,
+  .deck-options .sp,
   .catalog-open,
   .settings-group .tog,
   .ctr-tab,
@@ -874,14 +908,11 @@
   }
   .rail .line,
   .rail .played {
-    top: 20px;
+    top: 15px;
   }
   .rail .cursor {
-    top: 4px;
-    height: 36px;
-  }
-  .lap-label {
-    top: 26px;
+    top: 8px;
+    height: 16px;
   }
   .ctr-tab {
     height: 44px;
