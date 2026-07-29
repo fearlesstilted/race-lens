@@ -2,6 +2,35 @@ export type TrackPoint = [number, number]
 
 const MAX_PROGRESS_PER_TICK = 0.12
 
+function validStep(before: number, after: number): boolean {
+  return after >= before && after - before <= MAX_PROGRESS_PER_TICK
+}
+
+function smoothedProgress(frames: (number | null)[], index: number): number | null {
+  const current = frames[index]
+  const previous = frames[index - 1]
+  const next = frames[index + 1]
+  if (
+    current === undefined ||
+    current === null ||
+    previous === undefined ||
+    previous === null ||
+    next === undefined ||
+    next === null ||
+    !validStep(previous, current) ||
+    !validStep(current, next)
+  ) return current ?? null
+
+  // Spread one-second telemetry speed changes across neighbouring ticks. At
+  // 10× playback this removes the visible accelerate/brake pulse every 100 ms.
+  return (previous + 2 * current + next) / 4
+}
+
+function monotoneSlope(left: number, right: number): number {
+  if (left <= 0 || right <= 0) return 0
+  return 2 * left * right / (left + right)
+}
+
 function interpolateProgress(
   frames: (number | null)[],
   frameIndex: number,
@@ -15,12 +44,31 @@ function interpolateProgress(
   if (
     previous !== undefined &&
     previous !== null &&
-    (current < previous || current - previous > MAX_PROGRESS_PER_TICK)
+    !validStep(previous, current)
   ) return null
   const next = frames[before + 1]
   if (next === undefined || next === null) return current
-  if (next < current || next - current > MAX_PROGRESS_PER_TICK) return null
-  return current + (next - current) * (frameIndex - before)
+  if (!validStep(current, next)) return null
+
+  const p1 = smoothedProgress(frames, before) ?? current
+  const p2 = smoothedProgress(frames, before + 1) ?? next
+  const delta = p2 - p1
+  const p0 = smoothedProgress(frames, before - 1)
+  const p3 = smoothedProgress(frames, before + 2)
+  const leftDelta = p0 !== null && validStep(p0, p1) ? p1 - p0 : delta
+  const rightDelta = p3 !== null && validStep(p2, p3) ? p3 - p2 : delta
+  const m1 = monotoneSlope(leftDelta, delta)
+  const m2 = monotoneSlope(delta, rightDelta)
+  const t = frameIndex - before
+  const t2 = t * t
+  const t3 = t2 * t
+
+  return (
+    (2 * t3 - 3 * t2 + 1) * p1 +
+    (t3 - 2 * t2 + t) * m1 +
+    (-2 * t3 + 3 * t2) * p2 +
+    (t3 - t2) * m2
+  )
 }
 
 export function progressPathPosition(
