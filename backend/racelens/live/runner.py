@@ -14,6 +14,8 @@ from typing import Any, Callable
 from racelens.events.models import Event
 from racelens.replay.engine import ReplayEngine
 
+_ACTIVE_SESSION_STATUSES = {"started", "safety_car", "vsc"}
+
 
 class LiveRunner:
     """Polls *fetch_events* on a fixed interval and keeps a live ReplayEngine.
@@ -110,7 +112,7 @@ class LiveRunner:
         if self.engine is not None and self.engine.events:
             for event in reversed(self.engine.events):
                 if event.type == "SessionStatusChanged":
-                    session_running = event.payload.get("status") == "started"
+                    session_running = event.payload.get("status") in _ACTIVE_SESSION_STATUSES
                     break
                 if event.type == "SessionStarted":
                     session_running = True

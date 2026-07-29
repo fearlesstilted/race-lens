@@ -540,6 +540,362 @@
   flex-shrink: 0;
 }
 
+/* ── Battle Intelligence: honest D synthesis ───────────────────── */
+.battle-intelligence {
+  flex: 1.45 1 0;
+  min-height: 380px;
+  padding: 14px;
+  overflow: auto;
+  border-bottom: 1px solid var(--hair);
+  background:
+    linear-gradient(#ffffff06 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff06 1px, transparent 1px),
+    radial-gradient(circle at 78% 0%, #1b264f55, transparent 34%),
+    #090c15;
+  background-size: 48px 48px, 48px 48px, auto, auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 transparent;
+}
+.bi-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+.bi-heading small,
+.bi-heading > span {
+  color: var(--dim);
+  font: 700 9px var(--cond);
+  letter-spacing: .16em;
+}
+.bi-heading h1 {
+  margin: 3px 0 0;
+  font: italic 900 clamp(25px, 2.3vw, 38px)/.9 var(--cond);
+  letter-spacing: -.02em;
+}
+.bi-heading > span {
+  color: var(--amber);
+  text-align: right;
+}
+.bi-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 9px;
+}
+.bi-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #ffffff18;
+  border-radius: 5px;
+  background: linear-gradient(145deg, #171c2af2, #0c0f1af2);
+  box-shadow: 0 8px 24px #0004;
+}
+.bi-formation {
+  grid-column: 1 / -1;
+  min-height: 290px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 28px;
+  border: 1px solid #ffffff18;
+  background:
+    linear-gradient(115deg, #171c2af2, #0c0f1af2),
+    #0c0f1a;
+  text-align: center;
+}
+.bi-formation small {
+  color: #39c463;
+  font: 700 9px var(--cond);
+  letter-spacing: .2em;
+}
+.bi-formation strong {
+  margin-top: 8px;
+  font: italic 900 clamp(34px, 5vw, 68px)/.9 var(--cond);
+  letter-spacing: -.02em;
+}
+.bi-formation p {
+  max-width: 440px;
+  margin-top: 12px;
+  color: var(--dim);
+  font: 600 12px/1.5 var(--body);
+}
+.bi-flow { grid-column: span 7; }
+.bi-state { grid-column: span 5; }
+.bi-battles { grid-column: span 5; }
+.bi-pace { grid-column: span 7; }
+.bi-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 16px;
+  margin-bottom: 9px;
+}
+.bi-card-head b,
+.bi-card-head span {
+  font: 700 8px var(--cond);
+  letter-spacing: .16em;
+}
+.bi-card-head b { color: var(--dim); }
+.bi-card-head span { color: #39c463; text-align: right; }
+.bi-flow-list {
+  display: flex;
+  flex-direction: column;
+}
+.bi-driver {
+  width: 100%;
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 34px 5px 42px minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid #ffffff18;
+  border-radius: 3px;
+  background: #ffffff05;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.bi-driver:hover,
+.bi-driver:focus-visible,
+.bi-battle-row:hover,
+.bi-battle-row:focus-visible,
+.bi-pace-chart button:hover,
+.bi-pace-chart button:focus-visible {
+  border-color: #ffffff44;
+  background-color: #ffffff0b;
+  outline: none;
+}
+.bi-driver > i {
+  align-self: stretch;
+}
+.bi-rank {
+  color: var(--dim);
+  font: 800 14px var(--cond);
+}
+.bi-driver > strong {
+  font: italic 900 19px var(--cond);
+}
+.bi-driver-meta {
+  min-width: 0;
+}
+.bi-driver-meta b,
+.bi-driver-meta small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bi-driver-meta b {
+  font: 700 10px var(--cond);
+  text-transform: capitalize;
+}
+.bi-driver-meta small {
+  margin-top: 2px;
+  color: var(--dim);
+  font: 600 8px var(--cond);
+}
+.bi-driver-gap {
+  font: 800 11px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.bi-gap-link {
+  height: 15px;
+  display: flex;
+  align-items: center;
+  padding-left: 51px;
+  color: var(--dim);
+  font: 700 8px var(--cond);
+  font-variant-numeric: tabular-nums;
+}
+.bi-gap-link::before {
+  content: '';
+  width: 1px;
+  height: 100%;
+  margin-right: 7px;
+  background: #ffffff24;
+}
+.bi-gap-link.hot {
+  color: var(--amber);
+}
+.bi-gap-link.hot::before {
+  background: var(--amber);
+}
+.bi-lap {
+  margin-top: 4px;
+  font: italic 900 clamp(35px, 3vw, 48px)/.85 var(--cond);
+}
+.bi-lap small {
+  color: var(--dim);
+  font-size: 15px;
+}
+.bi-state-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 15px;
+}
+.bi-state-grid div {
+  min-width: 0;
+  padding-top: 7px;
+  border-top: 1px solid #ffffff18;
+}
+.bi-state-grid span,
+.bi-state-grid strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bi-state-grid span {
+  color: var(--dim);
+  font: 600 7px var(--cond);
+  letter-spacing: .12em;
+}
+.bi-state-grid strong {
+  margin-top: 3px;
+  font: 800 11px var(--cond);
+}
+.bi-battle-list {
+  display: grid;
+}
+.bi-battle-row {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 28px 64px minmax(40px, 1fr) 42px;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid #ffffff16;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.bi-battle-row:first-child { border-top: 0; }
+.bi-battle-row > span,
+.bi-battle-row > strong {
+  font: 700 10px var(--cond);
+}
+.bi-battle-row > i {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #ffffff12;
+}
+.bi-battle-row > i > b {
+  display: block;
+  height: 100%;
+  background: #31d7f2;
+}
+.bi-battle-row em {
+  font: normal 700 9px var(--cond);
+  text-align: right;
+}
+.bi-pace-chart {
+  height: 96px;
+  display: flex;
+  align-items: end;
+  gap: 5px;
+  padding-top: 7px;
+}
+.bi-pace-chart button {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  padding: 0 0 15px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.bi-pace-chart button i {
+  position: absolute;
+  right: 0;
+  bottom: 15px;
+  left: 0;
+  height: var(--pace-height);
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(var(--team), color-mix(in srgb, var(--team), transparent 70%));
+}
+.bi-pace-chart button span {
+  position: absolute;
+  inset: auto 0 0;
+  font: 700 8px var(--cond);
+  text-align: center;
+}
+.bi-empty {
+  padding: 18px 4px;
+  color: var(--dim);
+  font: 600 10px var(--cond);
+}
+
+.layout-presets .tog {
+  flex: 1;
+}
+.layout-options {
+  margin-top: 8px;
+  border: 1px solid var(--hair);
+}
+.layout-options .layer-row {
+  width: 100%;
+}
+.layout-help {
+  display: block;
+  margin-top: 8px;
+  color: var(--dim);
+  font: 600 9px/1.4 var(--cond);
+  letter-spacing: .08em;
+}
+
+@media (max-width: 1439px) {
+  .battle-intelligence {
+    min-height: 340px;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .battle-intelligence {
+    flex: 0 0 38vh;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (max-height: 500px) {
+  .wrap[data-mob-tab="MAP"] .battle-intelligence {
+    display: block;
+    flex: 0 0 42dvh;
+    min-height: 270px;
+    padding: 10px;
+  }
+  .bi-heading {
+    align-items: start;
+    margin-bottom: 8px;
+  }
+  .bi-heading h1 {
+    font-size: 26px;
+  }
+  .bi-heading > span {
+    max-width: 100px;
+    font-size: 7px;
+  }
+  .bi-grid {
+    display: block;
+  }
+  .bi-card {
+    margin-bottom: 8px;
+  }
+  .bi-battles,
+  .bi-pace {
+    display: none;
+  }
+}
+
 /* ── Win Probability Graph ──────────────────────────────────────── */
 .win-prob-graph {
   position: relative;

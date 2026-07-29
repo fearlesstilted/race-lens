@@ -151,11 +151,7 @@ export type FeedResponse = {
   items: FeedItem[]
 }
 
-export type Battle = {
-  leader_id: string
-  chaser_id: string
-  gap_s: number
-}
+export type Battle = Insight
 
 export type BattlesResponse = {
   battles: Battle[]

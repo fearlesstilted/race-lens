@@ -161,6 +161,39 @@ def test_stalled():
     assert runner.status()["data_quality"] == "stalled"
 
 
+@pytest.mark.parametrize("status", ["started", "safety_car", "vsc"])
+def test_active_session_without_updates_becomes_stalled(status, monkeypatch):
+    import racelens.live.runner as runner_mod
+
+    now = [100.0]
+    monkeypatch.setattr(runner_mod.time, "time", lambda: now[0])
+    events = [
+        event(SID, "SessionStarted", 0),
+        event(SID, "SessionStatusChanged", 1_000, status=status),
+    ]
+    runner = LiveRunner(lambda: events, poll_interval_s=6.0)
+    runner._poll_once()
+    now[0] += 60
+
+    assert runner.status()["data_quality"] == "stalled"
+
+
+def test_red_flag_without_updates_is_not_reported_as_stalled(monkeypatch):
+    import racelens.live.runner as runner_mod
+
+    now = [100.0]
+    monkeypatch.setattr(runner_mod.time, "time", lambda: now[0])
+    events = [
+        event(SID, "SessionStarted", 0),
+        event(SID, "SessionStatusChanged", 1_000, status="red_flag"),
+    ]
+    runner = LiveRunner(lambda: events, poll_interval_s=6.0)
+    runner._poll_once()
+    now[0] += 60
+
+    assert runner.status()["data_quality"] == "good"
+
+
 def test_status_fields_present():
     """status() must contain all documented keys."""
     runner = LiveRunner(lambda: mini_race(), poll_interval_s=5.0)

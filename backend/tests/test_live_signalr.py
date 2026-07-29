@@ -52,6 +52,23 @@ def test_capture_supervises_subprocess(tmp_path):
     assert not cap.alive
 
 
+def test_capture_restart_appends_to_existing_recording(tmp_path, monkeypatch):
+    command = []
+
+    class Process:
+        def poll(self):
+            return None
+
+    def popen(args, **_kwargs):
+        command.extend(args)
+        return Process()
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    SignalRCapture(tmp_path / "feed.txt").start()
+
+    assert "--append" in command
+
+
 def test_fetch_returns_empty_while_feed_missing(tmp_path):
     """No file / empty file → [] (capture still connecting), not an exception."""
     feed = tmp_path / "feed.txt"

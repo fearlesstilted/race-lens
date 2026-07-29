@@ -185,6 +185,19 @@ export function TopBar({ session, sessionId, sessions, lap, totalLaps, lang, lev
                   <span className="layer-name">VOICE</span>
                   <span className="layer-state">{voice ? 'ON' : 'OFF'}</span>
                 </button>
+                {onSettingsOpen && (
+                  <button
+                    type="button"
+                    className="layer-row layer-toggle"
+                    onClick={() => {
+                      setLayersOpen(false)
+                      onSettingsOpen()
+                    }}
+                  >
+                    <span className="layer-name">CUSTOMIZE DESK</span>
+                    <span className="layer-state">→</span>
+                  </button>
+                )}
               </div>
             </>
           )}

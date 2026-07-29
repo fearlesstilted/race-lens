@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
-import type { Lang, Level } from './replayTypes'
+import { DASHBOARD_PRESETS } from './replayTypes'
+import type { DashboardLayout, Lang, Level } from './replayTypes'
 
 type Props = {
   open: boolean
@@ -12,11 +13,13 @@ type Props = {
   liveAvailable: boolean
   projection: boolean
   winProb: boolean
+  dashboardLayout: DashboardLayout
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onModeChange: (mode: 'replay' | 'live') => void
   onProjection: (value: boolean) => void
   onWinProb: (value: boolean) => void
+  onDashboardLayout: (value: DashboardLayout) => void
   sessionId?: string | null
   onSeek?: (ms: number) => void
   sessionStatus?: string
@@ -27,7 +30,8 @@ type Props = {
 
 export function SettingsDrawer({
   open, onClose, lang, level, mode, liveAvailable, projection, winProb,
-  onLang, onLevel, onModeChange, onProjection, onWinProb,
+  dashboardLayout, onLang, onLevel, onModeChange, onProjection, onWinProb,
+  onDashboardLayout,
   sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -103,6 +107,55 @@ export function SettingsDrawer({
           <div className="tog-group">
             <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>GAP SCORE</button>
           </div>
+        </div>
+
+        <div className="settings-group">
+          <div className="settings-group-label">DESKTOP WORKSPACE</div>
+          <div className="tog-group layout-presets">
+            {Object.entries(DASHBOARD_PRESETS).map(([name, preset]) => {
+              const active = Object.entries(preset).every(
+                ([key, value]) => dashboardLayout[key as keyof DashboardLayout] === value,
+              )
+              return (
+                <button
+                  type="button"
+                  key={name}
+                  className={`tog${active ? ' tog-on' : ''}`}
+                  onClick={() => onDashboardLayout({ ...preset })}
+                >
+                  {name.toUpperCase()}
+                </button>
+              )
+            })}
+          </div>
+          <div className="layout-options">
+            <button
+              type="button"
+              className={`layer-row layer-toggle${dashboardLayout.center === 'battles' ? ' on' : ''}`}
+              onClick={() => onDashboardLayout({
+                ...dashboardLayout,
+                center: dashboardLayout.center === 'battles' ? 'track' : 'battles',
+              })}
+            >
+              <span className="layer-name">CENTER</span>
+              <span className="layer-state">{dashboardLayout.center === 'battles' ? 'BATTLES' : 'TRACK'}</span>
+            </button>
+            {(['timing', 'insights', 'feed'] as const).map((panel) => (
+              <button
+                type="button"
+                key={panel}
+                className={`layer-row layer-toggle${dashboardLayout[panel] ? ' on' : ''}`}
+                onClick={() => onDashboardLayout({
+                  ...dashboardLayout,
+                  [panel]: !dashboardLayout[panel],
+                })}
+              >
+                <span className="layer-name">{panel.toUpperCase()}</span>
+                <span className="layer-state">{dashboardLayout[panel] ? 'ON' : 'OFF'}</span>
+              </button>
+            ))}
+          </div>
+          <small className="layout-help">Docked panels stay readable; mobile keeps its tab layout.</small>
         </div>
 
         {mode === 'replay' && sessionId && onSeek && (
