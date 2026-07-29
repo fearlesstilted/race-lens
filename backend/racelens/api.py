@@ -305,6 +305,31 @@ def _positions_data(session_id: str) -> dict | None:
     return _positions_data_cached(session_id, str(fixtures_dir), mtime)
 
 
+def _positions_window(pos: dict, at_ms: int) -> dict:
+    """Return 30 seconds behind and 120 seconds ahead of the requested frame."""
+    tick_ms = max(1, int(pos.get("tick_ms") or 500))
+    start_ms = int(pos.get("start_ms") or 0)
+    drivers = pos.get("drivers") or {}
+    frame_count = max((len(frames) for frames in drivers.values()), default=0)
+    first = min(frame_count, max(0, (at_ms - 30_000 - start_ms) // tick_ms))
+    last = min(frame_count, max(first, (at_ms + 120_000 - start_ms) // tick_ms + 1))
+    result = {
+        key: pos[key]
+        for key in ("session_id", "tick_ms", "viewbox")
+        if key in pos
+    }
+    result["start_ms"] = start_ms + first * tick_ms
+    result["drivers"] = {
+        driver: frames[first:last] for driver, frames in drivers.items()
+    }
+    progress = pos.get("progress")
+    if isinstance(progress, dict):
+        result["progress"] = {
+            driver: frames[first:last] for driver, frames in progress.items()
+        }
+    return result
+
+
 def _attach_frame(state: dict, session_id: str | None = None) -> dict:
     """Merge per-tick track telemetry into the driver frame in place.
 
@@ -954,7 +979,10 @@ def track(session_id: str) -> dict:
 
 
 @app.get("/api/sessions/{session_id}/positions")
-def positions(session_id: str) -> FileResponse:
+def positions(
+    session_id: str,
+    at_ms: Optional[int] = Query(default=None, ge=0),
+) -> Any:
     """Return resampled car positions from Rust race-core pipeline.
 
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
@@ -963,6 +991,11 @@ def positions(session_id: str) -> FileResponse:
     path = _fixture_root(session_id, ".positions.json") / f"{session_id}.positions.json"
     if not path.is_file():
         raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
+    if at_ms is not None:
+        pos = _positions_data(session_id)
+        if pos is None:
+            raise HTTPException(404, f"positions data for '{session_id}' not found")
+        return _positions_window(pos, at_ms)
     return FileResponse(path, media_type="application/json")
 
 

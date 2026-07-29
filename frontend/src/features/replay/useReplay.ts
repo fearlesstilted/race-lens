@@ -82,6 +82,8 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const [markers, setMarkers] = useState<RaceMarker[]>([])
   const scrubTimeoutRef = useRef<number | null>(null)
   const languageRequestSeq = useRef(0)
+  const positionsRequestSeq = useRef(0)
+  const positionsLoadingRef = useRef(false)
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setRecentPasses, setFeed, setCommentary,
@@ -107,9 +109,26 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
   const { greenFlag, greenFlagText } = useGreenFlag(atMs, markers, timeline?.lights_out_ms ?? 0)
 
+  const loadPositionsWindow = useCallback((sid: string, centerMs: number) => {
+    if (positionsLoadingRef.current) return
+    positionsLoadingRef.current = true
+    const seq = ++positionsRequestSeq.current
+    fetch(`/api/sessions/${encodeURIComponent(sid)}/positions?at_ms=${Math.max(0, Math.round(centerMs))}`)
+      .then((response) => response.ok ? response.json() as Promise<PositionsData> : null)
+      .then((data) => {
+        if (seq === positionsRequestSeq.current) setPositionsData(data)
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (seq === positionsRequestSeq.current) positionsLoadingRef.current = false
+      })
+  }, [])
+
   // Source change: reset everything, then load appropriately
   useEffect(() => {
     languageRequestSeq.current++
+    positionsRequestSeq.current++
+    positionsLoadingRef.current = false
     if (scrubTimeoutRef.current !== null) {
       window.clearTimeout(scrubTimeoutRef.current)
       scrubTimeoutRef.current = null
@@ -145,18 +164,13 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       .then((r) => { if (!cancelled) setMarkers(r.markers) })
       .catch(() => { if (!cancelled) setMarkers([]) })
 
-    // Fetch positions telemetry (non-critical, best-effort)
-    fetch(`/api/sessions/${encodeURIComponent(sid)}/positions`)
-      .then((r) => r.ok ? r.json() as Promise<PositionsData> : null)
-      .then((d) => { if (!cancelled) setPositionsData(d) })
-      .catch(() => { if (!cancelled) setPositionsData(null) })
-
     setLoading(true)
     getTimeline(sid)
       .then((nextTimeline) => {
         if (cancelled) return undefined
         setTimeline(nextTimeline)
         setAtMs(nextTimeline.start_ms)
+        loadPositionsWindow(sid, nextTimeline.start_ms)
         return loadSnapshot(nextTimeline.start_ms, lang, level)
       })
       .catch((err: unknown) => {
@@ -178,6 +192,21 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     // lang/level intentionally NOT in deps — session change resets; lang/level trigger own effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.kind, sessionId])
+
+  // Refresh the small telemetry window before playback reaches its end, or
+  // immediately after a scrub outside the current window.
+  useEffect(() => {
+    if (!sessionId || !positionsData || positionsData.session_id !== sessionId) return
+    const frameCount = Math.max(
+      0,
+      ...Object.values(positionsData.drivers).map((frames) => frames.length),
+    )
+    if (frameCount === 0) return
+    const windowEndMs = positionsData.start_ms + (frameCount - 1) * positionsData.tick_ms
+    if (atMs < positionsData.start_ms || atMs >= windowEndMs - 30_000) {
+      loadPositionsWindow(sessionId, atMs)
+    }
+  }, [atMs, loadPositionsWindow, positionsData, sessionId])
 
   // Re-fetch feed + commentary when lang/level change (without resetting position).
   useEffect(() => {

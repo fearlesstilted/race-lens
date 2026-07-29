@@ -246,12 +246,16 @@ def test_positions_endpoint(tmp_path, monkeypatch):
     import json as _json
     import racelens.api as api
 
+    frames = [[float(index), float(index + 1)] for index in range(600)]
+    frames[1] = None
+    progress = [index / 100 for index in range(600)]
     pos_data = {
         "session_id": "2024_mini_race",
         "start_ms": 0,
         "tick_ms": 500,
         "viewbox": [600, 400],
-        "drivers": {"LEC": [[100.0, 200.0], None, [110.0, 205.0]]},
+        "drivers": {"LEC": frames},
+        "progress": {"LEC": progress},
     }
     (tmp_path / "2024_mini_race.jsonl").write_text(
         dump_jsonl(mini_race()), encoding="utf-8"
@@ -267,7 +271,16 @@ def test_positions_endpoint(tmp_path, monkeypatch):
     body = r.json()
     assert body["tick_ms"] == 500
     assert "LEC" in body["drivers"]
-    assert body["drivers"]["LEC"][1] is None  # null frame preserved
+    assert len(body["drivers"]["LEC"]) == 600
+    assert body["drivers"]["LEC"][1] is None
+
+    window = c.get(
+        "/api/sessions/2024_mini_race/positions", params={"at_ms": 100_000}
+    ).json()
+    assert window["start_ms"] == 70_000
+    assert len(window["drivers"]["LEC"]) == 301
+    assert window["drivers"]["LEC"][0] == frames[140]
+    assert window["progress"]["LEC"][-1] == progress[440]
 
     assert c.get("/api/sessions/nope/positions").status_code == 404
 
