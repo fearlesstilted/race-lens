@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import json
-
-import pandas as pd
+import sys
+from types import SimpleNamespace
 
 
 def test_progress_path_is_indexed_by_relative_distance():
@@ -48,17 +48,22 @@ def test_detect_launch_ms_uses_session_clock(monkeypatch):
 def test_raw_positions_skip_non_finite_coordinates(tmp_path, monkeypatch):
     from racelens.positions import launch, track
 
-    session_zero = pd.Timestamp("2026-07-28T12:00:00")
+    session_zero = datetime(2026, 7, 28, 12)
+
+    class Rows(list):
+        def itertuples(self):
+            return iter(self)
 
     class Session:
         date = session_zero
-        session_start_time = pd.Timedelta(0)
+        session_start_time = timedelta(0)
         pos_data = {
-            "1": pd.DataFrame({
-                "Date": [session_zero + pd.Timedelta(seconds=i) for i in range(4)],
-                "X": [1.0, float("nan"), float("inf"), 3.0],
-                "Y": [2.0, 2.0, 2.0, float("-inf")],
-            }),
+            "1": Rows([
+                SimpleNamespace(Date=session_zero, X=1.0, Y=2.0),
+                SimpleNamespace(Date=session_zero + timedelta(seconds=1), X=float("nan"), Y=2.0),
+                SimpleNamespace(Date=session_zero + timedelta(seconds=2), X=float("inf"), Y=2.0),
+                SimpleNamespace(Date=session_zero + timedelta(seconds=3), X=3.0, Y=float("-inf")),
+            ]),
         }
 
         @staticmethod
@@ -67,6 +72,11 @@ def test_raw_positions_skip_non_finite_coordinates(tmp_path, monkeypatch):
 
     monkeypatch.setattr(track, "_load_session", lambda *_: Session())
     monkeypatch.setattr(launch, "detect_launch_ms", lambda _: 0)
+    monkeypatch.setitem(
+        sys.modules,
+        "pandas",
+        SimpleNamespace(Timestamp=lambda value: value, Timedelta=lambda value: value),
+    )
     output = tmp_path / "positions.jsonl"
 
     assert track.export_raw_positions(2026, "Test", "R", output) == 1
