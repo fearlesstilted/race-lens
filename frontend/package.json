@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:ui": "node scripts/check-broadcast-overlay.ts",
     "check:track": "node scripts/check-track-interpolation.ts",
     "lint": "eslint src",
     "preview": "vite preview"

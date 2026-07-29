@@ -286,83 +286,84 @@
     display: none;
   }
 
-  /* Mobile replay is a full-width control panel, not a tiny desktop footer. */
+  /* Mobile replay keeps transport, position and options as three clear zones. */
   .deck {
-    width: 100%;
     padding: 8px calc(var(--s4) + env(safe-area-inset-right))
       calc(10px + env(safe-area-inset-bottom))
       calc(var(--s4) + env(safe-area-inset-left));
-    background: #09090f;
     box-shadow: 0 -12px 30px #0008;
-    align-self: stretch;
   }
-  .deck-mobile-meta {
+  .deck-shell {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+  .deck-transport {
+    width: 52px;
+    height: 52px;
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding-bottom: 7px;
-    color: var(--dim);
-    font: 700 11px var(--cond);
-    letter-spacing: 0.18em;
-  }
-  .deck-mobile-meta strong {
-    color: var(--ink);
-    font: italic 800 17px var(--cond);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.06em;
-  }
-  .deck .phase {
-    height: 6px;
-  }
-  .deck .rail {
-    height: 44px;
-  }
-  .deck .rail .line,
-  .deck .rail .played {
-    top: 15px;
-    height: 6px;
-  }
-  .deck .rail .cursor {
-    top: 4px;
-    height: 28px;
-  }
-  .deck .rail .cursor::after {
-    display: none;
-  }
-  .deck .lap-label {
-    top: 26px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    padding: 3px;
     font-size: 10px;
   }
-  .deck .rail-marker {
-    top: 3px;
-    height: 30px;
+  .deck-transport svg {
+    width: 18px;
+  }
+  .deck-timeline {
+    padding-top: 18px;
+  }
+  .deck-timeline .rail {
+    height: 44px;
+  }
+  .deck-timeline .rail .line,
+  .deck-timeline .rail .played {
+    top: 15px;
+    height: 2px;
+  }
+  .deck-timeline .rail .cursor {
+    top: 8px;
+    height: 16px;
+  }
+  .cursor-pill {
+    top: -19px;
+    max-width: min(190px, 80vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+  }
+  .deck-options {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    gap: 8px;
   }
   .b {
     padding: 0 var(--s3);
     height: 44px;  /* touch-friendly on mobile */
   }
-  .deckrow {
-    flex-wrap: nowrap;
-    gap: var(--s1);
-    margin-top: 0;
+  .deck-speed {
+    width: 44px;
+    height: 44px;
   }
-  .deckrow .b {
-    padding: 0 8px;
-    letter-spacing: 0.08em;
-  }
-  .deckrow .sp {
-    min-width: 72px;
+  .deck-options .sp {
     min-height: 44px;
-    margin-left: auto;
     justify-content: center;
     gap: 5px;
-    font-size: 8px;
-    letter-spacing: 0.08em;
+    font-size: 9px;
+    letter-spacing: 0.1em;
   }
-  .deckrow .sw {
+  .deck-options .sw {
     width: 24px;
   }
-  .deckrow .clock {
+  .deck-live-state {
+    min-height: 52px;
+    align-items: center;
+    gap: 8px;
+  }
+  .deck-live-state strong {
+    font-size: 16px;
+  }
+  .deck-live-state small {
     display: none;
   }
   .settings-close {
@@ -420,24 +421,15 @@
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
-  .deck {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+  .deck-shell {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
     gap: 8px;
   }
-  .deck .phase {
+  .deck-options {
+    grid-column: 3;
+  }
+  .deck-options .sp {
     display: none;
-  }
-  .deck .rail,
-  .deck .deckrow {
-    grid-row: 1;
-  }
-  .deck .rail {
-    grid-column: 1;
-  }
-  .deck .deckrow {
-    grid-column: 2;
   }
 }
 
