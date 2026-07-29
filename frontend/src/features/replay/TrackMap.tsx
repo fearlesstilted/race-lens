@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { TrackData } from '../../api/client'
 import { getTrack } from '../../api/client'
 import type { Battle, DriverState, RecentPass } from '../../api/types'
+import { battlePair } from '../../lib/battles'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
 import { teamColor } from './teamColors'
@@ -326,7 +327,7 @@ export const TrackMap = React.memo(function TrackMap({
             const isDimmed = hasFocus && !isSelected
             const r = isSelected ? 9 : 7
             const showLabel = isSelected || isTop3
-            const inBattle = battles.some(b => b.chaser_id === driverId || b.leader_id === driverId)
+            const inBattle = battles.some((battle) => battlePair(battle)?.includes(driverId))
             const isFlashing = flashingIds.has(driverId)
             return (
               <g
@@ -394,7 +395,7 @@ export const TrackMap = React.memo(function TrackMap({
         })}
       </svg>
 
-      <span className="note">{positionsData ? 'LIVE TELEMETRY' : 'SCHEMATIC · INTERPOLATED'}</span>
+      <span className="note">{positionsData ? 'RECORDED TELEMETRY' : 'SCHEMATIC · INTERPOLATED'}</span>
     </div>
   )
 })

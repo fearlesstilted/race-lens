@@ -5,6 +5,7 @@ import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
 import type { SessionSummary } from './api/types'
 import { LiveLobby } from './features/replay/LiveLobby'
+import { BattleIntelligence } from './features/replay/BattleIntelligence'
 import { BroadcastOverlay } from './features/replay/BroadcastOverlay'
 import { ForecastStrip } from './features/replay/ForecastStrip'
 import { StintTimeline } from './features/replay/StintTimeline'
@@ -20,6 +21,8 @@ import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
+import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
+import type { DashboardLayout } from './features/replay/replayTypes'
 import { useReplay } from './features/replay/useReplay'
 import { livePresentation } from './lib/liveStatus'
 import './style.css'
@@ -92,6 +95,7 @@ function App() {
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
@@ -106,6 +110,10 @@ function App() {
   const [signalrAvailable, setSignalrAvailable] = useState(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
+  const handleDashboardLayout = useCallback((layout: DashboardLayout) => {
+    setDashboardLayout(layout)
+    writeDashboardLayout(layout)
+  }, [])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -322,11 +330,13 @@ function App() {
         liveAvailable={liveAvailable}
         projection={projection}
         winProb={winProb}
+        dashboardLayout={dashboardLayout}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
         onProjection={setProjection}
         onWinProb={setWinProb}
+        onDashboardLayout={handleDashboardLayout}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         sessionStatus={sessionStatus}
@@ -436,12 +446,18 @@ function App() {
                   type="button"
                   className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
                   onClick={() => setMobTab(tab)}
-                >{tab}</button>
+                >{tab === 'MAP' ? 'RACE' : tab}</button>
               ))}
             </div>
           </div>
 
-          <div className="wrap" data-mob-tab={mobTab}>
+          <div
+            className="wrap"
+            data-mob-tab={mobTab}
+            data-show-timing={dashboardLayout.timing}
+            data-show-insights={dashboardLayout.insights}
+            data-show-feed={dashboardLayout.feed}
+          >
             <TimingTower
               rows={rows}
               battles={replay.battles}
@@ -460,22 +476,33 @@ function App() {
                   feed={replay.feed}
                 />
               )}
-              <TrackMap
-                key={mode === 'replay' ? sessionId ?? 'replay' : state?.session_id ?? 'live'}
-                sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
-                atMs={replay.atMs}
-                playing={replay.playing}
-                playbackSpeed={replay.speed}
-                drivers={state?.drivers ?? {}}
-                classification={state?.classification ?? []}
-                sessionStatus={sessionStatus}
-                neutralizationStartMs={replay.neutralizationStartMs}
-                selectedIds={selectedIds}
-                positionsData={effectivePositionsData}
-                battles={replay.battles}
-                recentPasses={replay.recentPasses}
-              />
-              {/* Center always keeps map + tabs — selecting drivers must never hide
+              {dashboardLayout.center === 'battles' ? (
+                <BattleIntelligence
+                  rows={rows}
+                  battles={replay.battles}
+                  currentLap={currentLap}
+                  totalLaps={state?.total_laps ?? null}
+                  sessionStatus={sessionStatus}
+                  onSelectDriver={handleSelectDriver}
+                />
+              ) : (
+                <TrackMap
+                  key={mode === 'replay' ? sessionId ?? 'replay' : state?.session_id ?? 'live'}
+                  sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
+                  atMs={replay.atMs}
+                  playing={replay.playing}
+                  playbackSpeed={replay.speed}
+                  drivers={state?.drivers ?? {}}
+                  classification={state?.classification ?? []}
+                  sessionStatus={sessionStatus}
+                  neutralizationStartMs={replay.neutralizationStartMs}
+                  selectedIds={selectedIds}
+                  positionsData={effectivePositionsData}
+                  battles={replay.battles}
+                  recentPasses={replay.recentPasses}
+                />
+              )}
+              {/* Center always keeps the race view + tabs — selecting drivers must never hide
                   forecast/win%. Driver focus moves to the right column instead. */}
               <div className="ctr-bottom">
                 <CenterTabs

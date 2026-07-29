@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Battle, DriverState } from '../../api/types'
+import { battlePair } from '../../lib/battles'
+import { formatLapTime } from '../../lib/format'
 import { teamColor } from './teamColors'
 
 type DriverRow = { id: string } & DriverState
@@ -9,14 +11,6 @@ type Props = {
   battles: Battle[]
   selectedIds: string[]
   onSelectDriver: (id: string) => void
-}
-
-function fmtLastLap(ms: number | null): string {
-  if (ms === null || ms <= 0) return '—'
-  const m = Math.floor(ms / 60000)
-  const s = Math.floor((ms % 60000) / 1000)
-  const millis = Math.floor(ms % 1000)
-  return `${m}:${String(s).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
 }
 
 /** Gained/lost since start: grid_position (baseline) vs current position (rank).
@@ -59,8 +53,11 @@ export const TimingTower = React.memo(function TimingTower({
   const battleSet = useMemo(() => {
     const s = new Set<string>()
     for (const b of battles) {
-      s.add(b.leader_id)
-      s.add(b.chaser_id)
+      const pair = battlePair(b)
+      if (pair) {
+        s.add(pair[0])
+        s.add(pair[1])
+      }
     }
     return s
   }, [battles])
@@ -319,7 +316,7 @@ export const TimingTower = React.memo(function TimingTower({
             </span>
             <span className="last-lap last-swap">
               <span className={`swap-layer${deltaPeek ? ' swap-hidden' : ''}`}>
-                {isRetired ? '—' : fmtLastLap(row.last_lap_ms)}
+                {isRetired ? '—' : formatLapTime(row.last_lap_ms)}
                 {hasFastestLap && !isRetired && <span className="fl-dot" title="Fastest lap">●</span>}
               </span>
               <span

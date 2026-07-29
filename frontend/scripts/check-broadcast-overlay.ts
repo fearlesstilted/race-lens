@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { selectBroadcastCandidate } from '../src/lib/broadcastOverlay.ts'
+import { battleGap, battlePair } from '../src/lib/battles.ts'
 import { livePresentation } from '../src/lib/liveStatus.ts'
 import { clusterMarkers } from '../src/lib/timelineMarkers.ts'
 
@@ -50,5 +51,8 @@ const distantMarker = { ...incident, at_ms: 91_000 }
 const pct = (marker: typeof incident) => marker.at_ms / 100_000
 assert.equal(clusterMarkers([incident, closeMarker], pct).length, 1)
 assert.equal(clusterMarkers([incident, distantMarker], pct).length, 2)
+const battle = { driver_ids: ['NOR', 'PIA'], evidence: { interval_s: 0.91 } }
+assert.deepEqual(battlePair(battle), ['NOR', 'PIA'])
+assert.equal(battleGap(battle), 0.91)
 
 console.log('replay/live UI checks passed')
