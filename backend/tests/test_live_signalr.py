@@ -1,4 +1,5 @@
 """SignalR live-source wiring: capture supervision + fetch guard + endpoint."""
+import json
 import subprocess
 import sys
 import time
@@ -10,6 +11,23 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from racelens.events.models import event  # noqa: E402
 from racelens.live.signalr import SignalRCapture, make_signalr_fetch  # noqa: E402
+
+
+def _session_info(event="British Grand Prix", location="Silverstone", status="Started"):
+    payload = {
+        "Meeting": {
+            "Key": 1,
+            "Name": event,
+            "Location": location,
+            "Country": {"Name": "Great Britain"},
+            "Circuit": {"ShortName": location},
+        },
+        "Key": 2,
+        "Name": "Race",
+        "StartDate": "2026-07-19T15:00:00",
+        "SessionStatus": status,
+    }
+    return repr(["SessionInfo", json.dumps(payload), ""])
 
 
 class SleeperCapture(SignalRCapture):
@@ -47,7 +65,7 @@ def test_fetch_reuses_unchanged_snapshot(tmp_path, monkeypatch):
     from racelens.adapters import f1live_adapter
 
     feed = tmp_path / "feed.txt"
-    feed.write_text("first\n", encoding="utf-8")
+    feed.write_text(_session_info() + "\n", encoding="utf-8")
     calls = []
     monkeypatch.setattr(
         f1live_adapter,
@@ -64,6 +82,27 @@ def test_fetch_reuses_unchanged_snapshot(tmp_path, monkeypatch):
         handle.write("second\n")
     fetch()
     assert len(calls) == 2
+
+
+def test_fetch_waits_for_target_and_refuses_finished_keyframe(tmp_path, monkeypatch):
+    from racelens.adapters import f1live_adapter
+
+    feed = tmp_path / "feed.txt"
+    calls = []
+    monkeypatch.setattr(
+        f1live_adapter,
+        "ingest_f1live",
+        lambda *args, **kwargs: calls.append(args) or [event("live", "SessionStarted", 0)],
+    )
+    fetch = make_signalr_fetch(feed, 2026, "Silverstone", "Race")
+
+    feed.write_text(_session_info("Hungarian Grand Prix", "Budapest") + "\n")
+    assert fetch() == []
+    feed.write_text(_session_info(status="Finalised") + "\n")
+    assert fetch() == []
+    feed.write_text(_session_info() + "\n")
+    assert fetch()
+    assert len(calls) == 1
 
 
 def test_live_start_signalr_wires_runner_and_capture(tmp_path, monkeypatch):

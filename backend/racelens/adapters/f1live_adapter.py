@@ -97,6 +97,51 @@ def _lines(feed_files: tuple[str, ...]) -> Iterator[tuple[str, Any, str]]:
                     yield cat, payload, ts
 
 
+def _session_identity(payload: dict[str, Any]) -> tuple[object, ...] | None:
+    meeting = payload.get("Meeting")
+    if not isinstance(meeting, dict) or not payload.get("Name"):
+        return None
+    return (
+        meeting.get("Key") or meeting.get("Number") or meeting.get("Name"),
+        payload.get("Key") or payload.get("Path") or payload.get("StartDate"),
+        payload.get("Name"),
+    )
+
+
+def current_f1live_session_info(*feed_files: str) -> dict[str, Any] | None:
+    """Return the latest identified SessionInfo keyframe in a recording."""
+    current = None
+    for category, payload, _ in _lines(feed_files):
+        if category == "SessionInfo" and _session_identity(payload) is not None:
+            current = payload
+    return current
+
+
+def _current_session_rows(
+    rows: list[tuple[str, Any, str]],
+) -> list[tuple[str, Any, str]]:
+    """Drop a stale session segment once the public feed switches identity."""
+    identities = [
+        (index, _session_identity(payload))
+        for index, (category, payload, _) in enumerate(rows)
+        if category == "SessionInfo" and _session_identity(payload) is not None
+    ]
+    distinct = {identity for _, identity in identities}
+    if len(distinct) <= 1:
+        return rows
+    latest = identities[-1][1]
+    start = next(index for index, identity in identities if identity == latest)
+    driver_list = next(
+        (
+            rows[index]
+            for index in range(start - 1, -1, -1)
+            if rows[index][0] == "DriverList"
+        ),
+        None,
+    )
+    return ([driver_list] if driver_list else []) + rows[start:]
+
+
 def _find_t0(rows: list[tuple[str, Any, str]]) -> float | None:
     """Session-start posix time: StatusSeries 'Started' (keyframe replays
     history, so this works mid-join), else first live SessionStatus Started,
@@ -128,7 +173,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     Deterministic full-snapshot conversion (LiveRunner's fetch contract):
     same recording → same events; the runner dedupes by event_id across polls.
     """
-    rows = list(_lines(feed_files))
+    rows = _current_session_rows(list(_lines(feed_files)))
     t0 = _find_t0(rows)
     if t0 is None:
         return []

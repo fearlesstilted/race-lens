@@ -42,8 +42,8 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
   const [phase, setPhase] = useState<LobbyPhase>('LOBBY')
 
   // LOBBY inputs
-  const [year, setYear] = useState(2026)
-  const [country, setCountry] = useState('Austria')
+  const [year, setYear] = useState(() => new Date().getFullYear())
+  const [country, setCountry] = useState('')
   // signalr = free official F1 live-timing feed (default); openf1 realtime is paid.
   const [source, setSource] = useState<LiveSource>(signalrAvailable ? 'signalr' : 'openf1')
   // signalr only: FastF1 session name — no OpenF1 discovery involved.
@@ -141,117 +141,148 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
 
   if (phase === 'LOBBY') {
     return (
-      <div className="live-bar live-lobby" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
-        <div className="live-lobby-controls">
-          <input
-            className="live-input live-year"
-            type="number"
-            value={year}
-            min={2018}
-            max={2030}
-            onChange={(e) => setYear(Number(e.target.value))}
-            title="Year"
-            aria-label="Year"
-            style={{ width: '4rem' }}
-          />
-          <input
-            className="live-input live-event"
-            type="text"
-            value={country}
-            placeholder="Austria"
-            onChange={(e) => setCountry(e.target.value)}
-            title="Country / event"
-            aria-label="Country or event"
-            style={{ width: '9rem' }}
-            onKeyDown={(e) => e.key === 'Enter' && void handleLoad()}
-          />
-          {source === 'signalr' ? (
-            <>
+      <main className="live-lobby">
+        <section className="live-lobby-card" aria-labelledby="live-lobby-title">
+          <span className="live-lobby-kicker">LIVE CAPTURE</span>
+          <h1 id="live-lobby-title">Connect to F1 live timing</h1>
+          <p className="live-lobby-intro">
+            Start the official feed before the session. A WAITING state is normal
+            until the first timing packet arrives.
+          </p>
+          <div className="live-lobby-controls">
+            <label>
+              <span>SEASON</span>
               <input
-                className="live-input live-session"
-                type="text"
-                value={sessionName}
-                placeholder="Race"
-                onChange={(e) => setSessionName(e.target.value)}
-                title='Session: Race / Qualifying / Sprint / FP1…'
-                aria-label="Session"
-                style={{ width: '7rem' }}
-                onKeyDown={(e) => e.key === 'Enter' && handleDirectStart()}
+                className="live-input live-year"
+                type="number"
+                value={year}
+                min={2018}
+                max={2030}
+                onChange={(event) => setYear(Number(event.target.value))}
+                inputMode="numeric"
               />
-              <button className="b primary" type="button" onClick={handleDirectStart} disabled={loadBusy}>
-                {loadBusy ? '...' : 'START'}
+            </label>
+            <label>
+              <span>GRAND PRIX</span>
+              <input
+                className="live-input live-event"
+                type="text"
+                value={country}
+                placeholder="Belgium or Spa"
+                onChange={(event) => setCountry(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && (
+                  source === 'signalr' ? handleDirectStart() : void handleLoad()
+                )}
+              />
+            </label>
+            {source === 'signalr' ? (
+              <>
+                <label>
+                  <span>SESSION</span>
+                  <select
+                    className="live-input live-session"
+                    value={sessionName}
+                    onChange={(event) => setSessionName(event.target.value)}
+                  >
+                    <option>Practice 1</option>
+                    <option>Practice 2</option>
+                    <option>Practice 3</option>
+                    <option>Sprint Qualifying</option>
+                    <option>Sprint</option>
+                    <option>Qualifying</option>
+                    <option>Race</option>
+                  </select>
+                </label>
+                <button className="b primary" type="button" onClick={handleDirectStart} disabled={loadBusy}>
+                  {loadBusy ? 'CONNECTING…' : 'START LIVE'}
+                </button>
+              </>
+            ) : (
+              <button className="b primary" type="button" onClick={handleLoad} disabled={loadBusy}>
+                {loadBusy ? 'LOADING…' : 'FIND SESSIONS'}
               </button>
-            </>
-          ) : (
-            <button className="b primary" type="button" onClick={handleLoad} disabled={loadBusy}>
-              {loadBusy ? '...' : 'LOAD'}
-            </button>
-          )}
-          <div className="tog-group live-source-toggle" title="Live data source">
-            <button
-              type="button"
-              className={`tog${source === 'signalr' ? ' tog-on' : ''}`}
-              onClick={() => setSource('signalr')}
-              disabled={!signalrAvailable}
-              title="Official F1 live-timing feed — free, direct connect"
-            >
-              F1 FEED
-            </button>
-            <button
-              type="button"
-              className={`tog${source === 'openf1' ? ' tog-on' : ''}`}
-              onClick={() => setSource('openf1')}
-              title="OpenF1 API — realtime tier is paid; free tier is delayed"
-            >
-              OPENF1
-            </button>
+            )}
           </div>
-        </div>
-        {source === 'signalr' && (
-          <span style={{ color: '#666', fontSize: '0.75rem', letterSpacing: '0.08em' }}>
-            прямое подключение к официальному F1 live timing — подключайся ДО старта сессии
-          </span>
-        )}
-        {loadErr && <span className="live-err">{loadErr}</span>}
-      </div>
+          <div className="live-source-row">
+            <div className="tog-group live-source-toggle" title="Live data source">
+              <button
+                type="button"
+                className={`tog${source === 'signalr' ? ' tog-on' : ''}`}
+                onClick={() => setSource('signalr')}
+                disabled={!signalrAvailable}
+                title="Official F1 live-timing feed — free, direct connect"
+              >
+                F1 FEED
+              </button>
+              <button
+                type="button"
+                className={`tog${source === 'openf1' ? ' tog-on' : ''}`}
+                onClick={() => setSource('openf1')}
+                title="OpenF1 API — realtime tier is paid; free tier is delayed"
+              >
+                OPENF1
+              </button>
+            </div>
+            <p>
+              {source === 'signalr'
+                ? 'Free official feed · connects immediately and waits for the selected session.'
+                : 'OpenF1 discovery · live timing may require its paid realtime tier.'}
+            </p>
+          </div>
+          {loadErr && <div className="live-err" role="alert">{loadErr}</div>}
+        </section>
+        <aside className="live-lobby-guide">
+          <span>BEFORE LIGHTS OUT</span>
+          <strong>1 · Connect</strong>
+          <p>Use the same event and session names as the F1 schedule.</p>
+          <strong>2 · Leave it running</strong>
+          <p>Race Lens rejects the previous session and waits for the selected one.</p>
+          <strong>3 · Watch the status</strong>
+          <p>WAITING becomes LIVE after the first valid timing frame.</p>
+        </aside>
+      </main>
     )
   }
 
   if (phase === 'SESSIONS') {
     return (
-      <div className="live-bar live-lobby" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.375rem', padding: '0.5rem 0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontStyle: 'italic', fontWeight: 700, letterSpacing: '0.08em', color: '#888', fontSize: '0.875rem' }}>
-            {year} {country.toUpperCase()}
-          </span>
-          <button className="b" type="button" onClick={() => setPhase('LOBBY')} style={{ fontSize: '0.8rem' }}>
-            BACK
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
-          {sessions.map((s) => (
-            <button
-              key={s.session_key}
-              type="button"
-              className={`b${s.started ? ' primary' : ''}`}
-              onClick={() => handleSessionClick(s)}
-              disabled={loadBusy}
-              title={s.started ? `Started at ${localTimeLabel(s.date_start)}` : `Starts at ${localTimeLabel(s.date_start)}`}
-            >
-              {s.session_name}
-              <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 400, opacity: 0.7 }}>
-                {localTimeLabel(s.date_start)}{s.started ? '' : ' (scheduled)'}
-              </span>
+      <main className="live-lobby live-lobby-sessions">
+        <section className="live-lobby-card">
+          <div className="live-sessions-head">
+            <span>
+              {year} {country.toUpperCase()}
+            </span>
+            <button className="b" type="button" onClick={() => setPhase('LOBBY')}>
+              BACK
             </button>
-          ))}
-        </div>
-      </div>
+          </div>
+          <div className="live-session-list">
+            {sessions.map((s) => (
+              <button
+                key={s.session_key}
+                type="button"
+                className={`b${s.started ? ' primary' : ''}`}
+                onClick={() => handleSessionClick(s)}
+                disabled={loadBusy}
+                title={s.started ? `Started at ${localTimeLabel(s.date_start)}` : `Starts at ${localTimeLabel(s.date_start)}`}
+              >
+                {s.session_name}
+                <span>
+                  {localTimeLabel(s.date_start)}{s.started ? '' : ' (scheduled)'}
+                </span>
+              </button>
+            ))}
+            {sessions.length === 0 && <p>No sessions found for this event.</p>}
+          </div>
+          {loadErr && <div className="live-err" role="alert">{loadErr}</div>}
+        </section>
+      </main>
     )
   }
 
   if (phase === 'COUNTDOWN' && countdownTarget) {
     return (
-      <div style={{ position: 'relative', width: '100%' }}>
+      <main className="live-countdown">
         <TrackMap
           sessionId={null}
           atMs={0}
@@ -262,32 +293,22 @@ export function LiveLobby({ signalrAvailable, onStart, onStop }: Props) {
           sessionStatus="started"
           positionsData={null}
         />
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(10,10,14,0.82)',
-          fontFamily: "'Barlow Condensed', sans-serif",
-          fontStyle: 'italic',
-        }}>
-          <div style={{ color: '#888', fontSize: '0.875rem', letterSpacing: '0.15em', marginBottom: '0.375rem' }}>
+        <div className="live-countdown-overlay">
+          <span>
             {countdownTarget.session_name.toUpperCase()} STARTS IN
-          </div>
-          <div style={{ color: '#fff', fontSize: '3.125rem', fontWeight: 900, letterSpacing: '0.06em', lineHeight: 1 }}>
+          </span>
+          <strong>
             {formatCountdown(remainMs)}
-          </div>
-          <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+          </strong>
+          <div className="live-countdown-actions">
             <button className="b" type="button" onClick={() => setPhase('SESSIONS')}>BACK</button>
             <button className="b danger" type="button" onClick={() => { setPhase('LOBBY'); onStop() }}>STOP</button>
           </div>
-          <div style={{ marginTop: '0.5rem', color: '#555', fontSize: '0.75rem', letterSpacing: '0.1em' }}>
+          <small>
             LIVE CAPTURE STARTS AT THE SCHEDULED TIME
-          </div>
+          </small>
         </div>
-      </div>
+      </main>
     )
   }
 

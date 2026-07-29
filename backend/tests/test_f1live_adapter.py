@@ -89,6 +89,32 @@ def test_session_name_absent_when_no_session_info(tmp_path):
     assert state["session_name"] is None
 
 
+def test_new_session_identity_drops_previous_session_rows(tmp_path):
+    previous = {
+        "Meeting": {"Key": 1, "Name": "Hungarian Grand Prix", "Location": "Budapest"},
+        "Key": 10, "Name": "Race", "StartDate": "2026-07-26T15:00:00",
+    }
+    current = {
+        "Meeting": {"Key": 2, "Name": "Belgian Grand Prix", "Location": "Spa"},
+        "Key": 20, "Name": "Race", "StartDate": "2026-08-02T15:00:00",
+    }
+    feed = tmp_path / "switched.txt"
+    feed.write_text("\n".join([
+        repr(["DriverList", {"1": {"Tla": "OLD"}, "3": {"Tla": "VER"}}, ""]),
+        repr(["SessionInfo", json.dumps(previous), ""]),
+        repr(["SessionStatus", {"Status": "Started"}, "2026-07-26T13:00:00Z"]),
+        repr(["TimingData", {"Lines": {"1": {"Position": "1"}}}, "2026-07-26T13:01:00Z"]),
+        repr(["SessionInfo", json.dumps(current), ""]),
+        repr(["SessionStatus", {"Status": "Started"}, "2026-08-02T13:00:00Z"]),
+        repr(["TimingData", {"Lines": {"3": {"Position": "1"}}}, "2026-08-02T13:01:00Z"]),
+    ]) + "\n", encoding="utf-8")
+
+    events = ingest_f1live(str(feed), session_id="current")
+
+    assert any(item.driver_id == "VER" for item in events)
+    assert all(item.driver_id != "OLD" for item in events)
+
+
 def test_keyframe_is_anchored_to_first_live_timestamp(tmp_path):
     lines = [
         "['SessionData', {\"StatusSeries\": [{\"SessionStatus\": \"Started\", "
