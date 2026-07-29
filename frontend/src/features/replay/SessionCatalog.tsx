@@ -4,6 +4,7 @@ import type { CatalogResponse, CatalogSession, CatalogSessionType } from '../../
 
 type Props = {
   open: boolean
+  landing?: boolean
   initialSeason?: number
   onClose: () => void
   onOpenReplay: (sessionId: string) => void
@@ -21,7 +22,7 @@ const SESSION_TYPES: Array<'ALL' | CatalogSessionType> = [
   'ALL', 'FP1', 'FP2', 'FP3', 'SQ', 'Sprint', 'Q', 'R',
 ]
 
-export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: Props) {
+export function SessionCatalog({ open, landing = false, initialSeason, onClose, onOpenReplay }: Props) {
   const [season, setSeason] = useState(initialSeason ?? new Date().getUTCFullYear())
   const [sessionType, setSessionType] = useState<'ALL' | CatalogSessionType>('ALL')
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
@@ -44,7 +45,7 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
   }, [open, season])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || landing) return
     previousFocus.current = document.activeElement as HTMLElement | null
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -68,7 +69,7 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
       window.removeEventListener('keydown', handleKey)
       previousFocus.current?.focus()
     }
-  }, [open, onClose])
+  }, [landing, open, onClose])
 
   const sessions = useMemo(
     () => catalog?.events.flatMap((event) => event.sessions) ?? [],
@@ -152,15 +153,25 @@ export function SessionCatalog({ open, initialSeason, onClose, onOpenReplay }: P
   }
 
   return (
-    <div className="settings-overlay open catalog-overlay">
-      <button type="button" className="settings-backdrop catalog-backdrop" onClick={onClose} aria-label="Close race archive" />
-      <section ref={panel} className="settings-drawer catalog-panel" role="dialog" aria-modal="true" aria-label="Race archive">
+    <div className={`settings-overlay open catalog-overlay${landing ? ' catalog-landing' : ''}`}>
+      {!landing && (
+        <button type="button" className="settings-backdrop catalog-backdrop" onClick={onClose} aria-label="Close race archive" />
+      )}
+      <section
+        ref={panel}
+        className="settings-drawer catalog-panel"
+        role={landing ? 'main' : 'dialog'}
+        aria-modal={landing ? undefined : true}
+        aria-label="Race archive"
+      >
         <header className="settings-drawer-hdr catalog-header">
           <div>
             <small>RACE ARCHIVE · 2018—NOW</small>
-            <h2>Choose any completed session</h2>
+            <h2>{landing ? 'Choose a session to begin' : 'Choose any completed session'}</h2>
           </div>
-          <button autoFocus type="button" className="settings-close" onClick={onClose} aria-label="Close">×</button>
+          {!landing && (
+            <button autoFocus type="button" className="settings-close" onClick={onClose} aria-label="Close">×</button>
+          )}
         </header>
         <div className="catalog-toolbar">
           <label htmlFor="catalog-season">SEASON</label>

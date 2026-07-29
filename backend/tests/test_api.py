@@ -73,6 +73,7 @@ def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
 
     for name in ["aaa_no_map", "zzz_demo"]:
         (tmp_path / f"{name}.jsonl").write_text(dump_jsonl(mini_race()), encoding="utf-8")
+    (tmp_path / "zzz_demo.positions_raw.jsonl").write_text("not a replay", encoding="utf-8")
     (tmp_path / "zzz_demo.positions.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
 

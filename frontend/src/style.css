@@ -537,6 +537,32 @@ body {
 .catalog-overlay {
   z-index: 600;
 }
+.catalog-landing {
+  background:
+    linear-gradient(115deg, #080910ee 0 54%, #0d1730ee 100%),
+    repeating-linear-gradient(90deg, transparent 0 79px, #ffffff05 80px);
+}
+.catalog-landing .catalog-panel {
+  right: 50%;
+  width: min(1120px, 100vw);
+  transform: translateX(50%);
+  border-right: 1px solid var(--hair);
+}
+.catalog-landing .catalog-header {
+  padding: clamp(22px, 4vh, 44px) clamp(18px, 4vw, 52px) 22px;
+}
+.catalog-landing .catalog-header h2 {
+  font-size: clamp(28px, 4vw, 52px);
+}
+.catalog-landing .catalog-toolbar,
+.catalog-landing .catalog-notice {
+  padding-right: clamp(18px, 4vw, 52px);
+  padding-left: clamp(18px, 4vw, 52px);
+}
+.catalog-landing .catalog-list {
+  padding-right: clamp(18px, 4vw, 52px);
+  padding-left: clamp(18px, 4vw, 52px);
+}
 .catalog-backdrop {
   border: 0;
 }

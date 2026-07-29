@@ -21,7 +21,6 @@ import { TopBar } from './features/replay/TopBar'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
 import { useReplay } from './features/replay/useReplay'
-import { sessionLabel } from './lib/format'
 import { livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
@@ -84,18 +83,18 @@ type MobTab = 'TIMING' | 'MAP' | 'INSIGHTS' | 'FEED'
 const MOB_TABS: MobTab[] = ['TIMING', 'MAP', 'INSIGHTS', 'FEED']
 
 function App() {
-  const initialCatalogId = new URLSearchParams(window.location.search).get('catalog')
+  const initialParams = new URLSearchParams(window.location.search)
+  const initialCatalogId = initialParams.get('catalog')
+  const initialSessionId = initialParams.get('session')
   const initialCatalogSeason = initialCatalogId && /^\d{4}-/.test(initialCatalogId)
     ? Number(initialCatalogId.slice(0, 4))
     : undefined
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
+  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [sessionId, setSessionId] = useState<string | null>(
-    () => new URLSearchParams(window.location.search).get('session'),
-  )
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
@@ -151,17 +150,18 @@ function App() {
         setSessions(items)
         const requested = new URLSearchParams(window.location.search).get('session')
         const requestedSession = items.find((item) => item.session_id === requested)
-        const initialSession = requestedSession?.session_id ?? items[0]?.session_id ?? null
+        const initialSession = requestedSession?.session_id ?? null
         setSessionId((current) => (
           items.some((item) => item.session_id === current) ? current : initialSession
         ))
-        if (requested && !requestedSession && initialSession) {
+        if (requested && !requestedSession) {
           setSessionNotice(
-            `Replay "${requested}" is unavailable · showing ${sessionLabel(initialSession)}`,
+            `Replay "${requested}" is unavailable · choose another session`,
           )
           const url = new URL(window.location.href)
-          url.searchParams.set('session', initialSession)
+          url.searchParams.delete('session')
           window.history.replaceState(null, '', url)
+          setCatalogOpen(true)
         } else {
           setSessionNotice(null)
         }
@@ -308,6 +308,7 @@ function App() {
     <>
       <SessionCatalog
         open={catalogOpen}
+        landing={mode === 'replay' && !sessionId}
         initialSeason={initialCatalogSeason}
         onClose={closeCatalog}
         onOpenReplay={handleSessionChange}
@@ -409,7 +410,7 @@ function App() {
         </div>
       )}
 
-      {(mode === 'replay' || isLiveActive) && (
+      {((mode === 'replay' && sessionId) || isLiveActive) && (
         <>
           <StatusStrip
             status={sessionStatus}

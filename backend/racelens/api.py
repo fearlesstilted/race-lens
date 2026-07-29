@@ -431,7 +431,7 @@ def capabilities() -> dict:
 def list_sessions() -> list[dict]:
     out = {}
     files = sorted(
-        FIXTURES_DIR.glob("*.jsonl"),
+        (f for f in FIXTURES_DIR.glob("*.jsonl") if not f.stem.endswith(".positions_raw")),
         key=lambda f: (
             not (FIXTURES_DIR / f"{f.stem}.positions.json").is_file(),
             f.stem,
