@@ -302,7 +302,8 @@ def _positions_data(session_id: str) -> dict | None:
     fixtures_dir = _fixture_root(session_id, ".positions.json")
     path = fixtures_dir / f"{session_id}.positions.json"
     mtime = path.stat().st_mtime if path.is_file() else 0.0
-    return _positions_data_cached(session_id, str(fixtures_dir), mtime)
+    with _engine_load_lock:
+        return _positions_data_cached(session_id, str(fixtures_dir), mtime)
 
 
 def _positions_window(pos: dict, at_ms: int) -> dict:

@@ -82,7 +82,7 @@ class SignalRCapture:
         self.out_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = [
             sys.executable, "-m", "racelens.cli", "capture-live",
-            "-o", str(self.out_path), "--timeout", "0",
+            "-o", str(self.out_path), "--timeout", "0", "--append",
         ]
         if self._no_auth:
             cmd.append("--no-auth")

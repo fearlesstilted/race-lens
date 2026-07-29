@@ -68,6 +68,38 @@ def test_engine_cold_load_is_single_flight(tmp_path, monkeypatch):
     assert len({id(engine) for engine in engines}) == 1
 
 
+def test_positions_cold_load_is_single_flight(tmp_path, monkeypatch):
+    import json
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    import racelens.api as api
+
+    session_id = "cold_race"
+    (tmp_path / f"{session_id}.jsonl").write_text(dump_jsonl(mini_race()), encoding="utf-8")
+    (tmp_path / f"{session_id}.positions.json").write_text(
+        json.dumps({"drivers": {"VER": [[1, 2]]}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path)
+    api._positions_data_cached.cache_clear()
+    original_loads = api.json.loads
+    load_count = 0
+
+    def slow_load(text):
+        nonlocal load_count
+        load_count += 1
+        time.sleep(0.05)
+        return original_loads(text)
+
+    monkeypatch.setattr(api.json, "loads", slow_load)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        positions = list(pool.map(lambda _: api._positions_data(session_id), range(4)))
+
+    assert load_count == 1
+    assert len({id(position) for position in positions}) == 1
+
+
 def test_sessions_with_positions_are_listed_first(tmp_path, monkeypatch):
     import racelens.api as api
 

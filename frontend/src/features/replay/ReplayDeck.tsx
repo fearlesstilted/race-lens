@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react'
 import type { RaceMarker, Timeline } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
 import type { LivePhase } from '../../lib/liveStatus'
+import { clusterMarkers } from '../../lib/timelineMarkers'
 
 type Speed = 1 | 5 | 10
 const SPEEDS: Speed[] = [1, 5, 10]
@@ -76,9 +77,6 @@ const SPOILER_KEY = 'racelens_spoiler_free'
 
 // ── Marker rendering helpers ──────────────────────────────────────────────────
 
-/** Minimum gap between marker groups as fraction of total width (1.5 %). */
-const CLUSTER_THRESHOLD_PCT = 1.5
-
 type MarkerStyle = {
   color: string
   shape: 'line' | 'triangle' | 'dot' | 'chevron'
@@ -101,27 +99,6 @@ function markerStyle(kind: RaceMarker['kind']): MarkerStyle {
     case 'UNDERCUT':    return { color: '#00d2be', shape: 'dot',      zIndex: 2 }
     default:            return { color: '#888899', shape: 'dot',      zIndex: 1 }
   }
-}
-
-/** Group close markers so they don't overlap. Returns cluster centers with merged info. */
-function clusterMarkers(
-  markers: RaceMarker[],
-  pctFn: (m: RaceMarker) => number,
-): { pct: number; items: RaceMarker[] }[] {
-  if (markers.length === 0) return []
-  const sorted = [...markers].sort((a, b) => a.at_ms - b.at_ms)
-  const groups: { pct: number; items: RaceMarker[] }[] = []
-  for (const m of sorted) {
-    const pct = pctFn(m)
-    const last = groups[groups.length - 1]
-    if (last && pct - last.pct < CLUSTER_THRESHOLD_PCT) {
-      last.items.push(m)
-      // keep highest-priority item's pct (first item) — no shift needed
-    } else {
-      groups.push({ pct, items: [m] })
-    }
-  }
-  return groups
 }
 
 export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', currentLap = null, canScrub = true, liveLabel, livePhase = 'connecting', liveBadge = 'CONNECTING', liveDetail = 'OPENING LIVE TIMING', onScrub, onPlay, onPause, onSpeed }: Props) {

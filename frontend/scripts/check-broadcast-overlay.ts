@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import { selectBroadcastCandidate } from '../src/lib/broadcastOverlay.ts'
 import { livePresentation } from '../src/lib/liveStatus.ts'
+import { clusterMarkers } from '../src/lib/timelineMarkers.ts'
 
 const incident = {
   kind: 'CRASH' as const,
@@ -43,5 +44,11 @@ const waiting = livePresentation(waitingStatus, false, null)
 assert.equal(waiting.phase, 'waiting')
 assert.equal(livePresentation({ ...waitingStatus, capture_alive: false }, false, null).phase, 'stalled')
 assert.equal(livePresentation(null, true, 'offline').phase, 'reconnecting')
+
+const closeMarker = { ...incident, at_ms: 5_000 }
+const distantMarker = { ...incident, at_ms: 91_000 }
+const pct = (marker: typeof incident) => marker.at_ms / 100_000
+assert.equal(clusterMarkers([incident, closeMarker], pct).length, 1)
+assert.equal(clusterMarkers([incident, distantMarker], pct).length, 2)
 
 console.log('replay/live UI checks passed')
