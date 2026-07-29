@@ -66,11 +66,7 @@ export function useTrackAnimation({
   const pelotonMedianRef = useRef<number>(DEFAULT_LAP_MS)
 
   const positionsDataRef = useRef<PositionsData | null>(null)
-  useEffect(() => { positionsDataRef.current = positionsData }, [positionsData])
-
   const progressPathRef = useRef<[number, number][] | undefined>(undefined)
-  useEffect(() => { progressPathRef.current = progressPath }, [progressPath])
-
   const atMsRef = useRef(atMs)
   useEffect(() => { atMsRef.current = atMs }, [atMs])
 
@@ -106,6 +102,16 @@ export function useTrackAnimation({
       }
     }
   }
+
+  useEffect(() => {
+    positionsDataRef.current = positionsData
+    if (!playingRef.current) renderPositions(atMsRef.current)
+  }, [positionsData])
+
+  useEffect(() => {
+    progressPathRef.current = progressPath
+    if (!playingRef.current) renderPositions(atMsRef.current)
+  }, [progressPath])
 
   // Update target fractions whenever atMs / drivers / classification change
   useEffect(() => {
