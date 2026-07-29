@@ -2,6 +2,13 @@ export type TrackPoint = [number, number]
 
 const MAX_PROGRESS_PER_TICK = 0.12
 
+export function lastKnownFrame(frames: (number | null)[]): number | null {
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    if (frames[index] !== null) return index
+  }
+  return null
+}
+
 function validStep(before: number, after: number): boolean {
   return after >= before && after - before <= MAX_PROGRESS_PER_TICK
 }

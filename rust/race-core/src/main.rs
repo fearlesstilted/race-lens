@@ -105,9 +105,14 @@ pub(crate) fn resample(
             continue;
         }
 
-        // Check for gap
-        let next_t = if idx + 1 < points.len() { points[idx + 1].0 } else { t0 };
-        let gap = if idx + 1 < points.len() { next_t - t0 } else { 0 };
+        // Check for a gap or an ended stream. A driver's final sample must not
+        // be repeated through the global session end.
+        let has_next = idx + 1 < points.len();
+        let gap = if has_next {
+            points[idx + 1].0 - t0
+        } else {
+            t - t0
+        };
         if gap > MAX_INTERPOLATION_GAP_MS && t > t0 {
             frames.push(None);
             continue;
@@ -292,6 +297,18 @@ mod tests {
             assert!(frames[i].is_none(), "frame {i} should be None (gap)");
         }
         assert!(frames[20].is_some(), "t=10000 should be Some");
+    }
+
+    #[test]
+    fn test_terminal_sample_expires() {
+        let pts = vec![(0, 100.0f32, 200.0f32)];
+        let track = mock_track();
+        let frames = resample(&pts, 0, 6000, 1000, &track);
+        assert!(
+            frames[5].is_some(),
+            "last point remains usable for five seconds"
+        );
+        assert!(frames[6].is_none(), "ended telemetry must not freeze on track");
     }
 
     #[test]
