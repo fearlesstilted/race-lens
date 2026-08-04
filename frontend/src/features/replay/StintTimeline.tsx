@@ -23,7 +23,8 @@ export function StintTimeline({ sessionId, currentLap, order }: Props) {
   const total = data.total_laps
   const ruler = [1, Math.ceil(total / 4), Math.ceil(total / 2), Math.ceil(total * 3 / 4), total]
 
-  const ids = Object.keys(data.stints)
+  const ids = Object.keys(data.stints).filter((id) => data.stints[id].length > 0)
+  if (ids.length === 0) return <div className="stints stints-state">TYRE STRATEGY UNAVAILABLE</div>
   const sorted = order
     ? [...ids].sort((a, b) => {
         const ia = order.indexOf(a)

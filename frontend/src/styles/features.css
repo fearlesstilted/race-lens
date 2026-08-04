@@ -584,7 +584,7 @@
 }
 .bi-formation small {
   color: #39c463;
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: .2em;
 }
 .bi-formation strong {
@@ -606,7 +606,7 @@
 }
 .bi-card-head b,
 .bi-card-head span {
-  font: 700 8px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: .16em;
 }
 .bi-card-head b { color: var(--dim); }
@@ -661,16 +661,16 @@
   white-space: nowrap;
 }
 .bi-driver-meta b {
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
   text-transform: capitalize;
 }
 .bi-driver-meta small {
   margin-top: 2px;
   color: var(--dim);
-  font: 600 8px var(--cond);
+  font: 600 12px var(--cond);
 }
 .bi-driver-gap {
-  font: 800 11px var(--cond);
+  font: 800 12px var(--cond);
   font-variant-numeric: tabular-nums;
 }
 .bi-gap-link {
@@ -679,7 +679,7 @@
   align-items: center;
   padding-left: 51px;
   color: var(--dim);
-  font: 700 8px var(--cond);
+  font: 700 12px var(--cond);
   font-variant-numeric: tabular-nums;
 }
 .bi-gap-link::before {
@@ -723,12 +723,12 @@
 }
 .bi-state-grid span {
   color: var(--dim);
-  font: 600 7px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: .12em;
 }
 .bi-state-grid strong {
   margin-top: 3px;
-  font: 800 11px var(--cond);
+  font: 800 12px var(--cond);
 }
 .bi-battle-list {
   display: grid;
@@ -750,7 +750,7 @@
 .bi-battle-row:first-child { border-top: 0; }
 .bi-battle-row > span,
 .bi-battle-row > strong {
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
 }
 .bi-battle-row > i {
   height: 4px;
@@ -764,7 +764,7 @@
   background: #31d7f2;
 }
 .bi-battle-row em {
-  font: normal 700 9px var(--cond);
+  font: normal 700 12px var(--cond);
   text-align: right;
 }
 .bi-pace-list { display: grid; }
@@ -786,12 +786,12 @@
 .bi-pace-row > i { align-self: stretch; }
 .bi-pace-row > strong,
 .bi-pace-row > span,
-.bi-pace-row > em { font: 700 10px var(--cond); }
+.bi-pace-row > em { font: 700 12px var(--cond); }
 .bi-pace-row > em { color: var(--dim); font-style: normal; text-align: right; }
 .bi-empty {
   padding: 18px 4px;
   color: var(--dim);
-  font: 600 10px var(--cond);
+  font: 600 12px/1.5 var(--body);
 }
 
 .layout-presets .tog {
@@ -1340,16 +1340,16 @@
   justify-content: space-between;
   align-items: baseline;
   padding: 8px 2px 6px;
-  font: italic 800 11px var(--cond);
+  font: italic 800 12px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
 }
 .stints-laps { font-style: normal; font-weight: 600; letter-spacing: 0.14em; }
-.stints-state { display: grid; place-items: center; color: var(--dim); font: 700 10px var(--cond); letter-spacing: .16em; }
-.stint-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 2px 6px; color: var(--dim); font: 700 8px var(--cond); letter-spacing: .08em; }
+.stints-state { display: grid; place-items: center; color: var(--dim); font: 700 12px var(--cond); letter-spacing: .16em; }
+.stint-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 2px 6px; color: var(--dim); font: 700 12px var(--cond); letter-spacing: .08em; }
 .stint-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .stint-legend i { width: 7px; height: 7px; border-radius: 50%; }
-.stint-ruler { display: grid; grid-template-columns: 38px 1fr; padding-bottom: 3px; color: var(--dim); font: 600 8px var(--cond); }
+.stint-ruler { display: grid; grid-template-columns: 38px 1fr; padding-bottom: 3px; color: var(--dim); font: 600 12px var(--cond); }
 .stint-ruler-laps { display: flex; justify-content: space-between; }
 .stints-rows {
   display: flex;
@@ -1378,7 +1378,7 @@
   border-right: 1px solid #00000099;
 }
 .stint-seg-lbl {
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   color: #000000bb;
   white-space: nowrap;
   letter-spacing: 0.02em;
