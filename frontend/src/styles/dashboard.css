@@ -70,7 +70,7 @@
 .pit-tag {
   display: inline-block;
   margin-left: 5px;
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.12em;
   color: var(--amber);
   vertical-align: middle;
@@ -432,7 +432,7 @@
   overflow-wrap: anywhere;
 }
 .ins h4 small {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
   flex-shrink: 0;

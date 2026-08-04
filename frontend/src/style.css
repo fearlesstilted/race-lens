@@ -231,7 +231,7 @@ body {
   padding: 4px 6px;
 }
 .layer-name {
-  font: 700 11px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.16em;
   color: var(--ink);
 }
