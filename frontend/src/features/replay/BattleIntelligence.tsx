@@ -11,17 +11,8 @@ type Props = {
   battles: Battle[]
   currentLap: number
   totalLaps: number | null
-  sessionStatus: string
   onSelectDriver: (id: string) => void
 }
-
-const statusLabel = (status: string) => ({
-  started: 'GREEN',
-  safety_car: 'SAFETY CAR',
-  vsc: 'VIRTUAL SC',
-  red_flag: 'RED FLAG',
-  finished: 'FINISHED',
-}[status] ?? status.replaceAll('_', ' ').toUpperCase())
 
 const recentPace = (driver: DriverRow): number | null => {
   const laps = driver.recent_laps_ms.filter((lap) => lap > 0).slice(-5)
@@ -36,7 +27,6 @@ export function BattleIntelligence({
   battles,
   currentLap,
   totalLaps,
-  sessionStatus,
   onSelectDriver,
 }: Props) {
   const leadFlow = rows.slice(0, 3)
@@ -106,7 +96,6 @@ export function BattleIntelligence({
           </div>
           <div className="bi-state-grid">
             <div><span>LEADER</span><strong>{rows[0]?.id ?? '—'}</strong></div>
-            <div><span>STATUS</span><strong>{statusLabel(sessionStatus)}</strong></div>
             <div><span>FASTEST</span><strong>{fastest?.id ?? '—'}</strong></div>
             <div><span>RUNNING</span><strong>{rows.filter((row) => !row.retired).length}</strong></div>
           </div>
@@ -114,7 +103,7 @@ export function BattleIntelligence({
 
         <article className="bi-card bi-battles">
           <div className="bi-card-head">
-            <b>ACTIVE BATTLES</b>
+            <b>ACTIVE BATTLES · {battles.length}</b>
           </div>
           <div className="bi-battle-list">
             {battles.slice(0, 5).map((battle) => {
@@ -138,7 +127,7 @@ export function BattleIntelligence({
                 </button>
               )
             })}
-            {battles.length === 0 && <div className="bi-empty">No confirmed close battle right now.</div>}
+            {battles.length === 0 && <div className="bi-empty">No active battles right now.</div>}
           </div>
         </article>
 
@@ -164,7 +153,7 @@ export function BattleIntelligence({
                 </button>
               )
             })}
-            {pace.length === 0 && <div className="bi-empty">Pace appears after completed laps.</div>}
+            {pace.length === 0 && <div className="bi-empty">Complete a lap to compare pace.</div>}
           </div>
         </article>
           </>

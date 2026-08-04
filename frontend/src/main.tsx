@@ -478,7 +478,6 @@ function App() {
                   battles={replay.battles}
                   currentLap={currentLap}
                   totalLaps={state?.total_laps ?? null}
-                  sessionStatus={sessionStatus}
                   onSelectDriver={handleSelectDriver}
                 />
               ) : (
@@ -541,8 +540,8 @@ function App() {
             ) : (
               <InsightPanel
                 key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
-                insights={replay.insights}
-                commentary={replay.commentary}
+                insights={mode !== 'replay' || timeline?.session_id === sessionId ? replay.insights : []}
+                commentary={mode !== 'replay' || timeline?.session_id === sessionId ? replay.commentary : []}
                 selectedIds={selectedIds}
                 sessionStatus={sessionStatus}
                 sessionId={mode === 'replay' ? sessionId : null}
