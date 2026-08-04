@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { getCapabilities, listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
-import type { SessionSummary } from './api/types'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { BattleIntelligence } from './features/replay/BattleIntelligence'
 import { BroadcastOverlay } from './features/replay/BroadcastOverlay'
@@ -94,7 +93,6 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
@@ -150,7 +148,6 @@ function App() {
       .then((items) => {
         if (cancelled) return
         window.clearTimeout(wakeTimer)
-        setSessions(items)
         const requested = new URLSearchParams(window.location.search).get('session')
         const requestedSession = items.find((item) => item.session_id === requested)
         const initialSession = requestedSession?.session_id ?? null
@@ -335,9 +332,7 @@ function App() {
         atMs={replay.atMs}
       />
       <TopBar
-        session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
         sessionId={mode === 'replay' ? sessionId : null}
-        sessions={mode === 'replay' ? sessions : []}
         lap={currentLap}
         totalLaps={state?.total_laps ?? null}
         lang={replay.lang}
@@ -347,15 +342,12 @@ function App() {
         projection={projection}
         voice={voice}
         onModeChange={handleModeSwitch}
-        onSessionChange={handleSessionChange}
-        onLang={replay.setLang}
         onLevel={replay.setLevel}
         onVoice={setVoice}
         onProjection={setProjection}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
-        sessionStatus={sessionStatus}
         atMs={replay.atMs}
         sessionName={mode === 'live' ? state?.session_name ?? null : null}
       />

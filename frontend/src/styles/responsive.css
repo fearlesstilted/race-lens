@@ -25,7 +25,7 @@
   /* Compact secondary toggles on laptop — smaller padding */
   .top-toggles .tog {
     padding: 4px 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .top-toggles {
     gap: 6px;
@@ -116,7 +116,7 @@
     font-size: 20px;
   }
   .lapbox .word, .lapbox .of {
-    font-size: 10px;
+    font-size: 12px;
   }
   /* Show the highlights event-jump panel in settings on tablet. */
   .settings-group.drawer-panels-group {
@@ -273,7 +273,7 @@
     font-size: 18px;
   }
   .lapbox .word, .lapbox .of {
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.15em;
   }
 
@@ -313,7 +313,6 @@
     display: grid;
     place-items: center;
     padding: 3px;
-    font-size: 10px;
   }
   .deck-transport svg {
     width: 18px;

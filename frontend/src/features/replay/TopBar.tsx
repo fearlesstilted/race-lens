@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { SessionSummary } from '../../api/types'
 import { sessionMeta, sessionTypeLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
 import { HighlightsPanel } from './HighlightsPanel'
@@ -7,9 +6,7 @@ import { HighlightsPanel } from './HighlightsPanel'
 type AppMode = 'replay' | 'live'
 
 type Props = {
-  session: SessionSummary | null
   sessionId: string | null
-  sessions: SessionSummary[]
   lap: number
   totalLaps: number | null
   lang: Lang
@@ -19,15 +16,12 @@ type Props = {
   projection: boolean
   voice: boolean
   onModeChange: (mode: AppMode) => void
-  onSessionChange: (id: string) => void
-  onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
   onVoice: (on: boolean) => void
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
   onCatalogOpen?: () => void
-  sessionStatus?: string
   atMs?: number
   /** Live-only session badge text, e.g. "SILVERSTONE · RACE". */
   sessionName?: string | null
