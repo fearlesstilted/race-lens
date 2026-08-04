@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
 import { DASHBOARD_PRESETS } from './replayTypes'
 import type { DashboardLayout, Lang, Level } from './replayTypes'
@@ -19,6 +20,9 @@ type Props = {
   onDashboardLayout: (value: DashboardLayout) => void
   sessionId?: string | null
   onSeek?: (ms: number) => void
+  sessionStatus?: string
+  lap?: number
+  totalLaps?: number | null
   atMs?: number
 }
 
@@ -26,7 +30,7 @@ export function SettingsDrawer({
   open, onClose, lang, level, mode, liveAvailable, projection,
   dashboardLayout, onLang, onLevel, onModeChange, onProjection,
   onDashboardLayout,
-  sessionId, onSeek, atMs,
+  sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -151,9 +155,10 @@ export function SettingsDrawer({
 
         {mode === 'replay' && sessionId && onSeek && (
           <div className="settings-group drawer-panels-group">
-            <div className="settings-group-label">HIGHLIGHTS</div>
+            <div className="settings-group-label">HIGHLIGHTS &amp; DOTD</div>
             <div className="drawer-panels-inner">
               <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={(ms) => { onSeek(ms); onClose() }} />
+              <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
             </div>
           </div>
         )}

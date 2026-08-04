@@ -328,6 +328,9 @@ function App() {
         onDashboardLayout={handleDashboardLayout}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
+        sessionStatus={sessionStatus}
+        lap={currentLap}
+        totalLaps={state?.total_laps ?? null}
         atMs={replay.atMs}
       />
       <TopBar
@@ -347,6 +350,7 @@ function App() {
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
+        sessionStatus={sessionStatus}
         atMs={replay.atMs}
         sessionName={mode === 'live' ? state?.session_name ?? null : null}
       />
@@ -488,6 +492,7 @@ function App() {
                   playbackSpeed={replay.speed}
                   drivers={state?.drivers ?? {}}
                   classification={state?.classification ?? []}
+                  totalLaps={state?.total_laps}
                   sessionStatus={sessionStatus}
                   neutralizationStartMs={replay.neutralizationStartMs}
                   selectedIds={selectedIds}

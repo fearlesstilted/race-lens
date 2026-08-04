@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import type { RaceMarker, Timeline } from '../../api/types'
 import { formatRaceTime, lapAtTime } from '../../lib/format'
 import type { LivePhase } from '../../lib/liveStatus'
@@ -159,6 +159,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canSc
               max={endMs}
               step={1000}
               value={atMs}
+              style={{ '--deck-progress': `${cursorPct}%` } as CSSProperties}
               onChange={(event) => onScrub(Number(event.currentTarget.value))}
               disabled={!timeline}
               aria-label="Replay position"
