@@ -45,18 +45,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .sess-picker--desktop {
-    display: none;
-  }
-  .sess-mobile {
-    display: block;
-    flex: 1;
-    width: auto;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   /* 2-zone: full-width map on top, timing+insights in 2 columns below */
   .wrap {
     grid-template-columns: 1fr 1fr;
@@ -167,10 +155,6 @@
   .catalog-toolbar label:not(:first-child) {
     margin-left: 0;
   }
-  .catalog-notice {
-    padding-right: calc(12px + env(safe-area-inset-right));
-    padding-left: calc(12px + env(safe-area-inset-left));
-  }
   .catalog-list {
     padding: 0 calc(12px + env(safe-area-inset-right))
       calc(12px + env(safe-area-inset-bottom))
@@ -251,8 +235,7 @@
     display: flex;
     flex-direction: column;
   }
-  .sess b,
-  .sess-select {
+  .sess b {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -289,7 +272,7 @@
   .sess {
     padding: 0 10px;
   }
-  .sess b, .sess-select {
+  .sess b {
     font-size: 12px;
   }
   .sess i {

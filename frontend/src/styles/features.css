@@ -456,7 +456,7 @@
 
 /* ── Overtake % in insight cards ───────────────────────────────── */
 .ins-overtake {
-  font: 700 11px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.18em;
   color: #00c853;
   margin-top: var(--s1);
@@ -952,14 +952,14 @@
   text-align: center;
 }
 .hl-time {
-  font: 600 11px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.05em;
   color: var(--dim);
   flex-shrink: 0;
   width: 52px;
 }
 .hl-lap {
-  font: 600 11px var(--cond);
+  font: 600 12px var(--cond);
   color: var(--dim);
   flex-shrink: 0;
   width: 28px;

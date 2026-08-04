@@ -22,6 +22,7 @@ import { TrackMap } from './features/replay/TrackMap'
 import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
 import type { DashboardLayout } from './features/replay/replayTypes'
 import { useReplay } from './features/replay/useReplay'
+import { lapAtTime } from './lib/format'
 import { livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
@@ -290,13 +291,11 @@ function App() {
 
   const hasFocus = selectedIds.length > 0
 
-  // Header lap = the lap IN PROGRESS (laps_completed + 1), shown once racing.
-  // state.lap only counts completed laps, so without this the first lap reads "—".
-  // During the formation lap (before lights-out) there is no lap number.
-  const lightsOutMs = replay.timeline?.lights_out_ms ?? 0
-  const racing = !!state && replay.atMs >= lightsOutMs
+  // Replay follows the range immediately; live follows the latest stream state.
   let currentLap = 0
-  if (racing && state) {
+  if (mode === 'replay') {
+    currentLap = timeline?.session_id === sessionId ? lapAtTime(timeline, replay.atMs) : 0
+  } else if (state) {
     const inProgress = (state.lap ?? 0) + 1
     currentLap = state.total_laps ? Math.min(inProgress, state.total_laps) : inProgress
   }

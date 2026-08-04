@@ -513,7 +513,7 @@
 
 /* 'also' subordinate type line */
 .ins-also {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.18em;
   color: var(--dim);
   margin-top: 2px;

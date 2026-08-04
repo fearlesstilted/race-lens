@@ -88,20 +88,20 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canSc
       ? 'FORMATION LAP'
       : `LAP ${lapAtTime(timeline, atMs)} · ${formatRaceTime(atMs - lightsOutMs)}`
   const visiblePhases = useMemo(() => {
-    const result: { kind: PhaseKind; pct: number; key: number; neutral: boolean; label?: string }[] = []
+    const result: { kind: PhaseKind; pct: number; key: string; neutral: boolean; label?: string }[] = []
     let accumulated = 0
     for (let i = 0; i < phases.length; i++) {
       const seg = phases[i]
       const segEnd = accumulated + seg.pct
       if (accumulated >= cursorPct) {
-        result.push({ ...seg, key: i, neutral: true })
+        result.push({ ...seg, key: `phase-${i}-future`, neutral: true })
       } else if (segEnd > cursorPct) {
         const pastPct = cursorPct - accumulated
         const futurePct = segEnd - cursorPct
-        result.push({ kind: seg.kind, pct: pastPct, key: i * 100, neutral: false, label: seg.label })
-        result.push({ kind: seg.kind, pct: futurePct, key: i * 100 + 1, neutral: true, label: seg.label })
+        result.push({ kind: seg.kind, pct: pastPct, key: `phase-${i}-past`, neutral: false, label: seg.label })
+        result.push({ kind: seg.kind, pct: futurePct, key: `phase-${i}-future`, neutral: true, label: seg.label })
       } else {
-        result.push({ ...seg, key: i, neutral: false })
+        result.push({ ...seg, key: `phase-${i}-whole`, neutral: false })
       }
       accumulated = segEnd
     }
