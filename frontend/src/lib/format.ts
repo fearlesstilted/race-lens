@@ -1,9 +1,17 @@
+import type { Timeline } from '../api/types'
+
 export const formatRaceTime = (ms: number) => {
   const totalSeconds = Math.floor(ms / 1000)
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
   return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+export const lapAtTime = (timeline: Timeline | null, atMs: number): number => {
+  if (!timeline || atMs < timeline.lights_out_ms) return 0
+  const marks = Object.values(timeline.lap_marks)
+  return Math.min(marks.filter((mark) => mark <= atMs).length + 1, marks.length || 1)
 }
 
 export const formatLapTime = (ms: number | null | undefined) => {

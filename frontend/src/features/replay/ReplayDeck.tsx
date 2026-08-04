@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { RaceMarker, Timeline } from '../../api/types'
-import { formatRaceTime } from '../../lib/format'
+import { formatRaceTime, lapAtTime } from '../../lib/format'
 import type { LivePhase } from '../../lib/liveStatus'
 
 type Speed = 1 | 5 | 10
@@ -82,7 +82,11 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canSc
   // (before lights-out) show a label instead of a time.
   const lightsOutMs = timeline?.lights_out_ms ?? 0
   const inFormation = atMs < lightsOutMs
-  const sessionTime = inFormation ? 'FORMATION LAP' : formatRaceTime(atMs - lightsOutMs)
+  const positionLabel = !timeline
+    ? 'REPLAY POSITION'
+    : inFormation
+      ? 'FORMATION LAP'
+      : `LAP ${lapAtTime(timeline, atMs)} · ${formatRaceTime(atMs - lightsOutMs)}`
   const visiblePhases = useMemo(() => {
     const result: { kind: PhaseKind; pct: number; key: number; neutral: boolean; label?: string }[] = []
     let accumulated = 0
@@ -123,6 +127,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canSc
           </button>
 
           <div className="deck-timeline">
+            <output className="deck-position">{positionLabel}</output>
             <div className="phase" aria-hidden="true">
               {visiblePhases.map((seg) => {
                 let cls: string
@@ -157,7 +162,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canSc
               onChange={(event) => onScrub(Number(event.currentTarget.value))}
               disabled={!timeline}
               aria-label="Replay position"
-              aria-valuetext={sessionTime}
+              aria-valuetext={positionLabel}
             />
           </div>
 

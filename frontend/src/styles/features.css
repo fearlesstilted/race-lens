@@ -489,7 +489,7 @@
   border-right: 1px solid var(--hair);
   background: transparent;
   color: var(--dim);
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.2em;
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
@@ -801,8 +801,8 @@
   display: block;
   margin-top: 8px;
   color: var(--dim);
-  font: 600 9px/1.4 var(--cond);
-  letter-spacing: .08em;
+  font: 500 12px/1.4 var(--body);
+  letter-spacing: 0;
 }
 
 @media (max-width: 1439px) {
@@ -1178,6 +1178,8 @@
   .settings-group .layer-toggle,
   .ctr-tab,
   .ins-filter .tog,
+  .hl-play-btn,
+  .hl-item,
   .settings-close,
   .ev-radio-btn,
   .center-switch button {

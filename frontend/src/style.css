@@ -400,7 +400,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font: 700 clamp(10px, 2.4vw, 12px) var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: clamp(0.04em, 0.8vw, 0.14em);
   background: none;
   border: none;
@@ -490,7 +490,7 @@ body {
   border-bottom: 1px solid var(--hair);
 }
 .settings-group-label {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
   margin-bottom: 10px;
