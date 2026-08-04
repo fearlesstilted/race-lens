@@ -4,7 +4,7 @@ import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, 
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
 import type { PositionsData } from '../../lib/liveGaps'
-import { LANG_KEY, LEVEL_KEY, NEUTRAL_STATUSES, readLang, readLevel, tickMs, writePersisted } from './replayTypes'
+import { LANG_KEY, LEVEL_KEY, NEUTRAL_STATUSES, readLang, readLevel, writePersisted } from './replayTypes'
 import type { Lang, Level, Speed } from './replayTypes'
 import type { ReplaySetters } from './replaySetters'
 import { useGreenFlag } from './useGreenFlag'
@@ -29,8 +29,6 @@ export type ReplayModel = {
   markers: RaceMarker[]
   playing: boolean
   speed: Speed
-  /** Wall-clock ms between stream frames (for CSS transitions). */
-  frameMs: number
   atMs: number
   loading: boolean
   error: string | null
@@ -282,9 +280,6 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     setLevelState(nextLevel)
   }, [])
 
-  // Wall-clock interval between frames: tick_ms(session) / speed
-  const frameMs = tickMs(speed) / speed
-
   // Derive neutralization start from backend state (works correctly after scrub)
   const neutralizationStartMs =
     state !== null && NEUTRAL_STATUSES.has(state.session_status)
@@ -293,7 +288,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
   return {
     state, insights, battles, recentPasses, feed, commentary, timeline, markers,
-    playing, speed, frameMs, atMs, loading, error, feedError,
+    playing, speed, atMs, loading, error, feedError,
     lang, level, positionsData,
     greenFlag, greenFlagText, neutralizationStartMs,
     canScrub: isReplay,

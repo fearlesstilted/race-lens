@@ -1,25 +1,17 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import type { RaceMarker, Timeline } from '../../api/types'
-import { formatRaceTime } from '../../lib/format'
+import { formatRaceTime, lapAtTime } from '../../lib/format'
 import type { LivePhase } from '../../lib/liveStatus'
-import { clusterMarkers } from '../../lib/timelineMarkers'
 
 type Speed = 1 | 5 | 10
 const SPEEDS: Speed[] = [1, 5, 10]
-
-type Lang = 'en' | 'ru'
 
 type Props = {
   timeline: Timeline | null
   atMs: number
   playing: boolean
   speed: Speed
-  /** Wall-clock ms between stream frames — for cursor transition. */
-  frameMs: number
   markers?: RaceMarker[]
-  lang?: Lang
-  /** Lap currently in progress, shared with the header. */
-  currentLap?: number | null
   /** When false (live mode) the scrub rail is disabled and speed controls hidden. */
   canScrub?: boolean
   /** Session clock string shown in live mode (e.g. "LAP 42"). */
@@ -73,39 +65,7 @@ function buildPhase(markers: RaceMarker[], startMs: number, endMs: number): Phas
   return segments.length > 0 ? segments : [{ kind: 'green', pct: 100 }]
 }
 
-const SPOILER_KEY = 'racelens_spoiler_free'
-
-// ── Marker rendering helpers ──────────────────────────────────────────────────
-
-type MarkerStyle = {
-  color: string
-  shape: 'line' | 'triangle' | 'dot' | 'chevron'
-  zIndex: number
-}
-
-function markerStyle(kind: RaceMarker['kind']): MarkerStyle {
-  switch (kind) {
-    case 'RED_FLAG':    return { color: '#cc2222', shape: 'line',     zIndex: 5 }
-    case 'SAFETY_CAR':
-    case 'VSC':         return { color: '#f2a900', shape: 'line',     zIndex: 4 }
-    case 'CRASH':
-    case 'INCIDENT':    return { color: '#cc2222', shape: 'triangle', zIndex: 3 }
-    case 'OFF_TRACK':   return { color: '#ff6a00', shape: 'triangle', zIndex: 3 }
-    case 'PENALTY':     return { color: '#f2a900', shape: 'dot',      zIndex: 3 }
-    case 'LEAD_CHANGE': return { color: '#ffffff', shape: 'chevron',  zIndex: 2 }
-    case 'FASTEST_LAP': return { color: '#b388ff', shape: 'dot',      zIndex: 2 }
-    case 'PODIUM_CHANGE': return { color: '#555566', shape: 'line',   zIndex: 1 }
-    case 'OVERTAKE':    return { color: '#00d2be', shape: 'chevron',  zIndex: 2 }
-    case 'UNDERCUT':    return { color: '#00d2be', shape: 'dot',      zIndex: 2 }
-    default:            return { color: '#888899', shape: 'dot',      zIndex: 1 }
-  }
-}
-
-export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = [], lang = 'en', currentLap = null, canScrub = true, liveLabel, livePhase = 'connecting', liveBadge = 'CONNECTING', liveDetail = 'OPENING LIVE TIMING', onScrub, onPlay, onPause, onSpeed }: Props) {
-  const [spoilerFree, setSpoilerFree] = useState(() => {
-    try { return localStorage.getItem(SPOILER_KEY) !== '0' } catch { return true }
-  })
-  const railRef = useRef<HTMLDivElement>(null)
+export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canScrub = true, liveLabel, livePhase = 'connecting', liveBadge = 'CONNECTING', liveDetail = 'OPENING LIVE TIMING', onScrub, onPlay, onPause, onSpeed }: Props) {
 
   const startMs = timeline?.start_ms ?? 0
   const endMs = timeline?.end_ms ?? 0
@@ -118,74 +78,35 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
     return buildPhase(markers, startMs, endMs)
   }, [markers, startMs, endMs, timeline])
 
-  // Marker clusters — respects spoilerFree (only show markers up to current atMs)
-  const markerClusters = useMemo(() => {
-    if (!timeline || duration <= 1 || markers.length === 0) return []
-    const visible = spoilerFree ? markers.filter((m) => m.at_ms <= atMs) : markers
-    const pctFn = (m: RaceMarker) => ((m.at_ms - startMs) / duration) * 100
-    return clusterMarkers(visible, pctFn)
-  }, [markers, spoilerFree, atMs, startMs, duration, timeline])
-
-  const handleRailClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!railRef.current || !timeline || !canScrub) return
-      const rect = railRef.current.getBoundingClientRect()
-      const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1)
-      onScrub(Math.round(startMs + ratio * duration))
-    },
-    [timeline, startMs, duration, onScrub, canScrub],
-  )
-
-  const toggleSpoiler = useCallback(() => {
-    setSpoilerFree((v) => {
-      const next = !v
-      try { localStorage.setItem(SPOILER_KEY, next ? '1' : '0') } catch { /* noop */ }
-      return next
-    })
-  }, [])
-
-  const handleRailKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!timeline || !canScrub) return
-    const step = Math.max(1000, Math.round(duration / 100))
-    let next = atMs
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next -= step
-    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += step
-    else if (event.key === 'Home') next = startMs
-    else if (event.key === 'End') next = endMs
-    else return
-    event.preventDefault()
-    onScrub(Math.min(endMs, Math.max(startMs, next)))
-  }, [atMs, canScrub, duration, endMs, onScrub, startMs, timeline])
-
   // Clock is race-relative: 0:00 at lights-out. During the formation lap
   // (before lights-out) show a label instead of a time.
   const lightsOutMs = timeline?.lights_out_ms ?? 0
   const inFormation = atMs < lightsOutMs
-  const sessionTime = inFormation ? 'FORMATION LAP' : formatRaceTime(atMs - lightsOutMs)
-  const cursorLabel = currentLap !== null ? `LAP ${currentLap} · ${sessionTime}` : sessionTime
-  const cursorAnchor = cursorPct < 10 ? 'start' : cursorPct > 90 ? 'end' : 'center'
-
+  const positionLabel = !timeline
+    ? 'REPLAY POSITION'
+    : inFormation
+      ? 'FORMATION LAP'
+      : `LAP ${lapAtTime(timeline, atMs)} · ${formatRaceTime(atMs - lightsOutMs)}`
   const visiblePhases = useMemo(() => {
-    if (!spoilerFree) return phases.map((seg, i) => ({ ...seg, key: i, neutral: false }))
-    const result: { kind: PhaseKind; pct: number; key: number; neutral: boolean; label?: string }[] = []
+    const result: { kind: PhaseKind; pct: number; key: string; neutral: boolean; label?: string }[] = []
     let accumulated = 0
     for (let i = 0; i < phases.length; i++) {
       const seg = phases[i]
       const segEnd = accumulated + seg.pct
       if (accumulated >= cursorPct) {
-        result.push({ ...seg, key: i, neutral: true })
+        result.push({ ...seg, key: `phase-${i}-future`, neutral: true })
       } else if (segEnd > cursorPct) {
         const pastPct = cursorPct - accumulated
         const futurePct = segEnd - cursorPct
-        result.push({ kind: seg.kind, pct: pastPct, key: i * 100, neutral: false, label: seg.label })
-        result.push({ kind: seg.kind, pct: futurePct, key: i * 100 + 1, neutral: true, label: seg.label })
+        result.push({ kind: seg.kind, pct: pastPct, key: `phase-${i}-past`, neutral: false, label: seg.label })
+        result.push({ kind: seg.kind, pct: futurePct, key: `phase-${i}-future`, neutral: true, label: seg.label })
       } else {
-        result.push({ ...seg, key: i, neutral: false })
+        result.push({ ...seg, key: `phase-${i}-whole`, neutral: false })
       }
       accumulated = segEnd
     }
     return result
-  }, [phases, spoilerFree, cursorPct])
+  }, [phases, cursorPct])
 
   return (
     <div className={`deck${canScrub ? '' : ' deck-live'}`}>
@@ -203,10 +124,10 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
                 ? <path d="M7 5h3v14H7zm7 0h3v14h-3z" />
                 : <path d="m8 5 11 7-11 7z" />}
             </svg>
-            <span>{playing ? 'PAUSE' : 'PLAY'}</span>
           </button>
 
           <div className="deck-timeline">
+            <output className="deck-position">{positionLabel}</output>
             <div className="phase" aria-hidden="true">
               {visiblePhases.map((seg) => {
                 let cls: string
@@ -226,153 +147,27 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
                     key={seg.key}
                     className={cls}
                     style={{ width: `${seg.pct}%` }}
-                    title={seg.label}
+                    title={seg.neutral ? undefined : seg.label}
                   />
                 )
               })}
             </div>
-            <div
-              className="rail"
-              ref={railRef}
-              onClick={handleRailClick}
-              onKeyDown={handleRailKeyDown}
-              role="slider"
-              tabIndex={0}
+            <input
+              className="deck-range"
+              type="range"
+              min={startMs}
+              max={endMs}
+              step={1000}
+              value={atMs}
+              onChange={(event) => onScrub(Number(event.currentTarget.value))}
+              disabled={!timeline}
               aria-label="Replay position"
-              aria-valuemin={startMs}
-              aria-valuemax={endMs}
-              aria-valuenow={atMs}
-              aria-valuetext={cursorLabel}
-            >
-              <div className="line" />
-              <div
-                className="played"
-                style={{
-                  width: `${progress * 100}%`,
-                  transition: playing ? `width ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
-                }}
-              />
-              <div
-                className="cursor"
-                style={{
-                  left: `${progress * 100}%`,
-                  transition: playing ? `left ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
-                }}
-              />
-              <span
-                className="cursor-pill"
-                data-anchor={cursorAnchor}
-                style={{
-                  left: `${progress * 100}%`,
-                  transition: playing ? `left ${(frameMs / 1000).toFixed(2)}s linear` : 'none',
-                }}
-              >
-                {cursorLabel}
-              </span>
-              {markerClusters.map((cluster) => {
-                // Pick the highest-priority item in cluster for rendering
-                const primary = cluster.items.reduce((best, m) =>
-                  markerStyle(m.kind).zIndex > markerStyle(best.kind).zIndex ? m : best,
-                )
-                const ms = markerStyle(primary.kind)
-                const isSevere =
-                  primary.kind === 'CRASH' ||
-                  primary.kind === 'INCIDENT' ||
-                  primary.kind === 'OFF_TRACK'
-                const tipText = cluster.items
-                  .map((m) => {
-                    const label = lang === 'ru' ? m.text_ru : m.text_en
-                    return m.lap != null ? `${label} · Lap ${m.lap}` : label
-                  })
-                  .join('\n')
-                const handleMarkerClick = (event: React.MouseEvent) => {
-                  event.stopPropagation()
-                  onScrub(primary.at_ms)
-                }
-                const markerCls = [
-                  'rail-marker',
-                  isSevere ? 'rail-marker-severe' : '',
-                ].filter(Boolean).join(' ')
-
-                return (
-                  <div
-                    key={`m-${cluster.pct.toFixed(3)}`}
-                    title={tipText}
-                    onClick={handleMarkerClick}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        onScrub(primary.at_ms)
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={tipText}
-                    className={markerCls}
-                    style={{
-                      left: `${cluster.pct}%`,
-                      zIndex: ms.zIndex,
-                    }}
-                  >
-                    {ms.shape === 'line' && (
-                      <svg
-                        width="2"
-                        height="16"
-                        viewBox="0 0 2 16"
-                        style={{ display: 'block', opacity: 0.88 }}
-                        aria-hidden="true"
-                      >
-                        <rect x="0" y="0" width="2" height="16" fill={ms.color} />
-                      </svg>
-                    )}
-                    {ms.shape === 'triangle' && (
-                      <svg
-                        width="9"
-                        height="8"
-                        viewBox="0 0 9 8"
-                        style={{ display: 'block', overflow: 'visible' }}
-                        aria-hidden="true"
-                      >
-                        <polygon points="4.5,0 9,8 0,8" fill={ms.color} />
-                      </svg>
-                    )}
-                    {ms.shape === 'dot' && (
-                      <svg
-                        width="5"
-                        height="5"
-                        viewBox="0 0 5 5"
-                        style={{ display: 'block' }}
-                        aria-hidden="true"
-                      >
-                        <circle cx="2.5" cy="2.5" r="2.5" fill={ms.color} />
-                      </svg>
-                    )}
-                    {ms.shape === 'chevron' && (
-                      <svg
-                        width="7"
-                        height="10"
-                        viewBox="0 0 7 10"
-                        style={{ display: 'block', opacity: 0.9 }}
-                        aria-hidden="true"
-                      >
-                        <polyline
-                          points="1,1 6,5 1,9"
-                          fill="none"
-                          stroke={ms.color}
-                          strokeWidth="1.8"
-                          strokeLinecap="square"
-                          strokeLinejoin="miter"
-                        />
-                      </svg>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+              aria-valuetext={positionLabel}
+            />
           </div>
 
           <div className="deck-options">
-            <div className="deck-speeds" aria-label="Replay speed">
+            <div className="deck-speeds" role="group" aria-label="Replay speed">
               {SPEEDS.map((s) => (
                 <button
                   key={s}
@@ -384,22 +179,6 @@ export function ReplayDeck({ timeline, atMs, playing, speed, frameMs, markers = 
                   {s}×
                 </button>
               ))}
-            </div>
-            <div
-              className="sp"
-              role="switch"
-              aria-checked={spoilerFree}
-              tabIndex={0}
-              onClick={toggleSpoiler}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  toggleSpoiler()
-                }
-              }}
-            >
-              SPOILER-FREE
-              <span className={`sw${spoilerFree ? ' sw-on' : ''}`} />
             </div>
           </div>
         </div>

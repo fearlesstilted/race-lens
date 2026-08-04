@@ -246,12 +246,6 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.35; }
 }
-.rail-disabled {
-  cursor: default;
-  opacity: 0.35;
-  pointer-events: none;
-}
-
 /* ── Forecast strip ─────────────────────────────────────────────── */
 .forecast-strip {
   border-top: 1px solid var(--hair);
@@ -462,7 +456,7 @@
 
 /* ── Overtake % in insight cards ───────────────────────────────── */
 .ins-overtake {
-  font: 700 11px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.18em;
   color: #00c853;
   margin-top: var(--s1);
@@ -495,7 +489,7 @@
   border-right: 1px solid var(--hair);
   background: transparent;
   color: var(--dim);
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.2em;
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
@@ -514,9 +508,8 @@
   display: flex;
   flex-direction: column;
 }
-/* Remove top border from forecast/winprob when inside ctr-pane */
+/* Remove top border from forecast when inside ctr-pane. */
 .ctr-pane .forecast-strip { border-top: none; }
-.ctr-pane .win-prob-graph { border-top: none; }
 /* Feed inside ctr-pane fills its height */
 .ctr-pane .ev-scroll {
   flex: 1;
@@ -556,28 +549,6 @@
   scrollbar-width: thin;
   scrollbar-color: #3a3a44 transparent;
 }
-.bi-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 12px;
-}
-.bi-heading small,
-.bi-heading > span {
-  color: var(--dim);
-  font: 700 9px var(--cond);
-  letter-spacing: .16em;
-}
-.bi-heading h1 {
-  margin: 3px 0 0;
-  font: italic 900 clamp(25px, 2.3vw, 38px)/.9 var(--cond);
-  letter-spacing: -.02em;
-}
-.bi-heading > span {
-  color: var(--amber);
-  text-align: right;
-}
 .bi-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -606,19 +577,13 @@
 }
 .bi-formation small {
   color: #39c463;
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: .2em;
 }
 .bi-formation strong {
   margin-top: 8px;
   font: italic 900 clamp(34px, 5vw, 68px)/.9 var(--cond);
   letter-spacing: -.02em;
-}
-.bi-formation p {
-  max-width: 440px;
-  margin-top: 12px;
-  color: var(--dim);
-  font: 600 12px/1.5 var(--body);
 }
 .bi-flow { grid-column: span 7; }
 .bi-state { grid-column: span 5; }
@@ -634,7 +599,7 @@
 }
 .bi-card-head b,
 .bi-card-head span {
-  font: 700 8px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: .16em;
 }
 .bi-card-head b { color: var(--dim); }
@@ -662,8 +627,8 @@
 .bi-driver:focus-visible,
 .bi-battle-row:hover,
 .bi-battle-row:focus-visible,
-.bi-pace-chart button:hover,
-.bi-pace-chart button:focus-visible {
+.bi-pace-row:hover,
+.bi-pace-row:focus-visible {
   border-color: #ffffff44;
   background-color: #ffffff0b;
   outline: none;
@@ -689,16 +654,16 @@
   white-space: nowrap;
 }
 .bi-driver-meta b {
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
   text-transform: capitalize;
 }
 .bi-driver-meta small {
   margin-top: 2px;
   color: var(--dim);
-  font: 600 8px var(--cond);
+  font: 600 12px var(--cond);
 }
 .bi-driver-gap {
-  font: 800 11px var(--cond);
+  font: 800 12px var(--cond);
   font-variant-numeric: tabular-nums;
 }
 .bi-gap-link {
@@ -707,7 +672,7 @@
   align-items: center;
   padding-left: 51px;
   color: var(--dim);
-  font: 700 8px var(--cond);
+  font: 700 12px var(--cond);
   font-variant-numeric: tabular-nums;
 }
 .bi-gap-link::before {
@@ -751,12 +716,12 @@
 }
 .bi-state-grid span {
   color: var(--dim);
-  font: 600 7px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: .12em;
 }
 .bi-state-grid strong {
   margin-top: 3px;
-  font: 800 11px var(--cond);
+  font: 800 12px var(--cond);
 }
 .bi-battle-list {
   display: grid;
@@ -778,7 +743,7 @@
 .bi-battle-row:first-child { border-top: 0; }
 .bi-battle-row > span,
 .bi-battle-row > strong {
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
 }
 .bi-battle-row > i {
   height: 4px;
@@ -792,46 +757,34 @@
   background: #31d7f2;
 }
 .bi-battle-row em {
-  font: normal 700 9px var(--cond);
+  font: normal 700 12px var(--cond);
   text-align: right;
 }
-.bi-pace-chart {
-  height: 96px;
-  display: flex;
-  align-items: end;
-  gap: 5px;
-  padding-top: 7px;
-}
-.bi-pace-chart button {
-  position: relative;
-  flex: 1;
-  height: 100%;
-  min-width: 0;
-  padding: 0 0 15px;
+.bi-pace-list { display: grid; }
+.bi-pace-row {
+  display: grid;
+  grid-template-columns: 4px 42px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 0;
   border: 0;
+  border-top: 1px solid #ffffff16;
   background: transparent;
-  color: var(--dim);
+  color: var(--ink);
   cursor: pointer;
+  text-align: left;
 }
-.bi-pace-chart button i {
-  position: absolute;
-  right: 0;
-  bottom: 15px;
-  left: 0;
-  height: var(--pace-height);
-  border-radius: 2px 2px 0 0;
-  background: linear-gradient(var(--team), color-mix(in srgb, var(--team), transparent 70%));
-}
-.bi-pace-chart button span {
-  position: absolute;
-  inset: auto 0 0;
-  font: 700 8px var(--cond);
-  text-align: center;
-}
+.bi-pace-row:first-child { border-top: 0; }
+.bi-pace-row > i { align-self: stretch; }
+.bi-pace-row > strong,
+.bi-pace-row > span,
+.bi-pace-row > em { font: 700 12px var(--cond); }
+.bi-pace-row > em { color: var(--dim); font-style: normal; text-align: right; }
 .bi-empty {
   padding: 18px 4px;
   color: var(--dim);
-  font: 600 10px var(--cond);
+  font: 600 12px/1.5 var(--body);
 }
 
 .layout-presets .tog {
@@ -848,8 +801,8 @@
   display: block;
   margin-top: 8px;
   color: var(--dim);
-  font: 600 9px/1.4 var(--cond);
-  letter-spacing: .08em;
+  font: 500 12px/1.4 var(--body);
+  letter-spacing: 0;
 }
 
 @media (max-width: 1439px) {
@@ -873,17 +826,6 @@
     min-height: 270px;
     padding: 10px;
   }
-  .bi-heading {
-    align-items: start;
-    margin-bottom: 8px;
-  }
-  .bi-heading h1 {
-    font-size: 26px;
-  }
-  .bi-heading > span {
-    max-width: 100px;
-    font-size: 7px;
-  }
   .bi-grid {
     display: block;
   }
@@ -896,43 +838,7 @@
   }
 }
 
-/* ── Win Probability Graph ──────────────────────────────────────── */
-.win-prob-graph {
-  position: relative;
-  background: var(--bg);
-  border-top: 1px solid var(--hair);
-  padding: var(--s1) 0 var(--s1) 0;
-}
-.win-prob-label {
-  font: 700 10px var(--cond);
-  letter-spacing: 0.3em;
-  color: var(--dim);
-  padding: 0 0 var(--s1) 34px;
-  font-variant-numeric: tabular-nums;
-}
-.win-prob-loading {
-  position: absolute;
-  top: 8px;
-  right: 60px;
-  font: 600 11px var(--cond);
-  color: var(--dim);
-}
-.win-prob-svg {
-  display: block;
-  width: 100%;
-  height: 140px;
-}
-.win-prob-axis {
-  font: 600 9px var(--cond);
-  fill: #ffffff44;
-  font-variant-numeric: tabular-nums;
-}
-.win-prob-driver {
-  font: 700 9px var(--cond);
-  letter-spacing: 0.06em;
-}
-
-/* ── top-panels: highlights + dotd container ─────────────────── */
+/* ── top-panels: highlights container ────────────────────────── */
 .top-panels {
   display: flex;
   align-items: center;
@@ -941,7 +847,7 @@
   position: relative;
 }
 
-/* ── drawer panels group (HIGHLIGHTS + DOTD inside settings drawer) ── */
+/* ── drawer highlights group ─────────────────────────────────── */
 .drawer-panels-group {
   /* shown only on mobile/tablet via media query */
   display: none;
@@ -951,21 +857,18 @@
   flex-direction: column;
   gap: 8px;
 }
-/* Inside drawer the hl-wrap/dotd-wrap trigger buttons fill full width */
-.drawer-panels-inner .hl-wrap,
-.drawer-panels-inner .dotd-wrap {
+/* Inside drawer the highlights trigger button fills full width. */
+.drawer-panels-inner .hl-wrap {
   width: 100%;
 }
-.drawer-panels-inner .hl-wrap > .tog,
-.drawer-panels-inner .dotd-wrap > .tog {
+.drawer-panels-inner .hl-wrap > .tog {
   width: 100%;
   justify-content: flex-start;
   padding: 8px 14px;
   font-size: 12px;
 }
-/* Panels inside drawer: static position, full width, no shadow/border-radius */
-.drawer-panels-inner .hl-panel,
-.drawer-panels-inner .dotd-panel {
+/* The highlights panel is static inside the drawer. */
+.drawer-panels-inner .hl-panel {
   position: static;
   width: 100%;
   max-height: 320px;
@@ -1006,7 +909,7 @@
   color: var(--dim);
 }
 .hl-play-btn {
-  font-size: 11px !important;
+  font-size: 12px !important;
   padding: 3px 10px !important;
   height: auto !important;
 }
@@ -1049,14 +952,14 @@
   text-align: center;
 }
 .hl-time {
-  font: 600 11px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.05em;
   color: var(--dim);
   flex-shrink: 0;
   width: 52px;
 }
 .hl-lap {
-  font: 600 11px var(--cond);
+  font: 600 12px var(--cond);
   color: var(--dim);
   flex-shrink: 0;
   width: 28px;
@@ -1068,173 +971,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* ── Driver of the Day panel ──────────────────────────────────── */
-.dotd-wrap {
-  position: relative;
-}
-.dotd-gate-hint {
-  display: block;
-  font: 600 9px var(--cond);
-  letter-spacing: 0.15em;
-  color: var(--dim);
-  opacity: 0.7;
-  white-space: nowrap;
-  margin-top: 3px;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-.dotd-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 280px;
-  background: #111117;
-  border: 1px solid var(--hair);
-  border-radius: 4px;
-  z-index: 200;
-  box-shadow: 0 8px 24px #00000088;
-  display: flex;
-  flex-direction: column;
-  max-height: 420px;
-}
-.dotd-header {
-  display: flex;
-  flex-direction: column;
-  padding: var(--s2) var(--s3);
-  border-bottom: 1px solid var(--hair);
-  flex-shrink: 0;
-}
-.dotd-title {
-  font: italic 800 12px var(--cond);
-  letter-spacing: 0.2em;
-  color: var(--dim);
-}
-.dotd-sub {
-  font: 11px var(--body);
-  color: #555566;
-  margin-top: 2px;
-}
-.dotd-empty {
-  padding: 16px 12px;
-  color: var(--dim);
-  font: 600 12px var(--cond);
-  letter-spacing: 0.1em;
-}
-.dotd-hero {
-  margin: var(--s2) var(--s3) var(--s1);
-  padding: var(--s2) var(--s3);
-  border-left: 3px solid var(--dim);
-  background: #0c0c14;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  flex-shrink: 0;
-}
-.dotd-hero-code {
-  font: italic 800 26px/1 var(--cond);
-  letter-spacing: 0.06em;
-}
-.dotd-hero-label {
-  font: 600 10px var(--cond);
-  letter-spacing: 0.25em;
-  color: var(--dim);
-}
-.dotd-hero-note {
-  font: 12px var(--body);
-  color: var(--dim);
-  margin-top: 2px;
-}
-.dotd-list {
-  overflow-y: auto;
-  flex: 1;
-  padding: 4px 0;
-}
-.dotd-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  width: 100%;
-  padding: var(--s1) var(--s3);
-  background: none;
-  border: none;
-  color: var(--ink);
-  cursor: pointer;
-  text-align: left;
-  font: 13px var(--body);
-  transition: background 0.1s;
-}
-.dotd-row:hover {
-  background: var(--hair);
-}
-.dotd-row-voted {
-  background: #0e1a0e !important;
-}
-.dotd-code {
-  font: italic 800 14px var(--cond);
-  letter-spacing: 0.06em;
-  width: 34px;
-  flex-shrink: 0;
-}
-.dotd-bar-wrap {
-  flex: 1;
-  height: 4px;
-  background: var(--hair);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.dotd-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.4s ease;
-}
-.dotd-score {
-  font: 600 11px var(--cond);
-  color: var(--dim);
-  width: 30px;
-  text-align: right;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-.dotd-check {
-  font: 600 10px var(--cond);
-  color: #44aa44;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-}
-.dotd-footer {
-  padding: 6px 12px 8px;
-  font: 10px var(--body);
-  color: #444455;
-  border-top: 1px solid var(--hair);
-  flex-shrink: 0;
-}
-
-/* ── Timeline markers ───────────────────────────────────────────── */
-/* All marker shapes are SVG-rendered in ReplayDeck.tsx.
-   These classes provide hover lift and severe-event emphasis. */
-
-.rail-marker {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  transition: transform 0.12s ease-out, opacity 0.12s ease-out;
-}
-.rail-marker:hover {
-  /* Subtle lift — the marker pops ~2px above the rail line */
-  transform: translateX(-50%) translateY(-2px);
-  opacity: 1 !important;
-}
-/* CRASH / INCIDENT / OFF_TRACK: static (no strobe). The SVG already renders these
-   red + a touch larger; a blinking timeline read as a seizure hazard. */
-.rail-marker-severe {
-  opacity: 1;
 }
 
 /* One editorial event at a time, ranked by race importance. */
@@ -1303,9 +1039,6 @@
 @media (prefers-reduced-motion: reduce) {
   .live-badge {
     animation: none;
-  }
-  .rail-marker:hover {
-    transform: translateX(-50%);
   }
 }
 
@@ -1391,11 +1124,17 @@
   justify-content: space-between;
   align-items: baseline;
   padding: 8px 2px 6px;
-  font: italic 800 11px var(--cond);
+  font: italic 800 12px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
 }
 .stints-laps { font-style: normal; font-weight: 600; letter-spacing: 0.14em; }
+.stints-state { display: grid; place-items: center; color: var(--dim); font: 700 12px var(--cond); letter-spacing: .16em; }
+.stint-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 2px 6px; color: var(--dim); font: 700 12px var(--cond); letter-spacing: .08em; }
+.stint-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.stint-legend i { width: 7px; height: 7px; border-radius: 50%; }
+.stint-ruler { display: grid; grid-template-columns: 38px 1fr; padding-bottom: 3px; color: var(--dim); font: 600 12px var(--cond); }
+.stint-ruler-laps { display: flex; justify-content: space-between; }
 .stints-rows {
   display: flex;
   flex-direction: column;
@@ -1410,8 +1149,11 @@
   gap: 8px;
 }
 .stint-drv { font: italic 800 13px var(--cond); letter-spacing: 0.04em; }
-.stint-bar { display: flex; height: 16px; width: 100%; border: 1px solid var(--hair); }
+.stint-bar { position: relative; height: 24px; width: 100%; border: 1px solid var(--hair); }
 .stint-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1419,9 +1161,8 @@
   overflow: hidden;
   border-right: 1px solid #00000099;
 }
-.stint-seg:last-child { border-right: none; }
 .stint-seg-lbl {
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   color: #000000bb;
   white-space: nowrap;
   letter-spacing: 0.02em;
@@ -1432,29 +1173,21 @@
 @media (max-width: 1024px) {
   .deck-transport,
   .deck-speed,
-  .deck-options .sp,
   .catalog-open,
   .settings-group .tog,
+  .settings-group .layer-toggle,
   .ctr-tab,
   .ins-filter .tog,
+  .hl-play-btn,
+  .hl-item,
   .settings-close,
   .ev-radio-btn,
-  .rail-marker {
+  .center-switch button {
     min-width: 44px;
     min-height: 44px;
     touch-action: manipulation;
   }
-  .rail {
-    height: 44px;
-  }
-  .rail .line,
-  .rail .played {
-    top: 15px;
-  }
-  .rail .cursor {
-    top: 8px;
-    height: 16px;
-  }
+  .deck-range { min-height: 44px; }
   .ctr-tab {
     height: 44px;
   }

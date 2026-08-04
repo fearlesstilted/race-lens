@@ -3,13 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { getCapabilities, listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
-import type { SessionSummary } from './api/types'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { BattleIntelligence } from './features/replay/BattleIntelligence'
 import { BroadcastOverlay } from './features/replay/BroadcastOverlay'
 import { ForecastStrip } from './features/replay/ForecastStrip'
 import { StintTimeline } from './features/replay/StintTimeline'
-import { WinProbGraph } from './features/replay/WinProbGraph'
 import { FocusPanel } from './features/replay/FocusPanel'
 import { InsightPanel } from './features/replay/InsightPanel'
 import { RaceFeed } from './features/replay/RaceFeed'
@@ -24,6 +22,7 @@ import { TrackMap } from './features/replay/TrackMap'
 import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
 import type { DashboardLayout } from './features/replay/replayTypes'
 import { useReplay } from './features/replay/useReplay'
+import { lapAtTime } from './lib/format'
 import { livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
@@ -49,21 +48,19 @@ function LiveStatusPill({
 
 // ── Center bottom segment tabs ────────────────────────────────────────────────
 
-type CenterTab = 'FEED' | 'PACE' | 'GAP' | 'STRATEGY'
+type CenterTab = 'FEED' | 'PACE' | 'STRATEGY'
 
 type CenterTabsProps = {
   activeTab: CenterTab
   showForecast: boolean
-  showWinProb: boolean
   showStrategy: boolean
   onTab: (t: CenterTab) => void
 }
 
-function CenterTabs({ activeTab, showForecast, showWinProb, showStrategy, onTab }: CenterTabsProps) {
+function CenterTabs({ activeTab, showForecast, showStrategy, onTab }: CenterTabsProps) {
   const tabs: CenterTab[] = ['FEED']
   if (showStrategy) tabs.push('STRATEGY')
   if (showForecast) tabs.push('PACE')
-  if (showWinProb) tabs.push('GAP')
   if (tabs.length <= 1) return null
   return (
     <div className="ctr-tabs">
@@ -97,7 +94,6 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
@@ -120,18 +116,16 @@ function App() {
 
   // PROJECTION toggle — replay only
   const [projection, setProjection] = useState(false)
-  // WIN % toggle — replay only
-  const [winProb, setWinProb] = useState(false)
   // VOICE alerts — speak flags/fastest laps/passes from the feed
   const [voice, setVoice] = useState(false)
   // Center bottom segment tab
   const [centerTab, setCenterTab] = useState<CenterTab>('FEED')
 
   useEffect(() => {
-    if ((centerTab === 'PACE' && !projection) || (centerTab === 'GAP' && !winProb)) {
+    if (centerTab === 'PACE' && !projection) {
       setCenterTab('FEED')
     }
-  }, [centerTab, projection, winProb])
+  }, [centerTab, projection])
 
   // Build DataSource from current mode
   const source = useMemo<DataSource | null>(() => {
@@ -155,7 +149,6 @@ function App() {
       .then((items) => {
         if (cancelled) return
         window.clearTimeout(wakeTimer)
-        setSessions(items)
         const requested = new URLSearchParams(window.location.search).get('session')
         const requestedSession = items.find((item) => item.session_id === requested)
         const initialSession = requestedSession?.session_id ?? null
@@ -298,13 +291,11 @@ function App() {
 
   const hasFocus = selectedIds.length > 0
 
-  // Header lap = the lap IN PROGRESS (laps_completed + 1), shown once racing.
-  // state.lap only counts completed laps, so without this the first lap reads "—".
-  // During the formation lap (before lights-out) there is no lap number.
-  const lightsOutMs = replay.timeline?.lights_out_ms ?? 0
-  const racing = !!state && replay.atMs >= lightsOutMs
+  // Replay follows the range immediately; live follows the latest stream state.
   let currentLap = 0
-  if (racing && state) {
+  if (mode === 'replay') {
+    currentLap = timeline?.session_id === sessionId ? lapAtTime(timeline, replay.atMs) : 0
+  } else if (state) {
     const inProgress = (state.lap ?? 0) + 1
     currentLap = state.total_laps ? Math.min(inProgress, state.total_laps) : inProgress
   }
@@ -329,25 +320,18 @@ function App() {
         mode={mode}
         liveAvailable={liveAvailable}
         projection={projection}
-        winProb={winProb}
         dashboardLayout={dashboardLayout}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
         onProjection={setProjection}
-        onWinProb={setWinProb}
         onDashboardLayout={handleDashboardLayout}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
-        sessionStatus={sessionStatus}
-        lap={currentLap}
-        totalLaps={state?.total_laps ?? null}
         atMs={replay.atMs}
       />
       <TopBar
-        session={mode === 'replay' ? (sessions.find((s) => s.session_id === sessionId) ?? null) : null}
         sessionId={mode === 'replay' ? sessionId : null}
-        sessions={mode === 'replay' ? sessions : []}
         lap={currentLap}
         totalLaps={state?.total_laps ?? null}
         lang={replay.lang}
@@ -355,19 +339,14 @@ function App() {
         mode={mode}
         liveAvailable={liveAvailable}
         projection={projection}
-        winProb={winProb}
         voice={voice}
         onModeChange={handleModeSwitch}
-        onSessionChange={handleSessionChange}
-        onLang={replay.setLang}
         onLevel={replay.setLevel}
         onVoice={setVoice}
         onProjection={setProjection}
-        onWinProb={setWinProb}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
-        sessionStatus={sessionStatus}
         atMs={replay.atMs}
         sessionName={mode === 'live' ? state?.session_name ?? null : null}
       />
@@ -446,7 +425,7 @@ function App() {
                   type="button"
                   className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
                   onClick={() => setMobTab(tab)}
-                >{tab === 'MAP' ? 'RACE' : tab}</button>
+                >{tab === 'MAP' ? dashboardLayout.center.toUpperCase() : tab}</button>
               ))}
             </div>
           </div>
@@ -476,13 +455,28 @@ function App() {
                   feed={replay.feed}
                 />
               )}
+              <div className="center-heading">
+                <span>WORKSPACE</span>
+                <div className="center-switch" role="group" aria-label="Center workspace">
+                  {(['battles', 'track'] as const).map((center) => (
+                    <button
+                      key={center}
+                      type="button"
+                      className={dashboardLayout.center === center ? 'on' : ''}
+                      aria-pressed={dashboardLayout.center === center}
+                      onClick={() => handleDashboardLayout({ ...dashboardLayout, center })}
+                    >
+                      {center.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {dashboardLayout.center === 'battles' ? (
                 <BattleIntelligence
                   rows={rows}
                   battles={replay.battles}
                   currentLap={currentLap}
                   totalLaps={state?.total_laps ?? null}
-                  sessionStatus={sessionStatus}
                   onSelectDriver={handleSelectDriver}
                 />
               ) : (
@@ -502,13 +496,11 @@ function App() {
                   recentPasses={replay.recentPasses}
                 />
               )}
-              {/* Center always keeps the race view + tabs — selecting drivers must never hide
-                  forecast/win%. Driver focus moves to the right column instead. */}
+              {/* Center keeps its workspace and tabs while driver focus moves right. */}
               <div className="ctr-bottom">
                 <CenterTabs
                   activeTab={centerTab}
                   showForecast={projection && (mode === 'replay' ? !!sessionId : isLiveActive)}
-                  showWinProb={winProb && (mode === 'replay' ? !!sessionId : isLiveActive)}
                   showStrategy={mode === 'replay' && !!sessionId}
                   onTab={setCenterTab}
                 />
@@ -521,17 +513,12 @@ function App() {
                     />
                   )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
-                    <StintTimeline sessionId={sessionId} order={state?.classification} />
+                    <StintTimeline sessionId={sessionId} currentLap={currentLap} order={state?.classification} />
                   )}
                   {centerTab === 'PACE' && projection && (
                     mode === 'replay'
                       ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
                       : isLiveActive && <ForecastStrip live atMs={replay.atMs} />
-                  )}
-                  {centerTab === 'GAP' && winProb && (
-                    mode === 'replay'
-                      ? sessionId && <WinProbGraph sessionId={sessionId} atMs={replay.atMs} />
-                      : isLiveActive && <WinProbGraph live atMs={replay.atMs} />
                   )}
                 </div>
               </div>
@@ -552,8 +539,8 @@ function App() {
             ) : (
               <InsightPanel
                 key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
-                insights={replay.insights}
-                commentary={replay.commentary}
+                insights={mode !== 'replay' || timeline?.session_id === sessionId ? replay.insights : []}
+                commentary={mode !== 'replay' || timeline?.session_id === sessionId ? replay.commentary : []}
                 selectedIds={selectedIds}
                 sessionStatus={sessionStatus}
                 sessionId={mode === 'replay' ? sessionId : null}
@@ -567,10 +554,7 @@ function App() {
             atMs={replay.atMs}
             playing={replay.playing}
             speed={replay.speed}
-            frameMs={replay.frameMs}
             markers={replay.markers}
-            lang={replay.lang}
-            currentLap={racing ? currentLap : null}
             canScrub={replay.canScrub}
             liveLabel={mode === 'live' ? liveLabel : null}
             livePhase={liveView.phase}

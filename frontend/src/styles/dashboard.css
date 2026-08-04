@@ -70,7 +70,7 @@
 .pit-tag {
   display: inline-block;
   margin-left: 5px;
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.12em;
   color: var(--amber);
   vertical-align: middle;
@@ -213,6 +213,39 @@
   overflow: hidden;
   position: relative;
 }
+.center-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--hair);
+  color: var(--dim);
+  font: 700 12px var(--cond);
+  letter-spacing: .2em;
+}
+.center-switch {
+  display: inline-flex;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.center-switch button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--hair);
+  background: transparent;
+  color: var(--dim);
+  font: 700 12px var(--cond);
+  letter-spacing: .12em;
+  cursor: pointer;
+}
+.center-switch button:first-child { border-left: 0; }
+.center-switch button:hover,
+.center-switch button.on { background: #e8002d1a; color: var(--ink); }
+.center-switch button.on { box-shadow: inset 0 -2px 0 var(--red); }
+.center-switch button:focus-visible { outline: 2px solid var(--rb-yellow); outline-offset: -2px; }
 .map {
   height: 46vh;
   min-height: 260px;
@@ -234,7 +267,7 @@
   position: absolute;
   right: 14px;
   bottom: 10px;
-  font: 600 11px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.25em;
   color: #55555f;
   z-index: 2;
@@ -343,7 +376,7 @@
   border-radius: 50%;
   background: #ffffff11;
   color: var(--dim);
-  font-size: 10px;
+  font-size: 10px; /* icon glyph only; the control name is its aria-label */
   line-height: 1;
   cursor: pointer;
 }
@@ -375,7 +408,7 @@
   border-bottom: 1px solid var(--hair);
 }
 .ins-filter .tog {
-  font-size: 9px;
+  font-size: 12px;
   padding: 2px 6px;
 }
 .ins-filter .tog:first-child {
@@ -432,7 +465,7 @@
   overflow-wrap: anywhere;
 }
 .ins h4 small {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.3em;
   color: var(--dim);
   flex-shrink: 0;
@@ -480,7 +513,7 @@
 
 /* 'also' subordinate type line */
 .ins-also {
-  font: 600 10px var(--cond);
+  font: 600 12px var(--cond);
   letter-spacing: 0.18em;
   color: var(--dim);
   margin-top: 2px;
@@ -502,18 +535,16 @@
 }
 .deck-shell {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
 }
 .deck-transport {
-  width: 64px;
+  width: 48px;
   height: 48px;
   display: grid;
-  grid-template-columns: 20px 1fr;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--ink);
   border-radius: 3px;
   background: var(--ink);
@@ -541,7 +572,15 @@
 }
 .deck-timeline {
   min-width: 0;
-  padding-top: 18px;
+  padding-top: 6px;
+}
+.deck-position {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--dim);
+  font: 700 12px/1 var(--cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .12em;
 }
 .phase {
   display: flex;
@@ -558,54 +597,19 @@
 .ph-vsc { background: repeating-linear-gradient(90deg, #f5c842 0px, #f5c842 4px, transparent 4px, transparent 8px); }
 .ph-neutral { background: #20232f; }
 
-.rail {
-  position: relative;
+.deck-range {
+  width: 100%;
   height: 28px;
+  margin: 0;
+  accent-color: var(--red);
   cursor: pointer;
-  touch-action: none;
 }
-.rail .line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 7px;
-  height: 2px;
-  background: #383b47;
-}
-.rail .played {
-  position: absolute;
-  left: 0;
-  top: 7px;
-  height: 2px;
-  background: var(--red);
-}
-.rail .cursor {
-  position: absolute;
-  top: 0;
-  width: 2px;
-  height: 16px;
-  background: var(--red);
-  box-shadow: 0 0 8px #e8002d99;
-  transform: translateX(-1px);
-}
-.cursor-pill {
-  position: absolute;
-  top: -19px;
-  padding: 2px 7px;
-  border: 1px solid #ffffff1f;
-  border-bottom-color: var(--red);
-  border-radius: 2px;
-  background: #111522;
-  color: var(--ink);
-  font: italic 800 11px var(--cond);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: .08em;
-  white-space: nowrap;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-.cursor-pill[data-anchor="start"] { transform: none; }
-.cursor-pill[data-anchor="end"] { transform: translateX(-100%); }
+.deck-range::-webkit-slider-runnable-track { height: 3px; background: #383b47; }
+.deck-range::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: var(--red); }
+.deck-range::-moz-range-track { height: 3px; background: #383b47; }
+.deck-range::-moz-range-progress { height: 3px; background: var(--red); }
+.deck-range::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--red); }
+.deck-range:disabled { cursor: default; opacity: .4; }
 .deck-options {
   display: flex;
   align-items: center;
@@ -691,50 +695,13 @@
   box-shadow: inset 0 -2px 0 var(--red);
 }
 .b.on:hover:not(:disabled) { border-color: var(--red); background: #e8002d2a; }
-.sp {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  font: 600 11px var(--cond);
-  letter-spacing: 0.22em;
-  color: var(--dim);
-  cursor: pointer;
-  user-select: none;
-}
-.sw {
-  width: 30px;
-  height: 16px;
-  border: 1px solid #ffffff2b;
-  position: relative;
-  flex-shrink: 0;
-}
-.sw::after {
-  content: '';
-  position: absolute;
-  right: 2px;
-  top: 2px;
-  bottom: 2px;
-  width: 10px;
-  background: #555;
-  transition: background 0.15s;
-}
-.sw.sw-on::after {
-  background: var(--red);
-}
 .deck-transport:focus-visible,
 .deck-speed:focus-visible,
-.rail:focus-visible,
-.sp:focus-visible {
+.deck-range:focus-visible {
   outline: 2px solid var(--rb-yellow);
   outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .rail .played,
-  .rail .cursor,
-  .cursor-pill {
-    transition: none !important;
-  }
 }
 
 /* trend column width defined in .trow declaration above */
@@ -751,7 +718,7 @@
 /* fastest lap purple dot */
 .fl-dot {
   color: #b388ff;
-  font-size: 10px;
+  font-size: 10px; /* decorative status dot, not microcopy */
   margin-left: 3px;
   vertical-align: middle;
 }
