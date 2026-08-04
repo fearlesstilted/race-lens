@@ -474,7 +474,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
       {!hasVisible && displayItems.length === 0 && (
         <div className="ins pace">
           <h4>
-            No active insights<small>INFO</small>
+            No active insights
           </h4>
           <p>Waiting for race data…</p>
         </div>

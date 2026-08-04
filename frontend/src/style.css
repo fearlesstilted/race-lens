@@ -133,18 +133,10 @@ body {
 }
 .sess {
   display: flex;
-  flex-direction: column;
   justify-content: center;
   padding: 0 12px;
 }
-.sess-main {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.sess b,
-.sess-select {
+.sess b {
   font: 600 15px var(--cond);
   letter-spacing: 0.14em;
   background: none;
@@ -154,46 +146,24 @@ body {
   padding: 0;
   text-transform: uppercase;
 }
-.sess-picker {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.sess-mobile {
-  display: none;
-}
-.sess-select {
-  border-bottom: 1px solid #ffffff24;
-}
-.sess-select option {
-  background: var(--navy2);
-}
-.sess-year { width: 58px; }
-.sess-event { width: 148px; }
-.sess-type { width: 116px; }
 .catalog-open {
   flex-shrink: 0;
-  min-height: 30px;
-  padding: 0 8px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 1px solid #ffc50066;
   border-radius: 3px;
   background: #ffc50012;
   color: var(--rb-yellow);
-  font: 700 10px var(--cond);
-  letter-spacing: 0.12em;
+  font: 700 14px var(--cond);
+  letter-spacing: 0.1em;
   cursor: pointer;
+  text-transform: uppercase;
 }
 .catalog-open:hover {
   border-color: var(--rb-yellow);
   background: #ffc50022;
 }
-.sess i {
-  font-style: normal;
-  color: var(--dim);
-  font-size: 12px;
-}
-
-/* ── lang / level toggles ────────────────────────────────────── */
+/* ── mode / layer toggles ────────────────────────────────────── */
 .top-toggles {
   display: flex;
   align-items: center;
@@ -554,8 +524,7 @@ body {
 .catalog-landing .catalog-header h2 {
   font-size: clamp(28px, 4vw, 52px);
 }
-.catalog-landing .catalog-toolbar,
-.catalog-landing .catalog-notice {
+.catalog-landing .catalog-toolbar {
   padding-right: clamp(18px, 4vw, 52px);
   padding-left: clamp(18px, 4vw, 52px);
 }
@@ -573,13 +542,7 @@ body {
 .catalog-header {
   gap: 16px;
 }
-.catalog-header small {
-  color: var(--amber);
-  font: 700 10px var(--cond);
-  letter-spacing: 0.24em;
-}
 .catalog-header h2 {
-  margin-top: 2px;
   font: italic 800 24px var(--cond);
 }
 .catalog-toolbar {
@@ -589,7 +552,7 @@ body {
   padding: 10px 18px;
   border-bottom: 1px solid var(--hair);
   color: var(--dim);
-  font: 700 11px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.16em;
 }
 .catalog-toolbar select {
@@ -605,12 +568,6 @@ body {
 }
 .catalog-toolbar span {
   margin-left: auto;
-}
-.catalog-notice {
-  padding: 9px 18px;
-  border-bottom: 1px solid var(--hair);
-  color: var(--dim);
-  font: 600 11px/1.4 var(--cond);
 }
 .catalog-error {
   padding: 10px 18px;
@@ -641,14 +598,14 @@ body {
 }
 .catalog-event-name small {
   color: var(--dim);
-  font: 700 9px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.2em;
 }
 .catalog-event-name b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: italic 800 18px var(--cond);
+  font: italic 800 20px var(--cond);
 }
 .catalog-sessions {
   display: flex;
@@ -677,7 +634,7 @@ body {
 }
 .catalog-session small {
   color: var(--dim);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.12em;
 }
 .catalog-session.is-ready {
@@ -706,8 +663,8 @@ body {
 }
 
 .label {
-  font: 600 11px var(--cond);
-  letter-spacing: 0.34em;
+  font: 600 13px var(--cond);
+  letter-spacing: 0.24em;
   color: var(--dim);
   /* fixed height so all three column labels sit on one baseline */
   height: var(--col-label-h);
@@ -719,4 +676,34 @@ body {
   background: var(--bg);
   z-index: 1;
   border-bottom: 1px solid var(--hair);
+}
+
+/* Later-imported dashboard rules keep the layout; these scoped type overrides
+   bring timing and insight copy up to the approved readable scale. */
+.col-timing .trow-hdr {
+  font-size: 12px;
+}
+.col-timing .delta-btn {
+  font-size: 12px;
+}
+.col-timing .pos,
+.col-timing .code {
+  font-size: 22px;
+}
+.col-timing .last-lap,
+.col-timing .gap {
+  font-size: 18px;
+}
+.col-timing .ty {
+  font-size: 18px;
+}
+.col-timing .tyre-age,
+.col-timing .pits-count {
+  font-size: 14px;
+}
+.col-insights .ins-filter .tog {
+  font-size: 12px;
+}
+.col-insights .ins p {
+  font-size: 17px;
 }

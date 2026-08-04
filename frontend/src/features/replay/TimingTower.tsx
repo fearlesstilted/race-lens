@@ -333,7 +333,6 @@ export const TimingTower = React.memo(function TimingTower({
           </div>
         )
       })}
-      {rows.length === 0 && <div className="trow-empty">No data</div>}
     </div>
   )
 })

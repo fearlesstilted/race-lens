@@ -166,7 +166,6 @@ export function SessionCatalog({ open, landing = false, initialSeason, onClose, 
       >
         <header className="settings-drawer-hdr catalog-header">
           <div>
-            <small>RACE ARCHIVE · 2018—NOW</small>
             <h2>{landing ? 'Choose a session to begin' : 'Choose any completed session'}</h2>
           </div>
           {!landing && (
@@ -187,9 +186,6 @@ export function SessionCatalog({ open, landing = false, initialSeason, onClose, 
             {SESSION_TYPES.map((item) => <option key={item}>{item}</option>)}
           </select>
           <span>{catalog ? `${events.length} weekends` : 'Loading calendar…'}</span>
-        </div>
-        <div className="catalog-notice">
-          Missing sessions are prepared once by the archive worker. A full archive often takes 15–45 minutes; queued requests can take longer.
         </div>
         {error && <div className="catalog-error" role="alert" aria-live="polite">{error}</div>}
         <div className="catalog-list" aria-busy={!catalog}>
