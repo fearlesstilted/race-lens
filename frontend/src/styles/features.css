@@ -556,28 +556,6 @@
   scrollbar-width: thin;
   scrollbar-color: #3a3a44 transparent;
 }
-.bi-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 12px;
-}
-.bi-heading small,
-.bi-heading > span {
-  color: var(--dim);
-  font: 700 9px var(--cond);
-  letter-spacing: .16em;
-}
-.bi-heading h1 {
-  margin: 3px 0 0;
-  font: italic 900 clamp(25px, 2.3vw, 38px)/.9 var(--cond);
-  letter-spacing: -.02em;
-}
-.bi-heading > span {
-  color: var(--amber);
-  text-align: right;
-}
 .bi-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -613,12 +591,6 @@
   margin-top: 8px;
   font: italic 900 clamp(34px, 5vw, 68px)/.9 var(--cond);
   letter-spacing: -.02em;
-}
-.bi-formation p {
-  max-width: 440px;
-  margin-top: 12px;
-  color: var(--dim);
-  font: 600 12px/1.5 var(--body);
 }
 .bi-flow { grid-column: span 7; }
 .bi-state { grid-column: span 5; }
@@ -662,8 +634,8 @@
 .bi-driver:focus-visible,
 .bi-battle-row:hover,
 .bi-battle-row:focus-visible,
-.bi-pace-chart button:hover,
-.bi-pace-chart button:focus-visible {
+.bi-pace-row:hover,
+.bi-pace-row:focus-visible {
   border-color: #ffffff44;
   background-color: #ffffff0b;
   outline: none;
@@ -795,39 +767,27 @@
   font: normal 700 9px var(--cond);
   text-align: right;
 }
-.bi-pace-chart {
-  height: 96px;
-  display: flex;
-  align-items: end;
-  gap: 5px;
-  padding-top: 7px;
-}
-.bi-pace-chart button {
-  position: relative;
-  flex: 1;
-  height: 100%;
-  min-width: 0;
-  padding: 0 0 15px;
+.bi-pace-list { display: grid; }
+.bi-pace-row {
+  display: grid;
+  grid-template-columns: 4px 42px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 0;
   border: 0;
+  border-top: 1px solid #ffffff16;
   background: transparent;
-  color: var(--dim);
+  color: var(--ink);
   cursor: pointer;
+  text-align: left;
 }
-.bi-pace-chart button i {
-  position: absolute;
-  right: 0;
-  bottom: 15px;
-  left: 0;
-  height: var(--pace-height);
-  border-radius: 2px 2px 0 0;
-  background: linear-gradient(var(--team), color-mix(in srgb, var(--team), transparent 70%));
-}
-.bi-pace-chart button span {
-  position: absolute;
-  inset: auto 0 0;
-  font: 700 8px var(--cond);
-  text-align: center;
-}
+.bi-pace-row:first-child { border-top: 0; }
+.bi-pace-row > i { align-self: stretch; }
+.bi-pace-row > strong,
+.bi-pace-row > span,
+.bi-pace-row > em { font: 700 10px var(--cond); }
+.bi-pace-row > em { color: var(--dim); font-style: normal; text-align: right; }
 .bi-empty {
   padding: 18px 4px;
   color: var(--dim);
@@ -872,17 +832,6 @@
     flex: 0 0 42dvh;
     min-height: 270px;
     padding: 10px;
-  }
-  .bi-heading {
-    align-items: start;
-    margin-bottom: 8px;
-  }
-  .bi-heading h1 {
-    font-size: 26px;
-  }
-  .bi-heading > span {
-    max-width: 100px;
-    font-size: 7px;
   }
   .bi-grid {
     display: block;
@@ -1396,6 +1345,12 @@
   color: var(--dim);
 }
 .stints-laps { font-style: normal; font-weight: 600; letter-spacing: 0.14em; }
+.stints-state { display: grid; place-items: center; color: var(--dim); font: 700 10px var(--cond); letter-spacing: .16em; }
+.stint-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 2px 6px; color: var(--dim); font: 700 8px var(--cond); letter-spacing: .08em; }
+.stint-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.stint-legend i { width: 7px; height: 7px; border-radius: 50%; }
+.stint-ruler { display: grid; grid-template-columns: 38px 1fr; padding-bottom: 3px; color: var(--dim); font: 600 8px var(--cond); }
+.stint-ruler-laps { display: flex; justify-content: space-between; }
 .stints-rows {
   display: flex;
   flex-direction: column;
@@ -1410,8 +1365,11 @@
   gap: 8px;
 }
 .stint-drv { font: italic 800 13px var(--cond); letter-spacing: 0.04em; }
-.stint-bar { display: flex; height: 16px; width: 100%; border: 1px solid var(--hair); }
+.stint-bar { position: relative; height: 24px; width: 100%; border: 1px solid var(--hair); }
 .stint-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1419,7 +1377,6 @@
   overflow: hidden;
   border-right: 1px solid #00000099;
 }
-.stint-seg:last-child { border-right: none; }
 .stint-seg-lbl {
   font: 700 9px var(--cond);
   color: #000000bb;

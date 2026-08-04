@@ -521,7 +521,7 @@ function App() {
                     />
                   )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
-                    <StintTimeline sessionId={sessionId} order={state?.classification} />
+                    <StintTimeline sessionId={sessionId} currentLap={currentLap} order={state?.classification} />
                   )}
                   {centerTab === 'PACE' && projection && (
                     mode === 'replay'
