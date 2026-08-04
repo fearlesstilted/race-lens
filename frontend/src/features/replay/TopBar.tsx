@@ -17,14 +17,12 @@ type Props = {
   mode: AppMode
   liveAvailable: boolean
   projection: boolean
-  winProb: boolean
   voice: boolean
   onModeChange: (mode: AppMode) => void
   onSessionChange: (id: string) => void
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
-  onWinProb: (on: boolean) => void
   onVoice: (on: boolean) => void
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
@@ -35,14 +33,14 @@ type Props = {
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, winProb, voice, onModeChange, onLevel, onProjection, onWinProb, onVoice, onSeek, onSettingsOpen, onCatalogOpen, atMs, sessionName }: Props) {
+export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, atMs, sessionName }: Props) {
   const current = sessionId ? sessionMeta(sessionId) : null
   const sessionTriggerLabel = current?.year
     ? `${current.year} · ${current.event} · ${sessionTypeLabel(current.type)}`
     : 'YEAR · EVENT · SESSION'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
-  const anyLayer = projection || winProb || voice || level === 'beginner'
+  const anyLayer = projection || voice || level === 'beginner'
   return (
     <div className="top">
       <div className="ident">
@@ -114,14 +112,6 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
                 >
                   <span className="layer-name">PACE OUTLOOK</span>
                   <span className="layer-state">{projection ? 'ON' : 'OFF'}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`layer-row layer-toggle${winProb ? ' on' : ''}`}
-                  onClick={() => onWinProb(!winProb)}
-                >
-                  <span className="layer-name">GAP SCORE</span>
-                  <span className="layer-state">{winProb ? 'ON' : 'OFF'}</span>
                 </button>
                 <button
                   type="button"

@@ -246,12 +246,6 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.35; }
 }
-.rail-disabled {
-  cursor: default;
-  opacity: 0.35;
-  pointer-events: none;
-}
-
 /* ── Forecast strip ─────────────────────────────────────────────── */
 .forecast-strip {
   border-top: 1px solid var(--hair);
@@ -514,9 +508,8 @@
   display: flex;
   flex-direction: column;
 }
-/* Remove top border from forecast/winprob when inside ctr-pane */
+/* Remove top border from forecast when inside ctr-pane. */
 .ctr-pane .forecast-strip { border-top: none; }
-.ctr-pane .win-prob-graph { border-top: none; }
 /* Feed inside ctr-pane fills its height */
 .ctr-pane .ev-scroll {
   flex: 1;
@@ -845,43 +838,7 @@
   }
 }
 
-/* ── Win Probability Graph ──────────────────────────────────────── */
-.win-prob-graph {
-  position: relative;
-  background: var(--bg);
-  border-top: 1px solid var(--hair);
-  padding: var(--s1) 0 var(--s1) 0;
-}
-.win-prob-label {
-  font: 700 10px var(--cond);
-  letter-spacing: 0.3em;
-  color: var(--dim);
-  padding: 0 0 var(--s1) 34px;
-  font-variant-numeric: tabular-nums;
-}
-.win-prob-loading {
-  position: absolute;
-  top: 8px;
-  right: 60px;
-  font: 600 11px var(--cond);
-  color: var(--dim);
-}
-.win-prob-svg {
-  display: block;
-  width: 100%;
-  height: 140px;
-}
-.win-prob-axis {
-  font: 600 9px var(--cond);
-  fill: #ffffff44;
-  font-variant-numeric: tabular-nums;
-}
-.win-prob-driver {
-  font: 700 9px var(--cond);
-  letter-spacing: 0.06em;
-}
-
-/* ── top-panels: highlights + dotd container ─────────────────── */
+/* ── top-panels: highlights container ────────────────────────── */
 .top-panels {
   display: flex;
   align-items: center;
@@ -890,7 +847,7 @@
   position: relative;
 }
 
-/* ── drawer panels group (HIGHLIGHTS + DOTD inside settings drawer) ── */
+/* ── drawer highlights group ─────────────────────────────────── */
 .drawer-panels-group {
   /* shown only on mobile/tablet via media query */
   display: none;
@@ -900,21 +857,18 @@
   flex-direction: column;
   gap: 8px;
 }
-/* Inside drawer the hl-wrap/dotd-wrap trigger buttons fill full width */
-.drawer-panels-inner .hl-wrap,
-.drawer-panels-inner .dotd-wrap {
+/* Inside drawer the highlights trigger button fills full width. */
+.drawer-panels-inner .hl-wrap {
   width: 100%;
 }
-.drawer-panels-inner .hl-wrap > .tog,
-.drawer-panels-inner .dotd-wrap > .tog {
+.drawer-panels-inner .hl-wrap > .tog {
   width: 100%;
   justify-content: flex-start;
   padding: 8px 14px;
   font-size: 12px;
 }
-/* Panels inside drawer: static position, full width, no shadow/border-radius */
-.drawer-panels-inner .hl-panel,
-.drawer-panels-inner .dotd-panel {
+/* The highlights panel is static inside the drawer. */
+.drawer-panels-inner .hl-panel {
   position: static;
   width: 100%;
   max-height: 320px;
@@ -1019,173 +973,6 @@
   white-space: nowrap;
 }
 
-/* ── Driver of the Day panel ──────────────────────────────────── */
-.dotd-wrap {
-  position: relative;
-}
-.dotd-gate-hint {
-  display: block;
-  font: 600 9px var(--cond);
-  letter-spacing: 0.15em;
-  color: var(--dim);
-  opacity: 0.7;
-  white-space: nowrap;
-  margin-top: 3px;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-.dotd-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 280px;
-  background: #111117;
-  border: 1px solid var(--hair);
-  border-radius: 4px;
-  z-index: 200;
-  box-shadow: 0 8px 24px #00000088;
-  display: flex;
-  flex-direction: column;
-  max-height: 420px;
-}
-.dotd-header {
-  display: flex;
-  flex-direction: column;
-  padding: var(--s2) var(--s3);
-  border-bottom: 1px solid var(--hair);
-  flex-shrink: 0;
-}
-.dotd-title {
-  font: italic 800 12px var(--cond);
-  letter-spacing: 0.2em;
-  color: var(--dim);
-}
-.dotd-sub {
-  font: 11px var(--body);
-  color: #555566;
-  margin-top: 2px;
-}
-.dotd-empty {
-  padding: 16px 12px;
-  color: var(--dim);
-  font: 600 12px var(--cond);
-  letter-spacing: 0.1em;
-}
-.dotd-hero {
-  margin: var(--s2) var(--s3) var(--s1);
-  padding: var(--s2) var(--s3);
-  border-left: 3px solid var(--dim);
-  background: #0c0c14;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  flex-shrink: 0;
-}
-.dotd-hero-code {
-  font: italic 800 26px/1 var(--cond);
-  letter-spacing: 0.06em;
-}
-.dotd-hero-label {
-  font: 600 10px var(--cond);
-  letter-spacing: 0.25em;
-  color: var(--dim);
-}
-.dotd-hero-note {
-  font: 12px var(--body);
-  color: var(--dim);
-  margin-top: 2px;
-}
-.dotd-list {
-  overflow-y: auto;
-  flex: 1;
-  padding: 4px 0;
-}
-.dotd-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  width: 100%;
-  padding: var(--s1) var(--s3);
-  background: none;
-  border: none;
-  color: var(--ink);
-  cursor: pointer;
-  text-align: left;
-  font: 13px var(--body);
-  transition: background 0.1s;
-}
-.dotd-row:hover {
-  background: var(--hair);
-}
-.dotd-row-voted {
-  background: #0e1a0e !important;
-}
-.dotd-code {
-  font: italic 800 14px var(--cond);
-  letter-spacing: 0.06em;
-  width: 34px;
-  flex-shrink: 0;
-}
-.dotd-bar-wrap {
-  flex: 1;
-  height: 4px;
-  background: var(--hair);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.dotd-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.4s ease;
-}
-.dotd-score {
-  font: 600 11px var(--cond);
-  color: var(--dim);
-  width: 30px;
-  text-align: right;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-.dotd-check {
-  font: 600 10px var(--cond);
-  color: #44aa44;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-}
-.dotd-footer {
-  padding: 6px 12px 8px;
-  font: 10px var(--body);
-  color: #444455;
-  border-top: 1px solid var(--hair);
-  flex-shrink: 0;
-}
-
-/* ── Timeline markers ───────────────────────────────────────────── */
-/* All marker shapes are SVG-rendered in ReplayDeck.tsx.
-   These classes provide hover lift and severe-event emphasis. */
-
-.rail-marker {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  transition: transform 0.12s ease-out, opacity 0.12s ease-out;
-}
-.rail-marker:hover {
-  /* Subtle lift — the marker pops ~2px above the rail line */
-  transform: translateX(-50%) translateY(-2px);
-  opacity: 1 !important;
-}
-/* CRASH / INCIDENT / OFF_TRACK: static (no strobe). The SVG already renders these
-   red + a touch larger; a blinking timeline read as a seizure hazard. */
-.rail-marker-severe {
-  opacity: 1;
-}
-
 /* One editorial event at a time, ranked by race importance. */
 .broadcast-overlay {
   --broadcast-accent: var(--red);
@@ -1252,9 +1039,6 @@
 @media (prefers-reduced-motion: reduce) {
   .live-badge {
     animation: none;
-  }
-  .rail-marker:hover {
-    transform: translateX(-50%);
   }
 }
 
@@ -1389,29 +1173,18 @@
 @media (max-width: 1024px) {
   .deck-transport,
   .deck-speed,
-  .deck-options .sp,
   .catalog-open,
   .settings-group .tog,
   .ctr-tab,
   .ins-filter .tog,
   .settings-close,
   .ev-radio-btn,
-  .rail-marker {
+  .center-switch button {
     min-width: 44px;
     min-height: 44px;
     touch-action: manipulation;
   }
-  .rail {
-    height: 44px;
-  }
-  .rail .line,
-  .rail .played {
-    top: 15px;
-  }
-  .rail .cursor {
-    top: 8px;
-    height: 16px;
-  }
+  .deck-range { min-height: 44px; }
   .ctr-tab {
     height: 44px;
   }

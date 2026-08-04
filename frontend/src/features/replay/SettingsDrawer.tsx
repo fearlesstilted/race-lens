@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
 import { DASHBOARD_PRESETS } from './replayTypes'
 import type { DashboardLayout, Lang, Level } from './replayTypes'
@@ -12,27 +11,22 @@ type Props = {
   mode: 'replay' | 'live'
   liveAvailable: boolean
   projection: boolean
-  winProb: boolean
   dashboardLayout: DashboardLayout
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onModeChange: (mode: 'replay' | 'live') => void
   onProjection: (value: boolean) => void
-  onWinProb: (value: boolean) => void
   onDashboardLayout: (value: DashboardLayout) => void
   sessionId?: string | null
   onSeek?: (ms: number) => void
-  sessionStatus?: string
-  lap?: number
-  totalLaps?: number | null
   atMs?: number
 }
 
 export function SettingsDrawer({
-  open, onClose, lang, level, mode, liveAvailable, projection, winProb,
-  dashboardLayout, onLang, onLevel, onModeChange, onProjection, onWinProb,
+  open, onClose, lang, level, mode, liveAvailable, projection,
+  dashboardLayout, onLang, onLevel, onModeChange, onProjection,
   onDashboardLayout,
-  sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
+  sessionId, onSeek, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -104,9 +98,6 @@ export function SettingsDrawer({
           <div className="tog-group" style={{ marginBottom: 8 }}>
             <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PACE OUTLOOK</button>
           </div>
-          <div className="tog-group">
-            <button type="button" className={`tog${winProb ? ' tog-on' : ''}`} onClick={() => onWinProb(!winProb)}>GAP SCORE</button>
-          </div>
         </div>
 
         <div className="settings-group">
@@ -160,10 +151,9 @@ export function SettingsDrawer({
 
         {mode === 'replay' && sessionId && onSeek && (
           <div className="settings-group drawer-panels-group">
-            <div className="settings-group-label">HIGHLIGHTS &amp; DOTD</div>
+            <div className="settings-group-label">HIGHLIGHTS</div>
             <div className="drawer-panels-inner">
               <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={(ms) => { onSeek(ms); onClose() }} />
-              <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
             </div>
           </div>
         )}

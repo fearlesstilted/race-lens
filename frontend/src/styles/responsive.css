@@ -118,7 +118,7 @@
   .lapbox .word, .lapbox .of {
     font-size: 10px;
   }
-  /* Show HIGHLIGHTS+DOTD section in settings drawer on tablet */
+  /* Show the highlights event-jump panel in settings on tablet. */
   .settings-group.drawer-panels-group {
     display: block;
   }
@@ -296,7 +296,7 @@
     display: none;
   }
 
-  /* Mobile replay keeps transport, position and options as three clear zones. */
+  /* Mobile replay keeps transport, position and speed as three clear zones. */
   .deck {
     padding: 8px calc(var(--s4) + env(safe-area-inset-right))
       calc(10px + env(safe-area-inset-bottom))
@@ -310,10 +310,8 @@
   .deck-transport {
     width: 52px;
     height: 52px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
+    display: grid;
+    place-items: center;
     padding: 3px;
     font-size: 10px;
   }
@@ -321,26 +319,10 @@
     width: 18px;
   }
   .deck-timeline {
-    padding-top: 18px;
+    padding-top: 6px;
   }
-  .deck-timeline .rail {
+  .deck-range {
     height: 44px;
-  }
-  .deck-timeline .rail .line,
-  .deck-timeline .rail .played {
-    top: 15px;
-    height: 2px;
-  }
-  .deck-timeline .rail .cursor {
-    top: 8px;
-    height: 16px;
-  }
-  .cursor-pill {
-    top: -19px;
-    max-width: min(190px, 80vw);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 10px;
   }
   .deck-options {
     grid-column: 1 / -1;
@@ -354,16 +336,6 @@
   .deck-speed {
     width: 44px;
     height: 44px;
-  }
-  .deck-options .sp {
-    min-height: 44px;
-    justify-content: center;
-    gap: 5px;
-    font-size: 9px;
-    letter-spacing: 0.1em;
-  }
-  .deck-options .sw {
-    width: 24px;
   }
   .deck-live-state {
     min-height: 52px;
@@ -437,9 +409,6 @@
   }
   .deck-options {
     grid-column: 3;
-  }
-  .deck-options .sp {
-    display: none;
   }
 }
 
