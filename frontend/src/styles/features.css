@@ -857,18 +857,21 @@
   flex-direction: column;
   gap: 8px;
 }
-/* Inside drawer the highlights trigger button fills full width. */
-.drawer-panels-inner .hl-wrap {
+/* Inside drawer the review triggers fill the available width. */
+.drawer-panels-inner .hl-wrap,
+.drawer-panels-inner .dotd-wrap {
   width: 100%;
 }
-.drawer-panels-inner .hl-wrap > .tog {
+.drawer-panels-inner .hl-wrap > .tog,
+.drawer-panels-inner .dotd-wrap > .tog {
   width: 100%;
   justify-content: flex-start;
   padding: 8px 14px;
   font-size: 12px;
 }
-/* The highlights panel is static inside the drawer. */
-.drawer-panels-inner .hl-panel {
+/* Review panels are static inside the drawer. */
+.drawer-panels-inner .hl-panel,
+.drawer-panels-inner .dotd-panel {
   position: static;
   width: 100%;
   max-height: 320px;
@@ -972,6 +975,82 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Driver of the Day panel ─────────────────────────────────── */
+.dotd-wrap { position: relative; }
+.dotd-gate-hint {
+  display: block;
+  margin-top: 3px;
+  color: var(--dim);
+  font: 600 12px var(--cond);
+  letter-spacing: .1em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.dotd-panel {
+  position: absolute;
+  z-index: 200;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  max-height: 420px;
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  background: #111117;
+  box-shadow: 0 8px 24px #0008;
+}
+.dotd-header {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--hair);
+}
+.dotd-title {
+  color: var(--dim);
+  font: italic 800 12px var(--cond);
+  letter-spacing: .2em;
+}
+.dotd-sub,
+.dotd-hero-note { margin-top: 2px; color: var(--dim); font: 13px var(--body); }
+.dotd-empty { padding: 16px 12px; color: var(--dim); font: 600 12px var(--cond); }
+.dotd-hero {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: var(--s1);
+  margin: var(--s2) var(--s3) var(--s1);
+  padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--dim);
+  background: #0c0c14;
+}
+.dotd-hero-code { font: italic 800 26px/1 var(--cond); letter-spacing: .06em; }
+.dotd-hero-label { color: var(--dim); font: 600 12px var(--cond); letter-spacing: .2em; }
+.dotd-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.dotd-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s1) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 13px var(--body);
+  text-align: left;
+  cursor: pointer;
+}
+.dotd-row:hover { background: var(--hair); }
+.dotd-row-voted { background: #0e1a0e !important; }
+.dotd-code { width: 34px; flex-shrink: 0; font: italic 800 14px var(--cond); letter-spacing: .06em; }
+.dotd-bar-wrap { flex: 1; height: 4px; overflow: hidden; border-radius: 2px; background: var(--hair); }
+.dotd-bar { height: 100%; border-radius: 2px; transition: width .4s ease; }
+.dotd-score { width: 30px; flex-shrink: 0; color: var(--dim); font: 600 12px var(--cond); text-align: right; font-variant-numeric: tabular-nums; }
+.dotd-check { flex-shrink: 0; color: #44aa44; font: 600 12px var(--cond); }
+.dotd-footer { flex-shrink: 0; padding: 6px 12px 8px; border-top: 1px solid var(--hair); color: #666676; font: 12px var(--body); }
 
 /* One editorial event at a time, ranked by race importance. */
 .broadcast-overlay {

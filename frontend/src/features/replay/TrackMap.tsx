@@ -5,6 +5,7 @@ import type { Battle, DriverState, RecentPass } from '../../api/types'
 import { battlePair } from '../../lib/battles'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
+import { hasFinishedRace } from '../../lib/trackInterpolation'
 import { teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
@@ -15,6 +16,7 @@ type Props = {
   playbackSpeed: number
   drivers: Record<string, DriverState>
   classification: string[]
+  totalLaps?: number | null
   sessionStatus?: string
   /** Session time (ms) when current neutralisation started — for elapsed timer in badge. */
   neutralizationStartMs?: number | null
@@ -67,7 +69,7 @@ function fmtElapsed(ms: number): string {
 }
 
 export const TrackMap = React.memo(function TrackMap({
-  sessionId, atMs, playing, playbackSpeed, drivers, classification, sessionStatus, neutralizationStartMs,
+  sessionId, atMs, playing, playbackSpeed, drivers, classification, totalLaps, sessionStatus, neutralizationStartMs,
   selectedIds = [], positionsData, battles = [], recentPasses = [],
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
@@ -319,7 +321,7 @@ export const TrackMap = React.memo(function TrackMap({
 
         {/* On-track cars — initial transform is 0,0; rAF loop updates imperatively */}
         {carIds
-          .filter(id => !drivers[id]?.in_pit && !drivers[id]?.retired)
+          .filter(id => !drivers[id]?.in_pit && !drivers[id]?.retired && !hasFinishedRace(drivers[id]?.laps_completed, totalLaps))
           .map((driverId) => {
             const color = teamColor(driverId)
             const isTop3 = top3.includes(driverId)

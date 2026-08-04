@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 
-import { lastKnownFrame, progressPathPosition } from '../src/lib/trackInterpolation.ts'
+import { hasFinishedRace, lastKnownFrame, progressPathPosition } from '../src/lib/trackInterpolation.ts'
+
+assert.equal(hasFinishedRace(70, 70), true)
+assert.equal(hasFinishedRace(69, 70), false)
+assert.equal(hasFinishedRace(70, null), false)
 
 const square: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]]
 

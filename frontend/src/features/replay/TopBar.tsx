@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { sessionMeta, sessionTypeLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
+import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
 
 type AppMode = 'replay' | 'live'
@@ -22,12 +23,13 @@ type Props = {
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
   onCatalogOpen?: () => void
+  sessionStatus?: string
   atMs?: number
   /** Live-only session badge text, e.g. "SILVERSTONE · RACE". */
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, atMs, sessionName }: Props) {
+export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, sessionName }: Props) {
   const current = sessionId ? sessionMeta(sessionId) : null
   const sessionTriggerLabel = current?.year
     ? `${current.year} · ${current.event} · ${sessionTypeLabel(current.type)}`
@@ -134,10 +136,11 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
         </div>
       </div>
 
-      {/* Highlights remain available for replay; the catalog owns session selection. */}
+      {/* Replay review panels; the catalog owns session selection. */}
       {mode === 'replay' && sessionId && onSeek && (
         <div className="top-panels">
           <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={onSeek} />
+          <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
         </div>
       )}
 
