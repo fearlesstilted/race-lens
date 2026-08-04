@@ -55,7 +55,10 @@ export function HighlightsPanel({ sessionId, lang = 'en', untilMs, onSeek }: Pro
     [sessionId, cutoffMs],
     open,
   )
-  const highlights: Highlight[] = useMemo(() => data?.highlights ?? [], [data])
+  const highlights: Highlight[] = useMemo(
+    () => (data?.highlights ?? []).filter((highlight) => untilMs === undefined || highlight.at_ms <= untilMs),
+    [data, untilMs],
+  )
 
   const stopPlay = useCallback(() => {
     if (playRef.current) clearTimeout(playRef.current)

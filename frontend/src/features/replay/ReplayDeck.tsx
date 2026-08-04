@@ -12,8 +12,6 @@ type Props = {
   playing: boolean
   speed: Speed
   markers?: RaceMarker[]
-  /** Lap currently in progress, shared with the header. */
-  currentLap?: number | null
   /** When false (live mode) the scrub rail is disabled and speed controls hidden. */
   canScrub?: boolean
   /** Session clock string shown in live mode (e.g. "LAP 42"). */
@@ -67,7 +65,7 @@ function buildPhase(markers: RaceMarker[], startMs: number, endMs: number): Phas
   return segments.length > 0 ? segments : [{ kind: 'green', pct: 100 }]
 }
 
-export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], currentLap = null, canScrub = true, liveLabel, livePhase = 'connecting', liveBadge = 'CONNECTING', liveDetail = 'OPENING LIVE TIMING', onScrub, onPlay, onPause, onSpeed }: Props) {
+export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], canScrub = true, liveLabel, livePhase = 'connecting', liveBadge = 'CONNECTING', liveDetail = 'OPENING LIVE TIMING', onScrub, onPlay, onPause, onSpeed }: Props) {
 
   const startMs = timeline?.start_ms ?? 0
   const endMs = timeline?.end_ms ?? 0
@@ -85,7 +83,6 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], curre
   const lightsOutMs = timeline?.lights_out_ms ?? 0
   const inFormation = atMs < lightsOutMs
   const sessionTime = inFormation ? 'FORMATION LAP' : formatRaceTime(atMs - lightsOutMs)
-  const cursorLabel = currentLap !== null ? `LAP ${currentLap} · ${sessionTime}` : sessionTime
   const visiblePhases = useMemo(() => {
     const result: { kind: PhaseKind; pct: number; key: number; neutral: boolean; label?: string }[] = []
     let accumulated = 0
@@ -145,7 +142,7 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], curre
                     key={seg.key}
                     className={cls}
                     style={{ width: `${seg.pct}%` }}
-                    title={seg.label}
+                    title={seg.neutral ? undefined : seg.label}
                   />
                 )
               })}
@@ -155,11 +152,12 @@ export function ReplayDeck({ timeline, atMs, playing, speed, markers = [], curre
               type="range"
               min={startMs}
               max={endMs}
+              step={1000}
               value={atMs}
               onChange={(event) => onScrub(Number(event.currentTarget.value))}
               disabled={!timeline}
               aria-label="Replay position"
-              aria-valuetext={cursorLabel}
+              aria-valuetext={sessionTime}
             />
           </div>
 

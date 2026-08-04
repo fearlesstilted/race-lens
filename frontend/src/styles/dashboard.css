@@ -221,7 +221,7 @@
   padding: 0 14px;
   border-bottom: 1px solid var(--hair);
   color: var(--dim);
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: .2em;
 }
 .center-switch {
@@ -237,7 +237,7 @@
   border-left: 1px solid var(--hair);
   background: transparent;
   color: var(--dim);
-  font: 700 10px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: .12em;
   cursor: pointer;
 }

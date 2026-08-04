@@ -565,7 +565,6 @@ function App() {
             playing={replay.playing}
             speed={replay.speed}
             markers={replay.markers}
-            currentLap={racing ? currentLap : null}
             canScrub={replay.canScrub}
             liveLabel={mode === 'live' ? liveLabel : null}
             livePhase={liveView.phase}
