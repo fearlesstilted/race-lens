@@ -804,6 +804,15 @@
   font: 500 12px/1.4 var(--body);
   letter-spacing: 0;
 }
+.settings-sub-label {
+  margin: 14px 0 6px;
+  color: var(--dim);
+  font: 600 12px var(--cond);
+  letter-spacing: .2em;
+}
+.review-dock-options .tog {
+  flex: 1;
+}
 
 @media (max-width: 1439px) {
   .battle-intelligence {
@@ -1001,6 +1010,20 @@
   border-radius: 4px;
   background: #111117;
   box-shadow: 0 8px 24px #0008;
+}
+
+@media (min-width: 1025px) {
+  .top-panels[data-dock="left"] .hl-panel,
+  .top-panels[data-dock="left"] .dotd-panel,
+  .top-panels[data-dock="right"] .hl-panel,
+  .top-panels[data-dock="right"] .dotd-panel {
+    position: fixed;
+    top: calc(58px + env(safe-area-inset-top));
+  }
+  .top-panels[data-dock="left"] .hl-panel { left: 16px; }
+  .top-panels[data-dock="left"] .dotd-panel { left: 368px; }
+  .top-panels[data-dock="right"] .hl-panel { right: 308px; left: auto; }
+  .top-panels[data-dock="right"] .dotd-panel { right: 16px; left: auto; }
 }
 .dotd-header {
   display: flex;
