@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { sessionMeta, sessionTypeLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
+import type { ReviewDock } from './replayTypes'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
 
@@ -16,6 +17,7 @@ type Props = {
   liveAvailable: boolean
   projection: boolean
   voice: boolean
+  reviewDock: ReviewDock
   onModeChange: (mode: AppMode) => void
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
@@ -29,7 +31,7 @@ type Props = {
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, sessionName }: Props) {
+export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, voice, reviewDock, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, sessionName }: Props) {
   const current = sessionId ? sessionMeta(sessionId) : null
   const sessionTriggerLabel = current?.year
     ? `${current.year} · ${current.event} · ${sessionTypeLabel(current.type)}`
@@ -138,7 +140,7 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
 
       {/* Replay review panels; the catalog owns session selection. */}
       {mode === 'replay' && sessionId && onSeek && (
-        <div className="top-panels">
+        <div className="top-panels" data-dock={reviewDock}>
           <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={onSeek} />
           <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
         </div>
