@@ -78,13 +78,15 @@ def test_dataframe_shape_and_fastf1_boundary(monkeypatch):
     assert calls == [(2026, False)]
 
 
-def test_window_starts_ten_minutes_early_and_supports_mid_join_and_delay():
+def test_race_starts_hour_early_while_other_sessions_start_ten_minutes_early():
     start = _at()
     qualifying = ScheduledSession(2026, 12, "Test", "Q", start)
     race = ScheduledSession(2026, 12, "Test", "R", start)
 
     assert select_due_session([qualifying], start - timedelta(minutes=11)) is None
     assert select_due_session([qualifying], start - timedelta(minutes=10)) == qualifying
+    assert select_due_session([race], start - timedelta(minutes=61)) is None
+    assert select_due_session([race], start - timedelta(minutes=60)) == race
     assert select_due_session([qualifying], start + timedelta(minutes=90)) == qualifying
     assert select_due_session([qualifying], start + HARD_DURATION["Q"]) is None
     assert select_due_session([race], start + timedelta(hours=3, minutes=30)) == race
