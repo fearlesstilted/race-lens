@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getOvertake } from '../../api/client'
 import type { CommentaryItem, Insight } from '../../api/types'
+import { focusDriverIds } from '../../lib/insightFocus'
 import { NEUTRAL_STATUSES, writePersisted } from './replayTypes'
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
   /** Session ID for overtake % endpoint (replay only). */
   sessionId?: string | null
   atMs?: number
+  onFocusDrivers?: (ids: string[]) => void
 }
 
 /** Cache overtake probabilities per replay moment and driver pair. */
@@ -158,6 +160,7 @@ const InsightCard = React.memo(function InsightCard({
   leaving,
   focused,
   overtakePct,
+  onFocusDrivers,
 }: {
   ins: Insight
   also: string[]
@@ -165,16 +168,17 @@ const InsightCard = React.memo(function InsightCard({
   leaving: boolean
   focused: boolean
   overtakePct?: number | null
+  onFocusDrivers?: (ids: string[]) => void
 }) {
   const data = evidenceData(ins)
-  return (
-    <div
-      className={[
-        severityClass(ins.severity),
-        leaving ? 'ins-leaving' : 'ins-entering',
-        focused ? 'ins-focused' : '',
-      ].filter(Boolean).join(' ')}
-    >
+  const focusIds = focusDriverIds(ins.driver_ids)
+  const className = [
+    severityClass(ins.severity),
+    leaving ? 'ins-leaving' : 'ins-entering',
+    focused ? 'ins-focused' : '',
+  ].filter(Boolean).join(' ')
+  const content = (
+    <>
       <h4>
         {insightTitle(ins)}
         <small>{insightSubtitle(ins)}</small>
@@ -195,8 +199,21 @@ const InsightCard = React.memo(function InsightCard({
           ))}
         </div>
       )}
-    </div>
+    </>
   )
+  if (onFocusDrivers && focusIds.length > 0) {
+    return (
+      <button
+        type="button"
+        className={`${className} ins-action`}
+        onClick={() => onFocusDrivers(focusIds)}
+      >
+        {content}
+        <span className="ins-action-label">FOCUS {focusIds.join(' / ')} →</span>
+      </button>
+    )
+  }
+  return <div className={className}>{content}</div>
 })
 
 type CardState = {
@@ -213,7 +230,7 @@ function isBattleType(type: string): boolean {
   return type.startsWith('BATTLE') || type.startsWith('TRAFFIC')
 }
 
-export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [], sessionStatus = '', sessionId, atMs = 0 }: Props) {
+export const InsightPanel = React.memo(function InsightPanel({ insights, commentary, selectedIds = [], sessionStatus = '', sessionId, atMs = 0, onFocusDrivers }: Props) {
   const isNeutral = NEUTRAL_STATUSES.has(sessionStatus)
 
   // User-controlled type filters for the "WHAT TO WATCH" panel — read once on
@@ -469,6 +486,7 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
           leaving={leaving}
           focused={focused}
           overtakePct={overtakePct}
+          onFocusDrivers={onFocusDrivers}
         />
       ))}
       {!hasVisible && displayItems.length === 0 && (

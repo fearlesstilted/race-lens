@@ -493,6 +493,34 @@
   color: var(--ink);
   font-weight: 700;
 }
+.ins-action {
+  display: block;
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.ins-action:hover {
+  background: #ffffff08;
+}
+.ins-action:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+.ins-action-label {
+  display: block;
+  margin-top: 9px;
+  color: var(--amber);
+  font: 800 12px var(--cond);
+  letter-spacing: .12em;
+}
 
 /* ── insight card animations ─────────────────────────────────── */
 @keyframes ins-enter {
