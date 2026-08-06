@@ -8,3 +8,7 @@ export function clipStints(stints: Stint[], currentLap: number): Stint[] {
     return [{ ...stint, end_lap, laps: end_lap - stint.start_lap + 1 }]
   })
 }
+
+export function showStintLabel(laps: number, totalLaps: number): boolean {
+  return totalLaps > 0 && laps / totalLaps >= 0.08
+}
