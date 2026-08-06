@@ -137,7 +137,7 @@ state stay on the session buttons where they are actionable.
 | 4 | Battle Intelligence implementation kicker removed |
 | 5 | Formation instruction removed |
 | 6 | `NO INFERRED TRACK POSITION` removed |
-| 7 | DOTD removed; header alignment simplified |
+| 7 | DOTD restored after owner review; its credibility and data source need a later product pass |
 | 8 | What to Watch heading and filters enlarged |
 | 9 | Empty insight `INFO` badge removed |
 | 10 | Archive worker notice removed |
@@ -168,3 +168,52 @@ state stay on the session buttons where they are actionable.
 Freeform draggable/resizable windows, Windows packaging, terminal rendering,
 demo recording, and the next production live-capture validation remain separate
 work. This pass only removes overload and makes the existing replay coherent.
+
+## Owner follow-up backlog — 2026-08-05
+
+These are product-direction notes, not a request for another audit or immediate
+implementation pass.
+
+Implemented on 2026-08-06: tyre `NOW`/future treatment, actionable What to
+Watch driver focus, the active 12 px typography floor, persisted anchored/left/
+right review panels, and the Race T−60 / other sessions T−10 recorder policy.
+The broader workspace manager, Live parity, official DOTD research, and real
+scheduled-capture proof remain open in `BACKLOG.md`.
+
+- **Tyre strategy:** spoiler-free clipping is correct, but the current view looks
+  broken early in a race. Keep the full-race scale, add an explicit `NOW` marker
+  and future-area treatment, and suppress labels on one-lap/narrow segments.
+  The user should immediately understand why most of the lane is empty.
+- **Primary statistics:** review the main race/statistics surface once more;
+  several secondary labels remain too small during normal viewing.
+- **What to Watch:** the panel is not compelling enough to keep watching. Make
+  its items actionable — select/focus the drivers, open the relevant comparison,
+  seek to evidence when applicable, or reveal useful detail — and reconsider
+  the panel's content hierarchy across the whole product.
+- **Popup panels:** Highlights and DOTD-style popovers are useful, but users
+  should eventually be able to choose their placement and presentation rather
+  than accept one fixed anchor.
+- **Custom workspace/window manager:** this is a required product capability,
+  not an optional preset pass. Do not build a separate patch list for desktop
+  resolutions: treat the viewport as available desk space and let users
+  show/hide, drag, dock, resize, and narrow widgets, then persist that personal
+  layout. Start with a bounded docking grid and sensible defaults before
+  considering fully free-floating desktop-style windows.
+- **Live parity:** the same configurable workspace and actionable widgets must
+  work in Live mode, with live-safe behavior where seeking is unavailable.
+- **Live release proof:** deploy a recorder image pinned to the current code,
+  verify its image SHA, then observe one complete scheduled session through
+  capture and archive publication. The code safeguards are not a substitute
+  for this production proof.
+- **Clickability:** most information-rich widgets should lead somewhere useful;
+  What to Watch is the clearest example, but the rule applies across the desk.
+- **DOTD credibility:** the current algorithmic result can produce funny picks
+  such as Stroll. If a reliable official F1 fan-vote/result source exists, offer
+  it as a separate clearly labelled view alongside the model pick and local user
+  vote; never imply the model result is the official fan result.
+- **Replay cache:** keep the process-wide replay and positions caches at
+  `maxsize=1` while Render is limited to 512 MB. When this code is next touched,
+  document the memory/eviction reason and add one two-session switching test.
+  Increase the cache only after concurrent production demand and RSS/cache-miss
+  measurements justify it, and only after checking that cached remote paths
+  cannot outlive disk-evicted session directories.
