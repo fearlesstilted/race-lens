@@ -1,6 +1,6 @@
 <h1 align="center">🏎️ RACE LENS</h1>
 
-<p align="center"><strong>Deterministic motorsport replay and race analysis.</strong></p>
+<p align="center"><strong>Pause the chaos. See why the race moved.</strong></p>
 
 <p align="center">
   <a href="https://github.com/fearlesstilted/race-lens/actions/workflows/ci.yml"><img src="https://github.com/fearlesstilted/race-lens/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -9,9 +9,14 @@
 
 <p align="center"><strong><a href="https://race-lens.onrender.com">Open the live demo</a></strong></p>
 
-Race Lens turns recorded timing events into an explainable race state at any
-point in time. The same event timeline always produces the same replay, which
-makes the system straightforward to inspect, test, and extend.
+Race Lens is my motorsport engineering playground: part replay machine, part
+broadcast desk, part strategy rabbit hole. Pick a session, scrub to any moment,
+and inspect timing, battles, tyres, radio, incidents, and the calls that shaped
+the race.
+
+Under the hood it stays deliberately deterministic: the same event timeline at
+the same timestamp always produces the same race state. That makes the fun UI
+inspectable instead of magical.
 
 ```text
 recorded event fixtures
@@ -36,9 +41,9 @@ The final manifest is the readiness marker. Render downloads a remote triplet
 to a bounded `/tmp` cache and checks every declared size and SHA-256 before the
 existing replay engine sees it.
 
-This is a personal engineering portfolio project, not a commercial timing
-product. It focuses on data normalization, replay correctness, transparent
-heuristics, and a polished end-to-end demo.
+This is a personal project, not a commercial timing product and definitely not
+a betting oracle. The point is to build the F1 viewer I want to poke at, while
+keeping the data pipeline, heuristics, and replay behavior honest.
 
 ## Try the demo
 
@@ -46,12 +51,14 @@ Open [race-lens.onrender.com](https://race-lens.onrender.com). The free instance
 may take up to a minute to wake after inactivity; the UI keeps the selected
 session and shows the wake-up stage instead of a local development error.
 
-Use **ARCHIVE** to browse completed practice, sprint, qualifying, and race
-sessions from the full-telemetry era (2018 onward). Sessions already in the
-demo open immediately. With private S3-compatible storage configured, a missing
-session is queued once for the outbound-only Debian worker; its verified replay
-becomes available without a Git data commit. Without storage, writable local
-deployments retain the small filesystem queue and the public demo stays bounded.
+Open the app without a session to get the interactive catalog, or click the
+session name in the header to switch. Completed practice, sprint, qualifying,
+and race sessions from the full-telemetry era (2018 onward) are available.
+Sessions already in the demo open immediately. With private S3-compatible
+storage configured, a missing session is queued once for the outbound-only
+Debian worker; its verified replay becomes available without a Git data commit.
+Without storage, writable local deployments retain the small filesystem queue
+and the public demo stays bounded.
 
 To run it locally:
 
@@ -64,9 +71,9 @@ Then open:
 - UI: http://localhost:5173
 - API docs: http://localhost:8000/docs
 
-Start with **Bahrain 2021** for the historical strategy duel, or **Spain 2024**
-for the densest 500 ms telemetry. Every bundled race includes recorded
-positions, so the track map works without FastF1, Rust, or preprocessing.
+Start with **Bahrain 2021** for the strategy duel, **Germany 2019** for wet
+chaos, or the **Hungary 2026 race** for the current full-workspace demo. The
+catalog is the source of truth for what is ready right now.
 
 The root `Dockerfile` builds a single public-demo image on port `7860`.
 It runs as a non-root user with `RACELENS_READONLY=1`, so public deployments
@@ -99,22 +106,19 @@ bounded canonical preparation request when private object storage is configured.
 | Recorder | Scheduled capture, archive validation, radio merge, and CI-gated publication | [backend/racelens/recorder/](backend/racelens/recorder/) |
 | UI | React + TypeScript replay/live dashboard | [frontend/src/](frontend/src/) |
 
-## Bundled data
+## Replay stories
 
-| Session | Replay story | Recorded positions |
-|---|---|:---:|
-| Bahrain 2021 race | Hamilton–Verstappen strategy duel | yes |
-| Germany 2019 race | Wet-weather chaos and repeated safety cars | yes |
-| São Paulo 2021 race | Hamilton recovery drive and overtaking | yes |
-| Monaco 2024 race | Street-circuit traffic and strategy | yes |
-| Spain 2024 race | High-density reference replay | yes |
-| Miami 2026 race | Current-era archive replay | yes |
-| Silverstone 2026 race | Deterministic fixture replay | yes |
-| Belgium 2026 FP1 | Verstappen leads Friday practice | yes |
-| Belgium 2026 FP2 | Antonelli–Norris–Verstappen top three | yes |
-| Belgium 2026 FP3 | Final practice replay | yes |
-| Belgium 2026 qualifying | Qualifying replay | yes |
-| Belgium 2026 race | Race replay | yes |
+| Session | Why open it |
+|---|---|
+| Bahrain 2021 race | Hamilton–Verstappen strategy duel |
+| Germany 2019 race | Wet-weather chaos and repeated safety cars |
+| São Paulo 2021 race | Hamilton recovery drive and overtaking |
+| Monaco 2024 race | Street-circuit traffic and strategy |
+| Spain 2024 race | High-density 500 ms telemetry reference |
+| Belgium and Hungary 2025–2026 | Recorded weekend sessions and current UI playground |
+
+This table is a sampler, not an inventory. The in-app catalog reports the
+actual local and remotely prepared session set.
 
 Silverstone uses recorded XY for the map but fixture events for tower ordering,
 because its archived lap-progress channel is incomplete.
@@ -200,10 +204,10 @@ gaps, and normalizes raw coordinates to the SVG viewbox.
 ### Unattended race weekends
 
 The optional Debian recorder follows the FastF1 UTC schedule from FP1 through
-the race. It starts early, records the F1 SignalR feed, verifies the meeting,
-round, year, and session before accepting data, and resumes safely after a
-restart. Raw and provisional data stay on the server; archive processing is
-retried without repeating capture.
+the race. It starts races at T−60 and other sessions at T−10, records the F1
+SignalR feed, verifies the meeting, round, year, and session before accepting
+data, and resumes safely after a restart. Raw and provisional data stay on the
+server; archive processing is retried without repeating capture.
 
 Each recorded session passes an archive coverage gate before a three-file
 fixture is sent through an isolated `capture/*` branch. GitHub Actions runs
