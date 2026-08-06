@@ -68,7 +68,7 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
 | Item | Status | What is actually missing |
 |---|---|---|
 | Capture lead time | **DONE** | Races become eligible at T−60; all other sessions remain T−10. The extra lead affects only 14-day local raw retention, not the isolated published archive. |
-| Current recorder release | **PROOF** | The image now carries its exact git revision. Deploy current `main`, verify that label, and observe one complete scheduled session through capture and archive publication. Earlier storage smoke tests do not prove the current image. |
+| Current recorder release | **PROOF** | Revision `b7a129698f81` was deployed healthy on 2026-08-06 with its exact image label verified. Observe one complete scheduled session through capture and archive publication; earlier storage smoke tests do not prove this image end to end. |
 | Real Live UX | **PROOF** | Exercise the dashboard during an actual session: reconnect, quiet feed periods, SC/VSC stall reporting, radio, timing, and clean transition into the published replay. |
 | Live workspace parity | **OPEN** | The future widget/workspace customization must work in Live with live-safe actions where seeking is impossible. Do this after the replay widget contract is settled. |
 
@@ -108,8 +108,8 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
 
 - **DONE:** the root README now describes the current catalog, representative
   replay stories, workspace, and T−60/T−10 recorder policy.
-- **OPEN:** remove the stale remote `fix/replay-polish-followup` branch; its tree
-  is identical to the merged `main` result.
+- **DONE:** the stale remote `fix/replay-polish-followup` branch was removed;
+  its tree was identical to the merged `main` result.
 - **OPEN:** after this backlog is accepted, retain the two final audits only as
   history or remove them; their raw reports and completed execution plan are
   already gone.
