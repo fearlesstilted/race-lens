@@ -4,7 +4,7 @@
  */
 import { getStints } from '../../api/client'
 import type { StintsResponse } from '../../api/types'
-import { clipStints } from '../../lib/stints'
+import { clipStints, showStintLabel } from '../../lib/stints'
 import { compoundColor } from './teamColors'
 import { useAsync } from './useAsync'
 
@@ -21,6 +21,7 @@ export function StintTimeline({ sessionId, currentLap, order }: Props) {
   if (loading) return <div className="stints stints-state">LOADING TYRE STRATEGY…</div>
   if (!data || error || data.total_laps <= 0) return <div className="stints stints-state">TYRE STRATEGY UNAVAILABLE</div>
   const total = data.total_laps
+  const currentPct = Math.min(100, Math.max(0, (currentLap / total) * 100))
   const ruler = [1, Math.ceil(total / 4), Math.ceil(total / 2), Math.ceil(total * 3 / 4), total]
 
   const ids = Object.keys(data.stints).filter((id) => data.stints[id].length > 0)
@@ -46,15 +47,25 @@ export function StintTimeline({ sessionId, currentLap, order }: Props) {
       </div>
       <div className="stint-ruler" aria-label="Race lap ruler">
         <span />
-        <span className="stint-ruler-laps">
-          {ruler.map((lap, index) => <span key={`${lap}-${index}`}>L{lap}</span>)}
+        <span className="stint-axis">
+          <span className="stint-ruler-laps">
+            {ruler.map((lap, index) => <span key={`${lap}-${index}`}>L{lap}</span>)}
+          </span>
+          {currentPct < 100 && (
+            <span className="stint-future stint-future-axis" style={{ left: `${currentPct}%` }}>
+              FUTURE
+            </span>
+          )}
+          <span className="stint-now stint-now-axis" style={{ left: `${currentPct}%` }}>
+            <i>NOW · L{currentLap}</i>
+          </span>
         </span>
       </div>
       <div className="stints-rows">
         {sorted.map((id) => (
           <div className="stint-row" key={id}>
             <span className="stint-drv">{id}</span>
-            <span className="stint-bar">
+            <span className="stint-bar" aria-label={`${id} strategy through lap ${currentLap} of ${total}`}>
               {clipStints(data.stints[id], currentLap).map((s, i) => (
                 <span
                   key={i}
@@ -62,9 +73,13 @@ export function StintTimeline({ sessionId, currentLap, order }: Props) {
                   style={{ left: `${((s.start_lap - 1) / total) * 100}%`, width: `${(s.laps / total) * 100}%`, background: compoundColor(s.compound) }}
                   title={`${s.compound} · L${s.start_lap}-${s.end_lap} (${s.laps})`}
                 >
-                  <span className="stint-seg-lbl">{s.compound} L{s.start_lap}–{s.end_lap}</span>
+                  {showStintLabel(s.laps, total) && (
+                    <span className="stint-seg-lbl">{s.compound} L{s.start_lap}–{s.end_lap}</span>
+                  )}
                 </span>
               ))}
+              {currentPct < 100 && <span className="stint-future" style={{ left: `${currentPct}%` }} />}
+              <span className="stint-now" style={{ left: `${currentPct}%` }} />
             </span>
           </div>
         ))}

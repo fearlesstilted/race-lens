@@ -1212,8 +1212,9 @@
 .stint-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 2px 6px; color: var(--dim); font: 700 12px var(--cond); letter-spacing: .08em; }
 .stint-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .stint-legend i { width: 7px; height: 7px; border-radius: 50%; }
-.stint-ruler { display: grid; grid-template-columns: 38px 1fr; padding-bottom: 3px; color: var(--dim); font: 600 12px var(--cond); }
-.stint-ruler-laps { display: flex; justify-content: space-between; }
+.stint-ruler { display: grid; grid-template-columns: 38px 1fr; padding-bottom: 5px; color: var(--dim); font: 600 12px var(--cond); }
+.stint-axis { position: relative; min-height: 20px; }
+.stint-ruler-laps { position: relative; z-index: 2; display: flex; justify-content: space-between; }
 .stints-rows {
   display: flex;
   flex-direction: column;
@@ -1228,7 +1229,7 @@
   gap: 8px;
 }
 .stint-drv { font: italic 800 13px var(--cond); letter-spacing: 0.04em; }
-.stint-bar { position: relative; height: 24px; width: 100%; border: 1px solid var(--hair); }
+.stint-bar { position: relative; height: 24px; width: 100%; overflow: hidden; border: 1px solid var(--hair); background: #080910; }
 .stint-seg {
   position: absolute;
   top: 0;
@@ -1239,12 +1240,53 @@
   min-width: 2px;
   overflow: hidden;
   border-right: 1px solid #00000099;
+  z-index: 1;
 }
 .stint-seg-lbl {
   font: 700 12px var(--cond);
   color: #000000bb;
   white-space: nowrap;
   letter-spacing: 0.02em;
+}
+.stint-future {
+  position: absolute;
+  z-index: 2;
+  inset-block: 0;
+  right: 0;
+  background: repeating-linear-gradient(135deg, #ffffff02 0 6px, #ffffff0a 6px 7px);
+  pointer-events: none;
+}
+.stint-future-axis {
+  top: -2px;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding-right: 3px;
+  color: #70707e;
+  font: 700 12px var(--cond);
+  letter-spacing: .12em;
+}
+.stint-now {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--red);
+  box-shadow: 0 0 0 1px #e8002d24;
+  pointer-events: none;
+}
+.stint-now-axis { top: 15px; bottom: -25px; }
+.stint-now-axis i {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  color: var(--red);
+  font: 800 12px var(--cond);
+  font-style: normal;
+  letter-spacing: .08em;
+  white-space: nowrap;
 }
 
 /* Declared last because the segmented center tabs are defined after the main
