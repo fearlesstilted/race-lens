@@ -1,11 +1,14 @@
 # Automated recorder
 
 The Debian worker records every Formula 1 session from FP1 through the race.
-It starts ten minutes before the published UTC time, resumes an interrupted
-capture, rejects stale or mismatched SignalR sessions, and keeps raw recordings
-for recovery. After the archive becomes available it builds the canonical
-fixture, merges captured team radio, transcribes it with Whisper, and generates
-track telemetry for sessions selected for publication.
+It starts races one hour before the published UTC time and every other session
+ten minutes early, resumes an interrupted capture, rejects stale or mismatched
+SignalR sessions, and keeps raw recordings for recovery. The extra race lead
+time only affects local raw data; published archives still begin at the
+isolated session boundary. Raw recordings are retained for 14 days by default.
+After the archive becomes available it builds the canonical fixture, merges
+captured team radio, transcribes it with Whisper, and generates track telemetry
+for sessions selected for publication.
 
 By default every recorded session is published to the demo. Change
 `RECORDER_PUBLISH_SESSIONS` in the private env file to narrow that policy.
@@ -120,7 +123,7 @@ not pretend otherwise.
 
 ```sh
 docker inspect race-lens-recorder --format \
-  'user={{.Config.User}} status={{.State.Status}} health={{.State.Health.Status}} readonly={{.HostConfig.ReadonlyRootfs}}'
+  'image={{.Config.Image}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} user={{.Config.User}} status={{.State.Status}} health={{.State.Health.Status}} readonly={{.HostConfig.ReadonlyRootfs}}'
 docker port race-lens-recorder          # must print nothing
 docker logs --tail 100 race-lens-recorder
 python3 deploy/recorder/publish.py      # normally invoked by cron

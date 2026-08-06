@@ -27,8 +27,9 @@ fi
 chmod 0600 "$env_file"
 
 tag=$(git -C "$repo_dir" rev-parse --short=12 HEAD 2>/dev/null || echo local)
+revision=$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null || echo unknown)
 image=race-lens-recorder:$tag
-docker build -f "$script_dir/Dockerfile" -t "$image" "$repo_dir"
+docker build --build-arg "VCS_REF=$revision" -f "$script_dir/Dockerfile" -t "$image" "$repo_dir"
 docker rm -f "$container" >/dev/null 2>&1 || true
 docker run -d \
     --name "$container" \

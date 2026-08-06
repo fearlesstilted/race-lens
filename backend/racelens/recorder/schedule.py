@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-START_EARLY = timedelta(minutes=10)
+STANDARD_START_EARLY = timedelta(minutes=10)
+RACE_START_EARLY = timedelta(hours=1)
 HARD_DURATION = {
     "FP1": timedelta(hours=2),
     "FP2": timedelta(hours=2),
@@ -56,7 +57,9 @@ class ScheduledSession:
 
     @property
     def capture_from(self) -> datetime:
-        return self.starts_at - START_EARLY
+        return self.starts_at - (
+            RACE_START_EARLY if self.kind == "R" else STANDARD_START_EARLY
+        )
 
     @property
     def capture_until(self) -> datetime:
