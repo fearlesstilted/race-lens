@@ -23,6 +23,7 @@ import { readDashboardLayout, writeDashboardLayout } from './features/replay/rep
 import type { DashboardLayout } from './features/replay/replayTypes'
 import { useReplay } from './features/replay/useReplay'
 import { lapAtTime } from './lib/format'
+import { focusDriverIds } from './lib/insightFocus'
 import { livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
@@ -237,6 +238,13 @@ function App() {
       if (prev.length >= 2) return [prev[1], id]
       return [...prev, id]
     })
+  }, [])
+
+  const handleFocusDrivers = useCallback((ids: string[]) => {
+    const focused = focusDriverIds(ids)
+    if (focused.length === 0) return
+    setSelectedIds(focused)
+    setMobTab('INSIGHTS')
   }, [])
 
   const handleModeSwitch = (next: AppMode) => {
@@ -550,6 +558,7 @@ function App() {
                 sessionStatus={sessionStatus}
                 sessionId={mode === 'replay' ? sessionId : null}
                 atMs={replay.atMs}
+                onFocusDrivers={handleFocusDrivers}
               />
             )}
           </div>
