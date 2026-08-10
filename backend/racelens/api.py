@@ -892,11 +892,12 @@ async def live_stream(
                         _remote_live_required, snapshot=False,
                     )
                 except HTTPException:
-                    yield "event: end\ndata: {}\n\n"
+                    # A storage/staleness failure is not a race lifecycle event.
+                    # Close quietly so EventSource reconnects.
                     return
                 pointer = current["pointer"]
                 snapshot = current["snapshot"]
-                if pointer["status"] != "live":
+                if pointer["status"] in {"finishing", "replay_ready", "failed"}:
                     yield "event: end\ndata: {}\n\n"
                     return
                 if snapshot is None:

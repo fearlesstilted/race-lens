@@ -1,4 +1,5 @@
 import copy
+import asyncio
 import json
 import os
 from datetime import UTC, datetime, timedelta
@@ -98,8 +99,31 @@ def _valid_records(now=NOW):
         "status_since_ms": 0,
         "total_laps": 72,
         "classification": ["VER"],
-        "drivers": {"VER": {"position": 1, "rank": 1}},
-        "data_quality": {"status": "good"},
+        "drivers": {"VER": {
+            "position": 1,
+            "rank": 1,
+            "grid_position": 1,
+            "laps_completed": 1,
+            "last_lap_ms": 80_000,
+            "best_lap_ms": 80_000,
+            "gap_s": 0.0,
+            "interval_s": None,
+            "tyre_compound": "Medium",
+            "tyre_age_laps": 1,
+            "pit_count": 0,
+            "in_pit": False,
+            "recent_laps_ms": [80_000],
+            "retired": False,
+            "x": None,
+            "y": None,
+            "progress": None,
+        }},
+        "data_quality": {
+            "status": "good",
+            "last_event_ms": 1_000,
+            "events_applied": 2,
+            "duplicates_dropped": 0,
+        },
         "frame_source": "live",
         "viewbox": None,
     }
@@ -156,6 +180,42 @@ def test_live_records_reject_invalid_oversized_stale_and_mismatched_data():
     mismatched["replay_session_id"] = "other_2026_race"
     with pytest.raises(storage.LiveRecordError, match="identity"):
         storage.validate_live_snapshot(mismatched, pointer=pointer, now=NOW)
+
+
+def test_live_records_reject_inner_identity_malformed_values_and_path_text():
+    pointer, snapshot = _valid_records()
+    inner = copy.deepcopy(snapshot)
+    inner["race_state"]["session_id"] = "other_2026_race"
+    with pytest.raises(storage.LiveRecordError, match="identity"):
+        storage.validate_live_snapshot(inner, pointer=pointer, now=NOW)
+
+    malformed_pointer = {**pointer, "status": []}
+    with pytest.raises(storage.LiveRecordError):
+        storage.validate_live_pointer(malformed_pointer)
+    malformed_snapshot = copy.deepcopy(snapshot)
+    malformed_snapshot["data_quality"] = []
+    with pytest.raises(storage.LiveRecordError):
+        storage.validate_live_snapshot(malformed_snapshot, pointer=pointer, now=NOW)
+
+    leaked = copy.deepcopy(snapshot)
+    leaked["feed"]["en"] = [{
+        "id": "leak",
+        "at_ms": 1_000,
+        "lap": 1,
+        "kind": "RaceControlMessage",
+        "tag": "FLAG",
+        "text": "/home/recorder/.aws/credentials",
+        "driver_id": None,
+    }]
+    with pytest.raises(storage.LiveRecordError, match="feed"):
+        storage.validate_live_snapshot(leaked, pointer=pointer, now=NOW)
+    with pytest.raises(storage.LiveRecordError):
+        storage.validate_live_pointer({**pointer, "status": "failed", "failure": "S3 bucket secret"})
+
+    missing = copy.deepcopy(snapshot)
+    del missing["race_state"]["classification"]
+    with pytest.raises(storage.LiveRecordError, match="race state"):
+        storage.validate_live_snapshot(missing, pointer=pointer, now=NOW)
 
 
 def test_recorder_snapshot_handles_partial_append_sc_vsc_and_late_transcript(tmp_path):
@@ -261,11 +321,148 @@ def test_finishing_then_verified_ready_or_safe_failed_keeps_snapshot(tmp_path):
     recorder._set_live_status(SESSION, "replay_ready")
     assert store.objects["live/current.json"]["status"] == "replay_ready"
 
-    recorder._set_live_status(SESSION, "failed", failure="Archive preparation failed")
-    pointer = store.objects["live/current.json"]
-    assert pointer["status"] == "failed"
-    assert pointer["failure"] == "Archive preparation failed"
+    with pytest.raises(storage.LiveRecordError, match="transition"):
+        recorder._set_live_status(SESSION, "failed", failure="Archive preparation failed")
+    assert store.objects["live/current.json"]["status"] == "replay_ready"
     assert store.objects[snapshot_key] == snapshot
+
+
+def test_live_status_enforces_lifecycle_graph_and_verified_retry(tmp_path):
+    store = MemoryStore()
+    pointer, snapshot = _valid_records()
+    storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
+    with pytest.raises(storage.LiveRecordError, match="transition"):
+        storage.write_live_status(
+            store, SESSION.session_id, fixture_stem(SESSION), "replay_ready", now=NOW,
+        )
+    storage.write_live_status(
+        store, SESSION.session_id, fixture_stem(SESSION), "failed",
+        failure="Archive preparation failed", now=NOW,
+    )
+    with pytest.raises(storage.LiveRecordError, match="manifest"):
+        storage.write_live_status(
+            store, SESSION.session_id, fixture_stem(SESSION), "replay_ready", now=NOW,
+        )
+
+    archive = tmp_path / "retry"
+    archive.mkdir()
+    replay = fixture_stem(SESSION)
+    files = []
+    for suffix in (".jsonl", ".track.json", ".positions.json"):
+        path = archive / f"{replay}{suffix}"
+        path.write_text("{}\n", encoding="utf-8")
+        files.append(path)
+    publish_session(store, SESSION.session_id, replay, *files, event_count=1)
+    storage.write_live_status(
+        store, SESSION.session_id, replay, "replay_ready", now=NOW,
+    )
+    with pytest.raises(storage.LiveRecordError, match="transition"):
+        storage.write_live_status(
+            store, SESSION.session_id, replay, "finishing", now=NOW,
+        )
+
+
+def test_live_snapshot_preserves_created_at_for_same_identity_and_resets_for_new_race():
+    store = MemoryStore()
+    pointer, snapshot = _valid_records()
+    storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
+
+    later = NOW + timedelta(seconds=5)
+    next_pointer = {
+        **pointer,
+        "created_at": later.isoformat().replace("+00:00", "Z"),
+        "updated_at": later.isoformat().replace("+00:00", "Z"),
+    }
+    next_snapshot = copy.deepcopy(snapshot)
+    next_snapshot.update(
+        sequence=2,
+        generated_at=later.isoformat().replace("+00:00", "Z"),
+        expires_at=(later + timedelta(seconds=20)).isoformat().replace("+00:00", "Z"),
+    )
+    storage.write_live_snapshot(store, next_pointer, next_snapshot, now=later)
+    assert store.objects["live/current.json"]["created_at"] == pointer["created_at"]
+
+    new_pointer = copy.deepcopy(next_pointer)
+    new_pointer.update(
+        canonical_session_id="2026-16-r",
+        replay_session_id="italian_2026_race",
+        snapshot_key="live/2026-16-r/snapshot.json",
+    )
+    new_snapshot = copy.deepcopy(next_snapshot)
+    new_snapshot.update(
+        canonical_session_id="2026-16-r",
+        replay_session_id="italian_2026_race",
+    )
+    new_snapshot["race_state"]["session_id"] = "italian_2026_race"
+    storage.write_live_snapshot(store, new_pointer, new_snapshot, now=later)
+    assert store.objects["live/current.json"]["created_at"] == next_pointer["created_at"]
+
+
+def test_capture_loop_restarts_and_publishes_every_five_seconds_only_with_storage(
+    tmp_path, monkeypatch,
+):
+    import racelens.recorder.worker as worker
+
+    monkeypatch.setattr(worker, "FINISH_GRACE", timedelta(seconds=5))
+    monkeypatch.setattr(storage.StorageConfig, "from_env", classmethod(lambda cls: None))
+
+    def run_capture(root, object_store):
+        clock = [NOW]
+        config = _config(root)
+        processes = []
+        raw = config.raw_dir / f"{SESSION.session_id}.f1live"
+        _write_feed(raw, _feed_prefix())
+
+        class Process:
+            def __init__(self, first):
+                self.first = first
+                self.stopped = False
+
+            def poll(self):
+                return 1 if self.first and clock[0] >= NOW + timedelta(seconds=5) else None
+
+            def send_signal(self, _signal):
+                self.stopped = True
+
+            def wait(self, timeout=None):
+                return 0
+
+            def kill(self):
+                self.stopped = True
+
+        def popen(*_args, **_kwargs):
+            process = Process(not processes)
+            processes.append(process)
+            return process
+
+        def sleep(seconds):
+            clock[0] += timedelta(seconds=seconds)
+            if clock[0] == NOW + timedelta(seconds=5):
+                with raw.open("a", encoding="utf-8") as handle:
+                    handle.write(_line(
+                        "SessionStatus", {"Status": "Finished"},
+                        "2026-08-23T13:05:05Z",
+                    ) + "\n")
+
+        recorder = Recorder(
+            config, now=lambda: clock[0], sleep=sleep, object_store=object_store,
+        )
+        publishes = []
+        monkeypatch.setattr(
+            recorder,
+            "_publish_live_snapshot",
+            lambda *_args: publishes.append(clock[0]) or True,
+        )
+        monkeypatch.setattr(recorder, "_set_live_status", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(worker.subprocess, "Popen", popen)
+        recorder.capture(SESSION)
+        return publishes, len(processes)
+
+    publishes, starts = run_capture(tmp_path / "stored", MemoryStore())
+    assert publishes == [NOW, NOW + timedelta(seconds=5), NOW + timedelta(seconds=10)]
+    assert starts == 2
+    publishes, _ = run_capture(tmp_path / "local", None)
+    assert publishes == []
 
 
 def test_remote_live_api_fallback_cache_and_sanitized_storage_failure(monkeypatch):
@@ -281,6 +478,7 @@ def test_remote_live_api_fallback_cache_and_sanitized_storage_failure(monkeypatc
     store = CountingStore()
     pointer, snapshot = _valid_records()
     storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
+    store.reads = 0
     monkeypatch.setattr(api, "_object_store", lambda: store)
     monkeypatch.setattr(api, "_live", None)
     monkeypatch.setattr(api, "_remote_live_cache", None)
@@ -318,3 +516,36 @@ def test_remote_live_api_fallback_cache_and_sanitized_storage_failure(monkeypatc
     failed = client.get("/api/live/status")
     assert failed.status_code == 503
     assert "secret" not in failed.text
+
+
+def test_active_remote_sse_closes_without_terminal_end_on_transient_or_stale(
+    monkeypatch,
+):
+    import racelens.api as api
+
+    async def collect_after(initial_store, replacement_store):
+        monkeypatch.setattr(api, "_object_store", lambda: initial_store)
+        monkeypatch.setattr(api, "_live", None)
+        monkeypatch.setattr(api, "_remote_live_cache", None)
+        monkeypatch.setattr(api, "_utcnow", lambda: NOW)
+        response = await api.live_stream(tick_s=0.5, lang="en", level="pro")
+        monkeypatch.setattr(api, "_object_store", lambda: replacement_store)
+        api._remote_live_cache = None
+        return [chunk async for chunk in response.body_iterator]
+
+    healthy = MemoryStore()
+    pointer, snapshot = _valid_records()
+    storage.write_live_snapshot(healthy, pointer, snapshot, now=NOW)
+
+    class BrokenStore:
+        def get_json(self, *_args, **_kwargs):
+            raise StorageError("provider endpoint secret")
+
+    assert asyncio.run(collect_after(healthy, BrokenStore())) == []
+
+    stale = MemoryStore()
+    storage.write_live_snapshot(stale, pointer, snapshot, now=NOW)
+    stale.objects[pointer["snapshot_key"]]["expires_at"] = (
+        NOW - timedelta(seconds=1)
+    ).isoformat().replace("+00:00", "Z")
+    assert asyncio.run(collect_after(healthy, stale)) == []

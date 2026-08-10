@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -434,6 +435,13 @@ def manifest_objects_match(store: Any, manifest: dict) -> bool:
 
 
 _LIVE_STATUSES = {"live", "finishing", "replay_ready", "failed"}
+_LIVE_FAILURES = {"Archive preparation failed"}
+_LIVE_TRANSITIONS = {
+    "live": {"finishing", "failed"},
+    "finishing": {"replay_ready", "failed"},
+    "failed": {"replay_ready"},
+    "replay_ready": set(),
+}
 _LIVE_POINTER_FIELDS = {
     "schema_version", "canonical_session_id", "replay_session_id", "status",
     "snapshot_key", "created_at", "updated_at", "failure",
@@ -444,6 +452,79 @@ _LIVE_SNAPSHOT_FIELDS = {
     "recent_passes", "feed", "commentary", "radio", "capture_freshness",
     "data_quality",
 }
+_RACE_STATE_FIELDS = {
+    "session_id", "at_ms", "lap", "session_status", "session_name",
+    "status_since_ms", "total_laps", "classification", "drivers",
+    "data_quality", "frame_source", "viewbox",
+}
+_DRIVER_FIELDS = {
+    "position", "rank", "grid_position", "laps_completed", "last_lap_ms",
+    "best_lap_ms", "gap_s", "interval_s", "tyre_compound", "tyre_age_laps",
+    "pit_count", "in_pit", "recent_laps_ms", "retired", "x", "y", "progress",
+}
+_INSIGHT_FIELDS = {
+    "insight_id", "type", "severity", "confidence", "created_at_ms", "lap",
+    "driver_ids", "evidence",
+}
+_INSIGHT_TYPES = {
+    "TRAFFIC_RISK_MEDIUM", "TRAFFIC_RISK_HIGH", "DRS_TRAIN_ACTIVE",
+    "PIT_WINDOW_OPEN", "SC_PIT_WINDOW", "UNDERCUT_RISK_MEDIUM",
+    "UNDERCUT_RISK_HIGH", "DEGRADATION_TREND_DETECTED",
+    "CLEAN_AIR_PACE_LEADER", "BATTLE_DETECTED",
+}
+_FEED_KINDS = {
+    "SessionStarted", "SessionStatusChanged", "LapCompleted", "PitIn", "PitOut",
+    "RaceControlMessage", "RetirementDetected", "ON_TRACK", "UNDERCUT",
+}
+_EVIDENCE_FIELDS = {
+    "interval_s", "pace_delta_ms", "behind_last_lap_ms", "ahead_last_lap_ms",
+    "cars", "head", "intervals_s", "pit_loss_s", "margin_s",
+    "gap_to_next_behind_s", "tyre_age_laps", "position",
+    "attacker_tyre_age_laps", "defender_tyre_age_laps", "laps_ms", "drift_ms",
+    "avg_lap_ms", "vs_race_leader_ms", "drivers_in_clean_air", "positions",
+}
+_DRIVER_ID = re.compile(r"^[A-Z0-9]{1,4}$")
+_UNSAFE_PUBLIC_TEXT = (
+    "://", "aws_", "racelens_s3_", "/home/", "/var/", "/tmp/", "/opt/",
+    "/etc/", "\\users\\", "bucket", "endpoint", "secret_access", "access_key",
+    "amazonaws.com", "botocore", "boto3",
+)
+
+
+def _choice(value: object, allowed: set[str]) -> bool:
+    return isinstance(value, str) and value in allowed
+
+
+def _integer(value: object, minimum: int = 0, maximum: int = 2**63 - 1) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and minimum <= value <= maximum
+
+
+def _number(value: object, *, nullable: bool = False) -> bool:
+    if value is None:
+        return nullable
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return -(2**63) <= value <= 2**63 - 1
+    return isinstance(value, float) and math.isfinite(value)
+
+
+def _public_text(value: object, *, maximum: int = 500, empty: bool = False) -> bool:
+    if not isinstance(value, str) or len(value) > maximum or (not empty and not value):
+        return False
+    lowered = value.lower()
+    return (
+        not any(ord(char) < 32 and char not in "\t" for char in value)
+        and "\r" not in value
+        and "\n" not in value
+        and not value.startswith(("/", "\\"))
+        and not re.match(r"^[a-zA-Z]:[\\/]", value)
+        and not any(token in lowered for token in _UNSAFE_PUBLIC_TEXT)
+    )
+
+
+def _driver_id(value: object) -> bool:
+    return isinstance(value, str) and bool(_DRIVER_ID.fullmatch(value))
 
 
 def live_snapshot_key(canonical_session_id: str) -> str:
@@ -465,16 +546,9 @@ def validate_live_pointer(value: object) -> dict:
         or not SESSION_ID.fullmatch(canonical)
         or not isinstance(replay, str)
         or not REPLAY_ID.fullmatch(replay)
-        or status not in _LIVE_STATUSES
+        or not _choice(status, _LIVE_STATUSES)
         or value["snapshot_key"] != live_snapshot_key(canonical)
-        or (
-            failure is not None
-            and (
-                not isinstance(failure, str)
-                or not 0 < len(failure) <= 300
-                or any(char in failure for char in "\r\n")
-            )
-        )
+        or (failure is not None and not _choice(failure, _LIVE_FAILURES))
         or (status == "failed") != (failure is not None)
     ):
         raise LiveRecordError("live pointer metadata is invalid")
@@ -492,6 +566,184 @@ def _bounded_rows(value: object, name: str, limit: int) -> list:
     if not isinstance(value, list) or len(value) > limit or any(not isinstance(row, dict) for row in value):
         raise LiveRecordError(f"live snapshot {name} is invalid")
     return value
+
+
+def _validate_race_state(value: object, replay_session_id: str) -> None:
+    if not isinstance(value, dict) or set(value) != _RACE_STATE_FIELDS:
+        raise LiveRecordError("live snapshot race state is invalid")
+    if value["session_id"] != replay_session_id:
+        raise LiveRecordError("live snapshot inner identity differs")
+    if (
+        not _integer(value["at_ms"])
+        or not _integer(value["lap"], maximum=500)
+        or not _choice(
+            value["session_status"],
+            {"unknown", "started", "red_flag", "safety_car", "vsc", "finished"},
+        )
+        or (
+            value["session_name"] is not None
+            and not _public_text(value["session_name"], maximum=120)
+        )
+        or not _integer(value["status_since_ms"])
+        or (
+            value["total_laps"] is not None
+            and not _integer(value["total_laps"], maximum=500)
+        )
+        or value["frame_source"] != "live"
+        or value["viewbox"] is not None
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+    drivers = value["drivers"]
+    if not isinstance(drivers, dict) or len(drivers) > 30 or not all(
+        _driver_id(driver) for driver in drivers
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+    for driver in drivers.values():
+        if not isinstance(driver, dict) or set(driver) != _DRIVER_FIELDS:
+            raise LiveRecordError("live snapshot driver state is invalid")
+        if (
+            any(
+                driver[field] is not None
+                and not _integer(driver[field], minimum=1, maximum=30)
+                for field in ("position", "rank", "grid_position")
+            )
+            or not _integer(driver["laps_completed"], maximum=500)
+            or any(
+                driver[field] is not None and not _integer(driver[field])
+                for field in ("last_lap_ms", "best_lap_ms")
+            )
+            or not _number(driver["gap_s"], nullable=True)
+            or not _number(driver["interval_s"], nullable=True)
+            or (
+                driver["tyre_compound"] is not None
+                and not _choice(
+                    driver["tyre_compound"],
+                    {
+                        "Soft", "Medium", "Hard", "Intermediate", "Wet", "Unknown",
+                        "S", "M", "H", "I", "W",
+                    },
+                )
+            )
+            or (
+                driver["tyre_age_laps"] is not None
+                and not _integer(driver["tyre_age_laps"], maximum=500)
+            )
+            or not _integer(driver["pit_count"], maximum=100)
+            or not isinstance(driver["in_pit"], bool)
+            or not isinstance(driver["retired"], bool)
+            or not isinstance(driver["recent_laps_ms"], list)
+            or len(driver["recent_laps_ms"]) > 3
+            or not all(_integer(lap_ms) for lap_ms in driver["recent_laps_ms"])
+            or any(driver[field] is not None for field in ("x", "y", "progress"))
+        ):
+            raise LiveRecordError("live snapshot driver state is invalid")
+    classification = value["classification"]
+    if (
+        not isinstance(classification, list)
+        or len(classification) > 30
+        or not all(_driver_id(driver) and driver in drivers for driver in classification)
+        or len(classification) != len(set(classification))
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+    quality = value["data_quality"]
+    if (
+        not isinstance(quality, dict)
+        or set(quality) != {
+            "status", "last_event_ms", "events_applied", "duplicates_dropped",
+        }
+        or not _choice(quality["status"], {"unknown", "good", "stale"})
+        or (quality["last_event_ms"] is not None and not _integer(quality["last_event_ms"]))
+        or not _integer(quality["events_applied"])
+        or not _integer(quality["duplicates_dropped"])
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+
+
+def _validate_insights(value: object, name: str, limit: int) -> None:
+    for insight in _bounded_rows(value, name, limit):
+        if set(insight) != _INSIGHT_FIELDS:
+            raise LiveRecordError(f"live snapshot {name} is invalid")
+        driver_ids = insight["driver_ids"]
+        evidence = insight["evidence"]
+        if (
+            not _public_text(insight["insight_id"], maximum=160)
+            or not _choice(insight["type"], _INSIGHT_TYPES)
+            or not _choice(insight["severity"], {"info", "low", "medium", "high"})
+            or not _choice(insight["confidence"], {"low", "medium", "high"})
+            or not _integer(insight["created_at_ms"])
+            or not _integer(insight["lap"], maximum=500)
+            or not isinstance(driver_ids, list)
+            or len(driver_ids) > 20
+            or not all(_driver_id(driver) for driver in driver_ids)
+            or not isinstance(evidence, dict)
+            or not set(evidence) <= _EVIDENCE_FIELDS
+        ):
+            raise LiveRecordError(f"live snapshot {name} is invalid")
+        for key, item in evidence.items():
+            if key == "head":
+                valid = _driver_id(item)
+            elif isinstance(item, list):
+                valid = len(item) <= 30 and all(_number(number) for number in item)
+            else:
+                valid = _number(item, nullable=key == "vs_race_leader_ms")
+            if not valid:
+                raise LiveRecordError(f"live snapshot {name} is invalid")
+
+
+def _validate_passes(value: object) -> None:
+    for row in _bounded_rows(value, "passes", 100):
+        if (
+            set(row) != {"ahead", "behind", "kind", "at_ms"}
+            or not _driver_id(row["ahead"])
+            or not _driver_id(row["behind"])
+            or not _choice(row["kind"], {"ON_TRACK", "UNDERCUT"})
+            or not _integer(row["at_ms"])
+        ):
+            raise LiveRecordError("live snapshot passes are invalid")
+
+
+def _validate_feed(value: object) -> None:
+    for row in _bounded_rows(value, "feed", 100):
+        required = {"id", "at_ms", "lap", "kind", "tag", "text", "driver_id"}
+        optional = {"audio_url", "transcript"}
+        if not required <= set(row) or not set(row) <= required | optional:
+            raise LiveRecordError("live snapshot feed is invalid")
+        if (
+            not _public_text(row["id"], maximum=200)
+            or not _integer(row["at_ms"])
+            or (row["lap"] is not None and not _integer(row["lap"], maximum=500))
+            or not _choice(row["kind"], _FEED_KINDS)
+            or not _choice(row["tag"], {"PIT", "FLAG", "FINISH", "FASTEST", "INFO", "PASS"})
+            or not _public_text(row["text"], maximum=1000)
+            or (row["driver_id"] is not None and not _driver_id(row["driver_id"]))
+            or (
+                "audio_url" in row
+                and (
+                    not isinstance(row["audio_url"], str)
+                    or not row["audio_url"].startswith(
+                        "https://livetiming.formula1.com/static/"
+                    )
+                    or len(row["audio_url"]) > 2048
+                )
+            )
+            or (
+                "transcript" in row
+                and not _public_text(row["transcript"], maximum=2000)
+            )
+        ):
+            raise LiveRecordError("live snapshot feed is invalid")
+
+
+def _validate_commentary(value: object) -> None:
+    for row in _bounded_rows(value, "commentary", 100):
+        if (
+            set(row) != {"insight_id", "severity", "lap", "text"}
+            or not _public_text(row["insight_id"], maximum=160)
+            or not _choice(row["severity"], {"info", "low", "medium", "high"})
+            or not _integer(row["lap"], maximum=500)
+            or not _public_text(row["text"], maximum=2000)
+        ):
+            raise LiveRecordError("live snapshot commentary is invalid")
 
 
 def validate_live_snapshot(
@@ -533,25 +785,15 @@ def validate_live_snapshot(
     if expires - generated > timedelta(seconds=LIVE_SNAPSHOT_TTL_S) or current > expires:
         raise LiveRecordError("live snapshot is stale")
 
-    state = value["race_state"]
-    if (
-        not isinstance(state, dict)
-        or not isinstance(state.get("drivers"), dict)
-        or len(state["drivers"]) > 30
-        or not isinstance(state.get("at_ms"), int)
-        or state.get("session_status") not in {
-            "unknown", "started", "red_flag", "safety_car", "vsc", "finished",
-        }
-    ):
-        raise LiveRecordError("live snapshot race state is invalid")
-    _bounded_rows(value["battles"], "battles", 50)
-    _bounded_rows(value["active_insights"], "insights", 100)
-    _bounded_rows(value["recent_passes"], "passes", 100)
+    _validate_race_state(value["race_state"], pointer["replay_session_id"])
+    _validate_insights(value["battles"], "battles", 50)
+    _validate_insights(value["active_insights"], "insights", 100)
+    _validate_passes(value["recent_passes"])
     feed = value["feed"]
     if not isinstance(feed, dict) or set(feed) != {"en", "ru"}:
         raise LiveRecordError("live snapshot feed is invalid")
     for language in ("en", "ru"):
-        _bounded_rows(feed[language], "feed", 100)
+        _validate_feed(feed[language])
     commentary = value["commentary"]
     if not isinstance(commentary, dict) or set(commentary) != {"en", "ru"}:
         raise LiveRecordError("live snapshot commentary is invalid")
@@ -560,17 +802,22 @@ def validate_live_snapshot(
         if not isinstance(levels, dict) or set(levels) != {"beginner", "pro"}:
             raise LiveRecordError("live snapshot commentary is invalid")
         for level in ("beginner", "pro"):
-            _bounded_rows(levels[level], "commentary", 100)
+            _validate_commentary(levels[level])
     radio = _bounded_rows(value["radio"], "radio", 20)
     for row in radio:
         if (
             set(row) != {"audio_url", "transcript", "driver_id", "at_ms"}
             or not isinstance(row["audio_url"], str)
-            or not row["audio_url"].startswith("https://")
+            or not row["audio_url"].startswith(
+                "https://livetiming.formula1.com/static/"
+            )
             or len(row["audio_url"]) > 2048
-            or (row["transcript"] is not None and not isinstance(row["transcript"], str))
-            or (row["driver_id"] is not None and not isinstance(row["driver_id"], str))
-            or not isinstance(row["at_ms"], int)
+            or (
+                row["transcript"] is not None
+                and not _public_text(row["transcript"], maximum=2000)
+            )
+            or (row["driver_id"] is not None and not _driver_id(row["driver_id"]))
+            or not _integer(row["at_ms"])
         ):
             raise LiveRecordError("live snapshot radio is invalid")
     freshness = value["capture_freshness"]
@@ -582,17 +829,18 @@ def validate_live_snapshot(
         or not isinstance(freshness["raw_size"], int)
         or isinstance(freshness["raw_size"], bool)
         or not 0 <= freshness["raw_size"] <= MAX_SESSION_BYTES
-        or not isinstance(freshness["seconds_since_growth"], (int, float))
-        or isinstance(freshness["seconds_since_growth"], bool)
+        or not _number(freshness["seconds_since_growth"])
         or freshness["seconds_since_growth"] < 0
         or not isinstance(freshness["transport_growing"], bool)
-        or value["data_quality"] not in {"good", "degraded", "stalled"}
+        or not _choice(value["data_quality"], {"good", "degraded", "stalled"})
     ):
         raise LiveRecordError("live snapshot freshness is invalid")
     try:
-        _parsed_time(freshness["raw_updated_at"])
+        raw_updated = _parsed_time(freshness["raw_updated_at"])
     except (TypeError, ValueError) as exc:
         raise LiveRecordError("live snapshot freshness is invalid") from exc
+    if raw_updated > current + timedelta(seconds=5):
+        raise LiveRecordError("live snapshot freshness is invalid")
     return value
 
 
@@ -605,6 +853,14 @@ def write_live_snapshot(
 ) -> None:
     pointer = validate_live_pointer(pointer)
     snapshot = validate_live_snapshot(snapshot, pointer=pointer, now=now)
+    current = store.get_json("live/current.json", limit=MAX_RECORD_BYTES)
+    if (
+        isinstance(current, dict)
+        and current.get("canonical_session_id") == pointer["canonical_session_id"]
+        and current.get("replay_session_id") == pointer["replay_session_id"]
+    ):
+        existing = validate_live_pointer(current)
+        pointer = validate_live_pointer({**pointer, "created_at": existing["created_at"]})
     store.put_json(pointer["snapshot_key"], snapshot)
     store.put_json("live/current.json", pointer)
 
@@ -649,6 +905,11 @@ def write_live_status(
         or pointer["replay_session_id"] != replay_session_id
     ):
         raise LiveRecordError("live pointer identity differs")
+    if not _choice(status, _LIVE_STATUSES):
+        raise LiveRecordError("live status is invalid")
+    current_status = pointer["status"]
+    if status != current_status and status not in _LIVE_TRANSITIONS[current_status]:
+        raise LiveRecordError(f"live status transition {current_status} -> {status} is invalid")
     if status == "replay_ready":
         try:
             manifest = load_manifest(
