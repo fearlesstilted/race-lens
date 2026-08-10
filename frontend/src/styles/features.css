@@ -382,6 +382,12 @@
 .pit-sim-card {
   padding: 6px 0;
 }
+.pit-sim-snapshot {
+  margin-bottom: 5px;
+  color: var(--dim);
+  font: 700 12px var(--cond);
+  letter-spacing: .1em;
+}
 .pit-sim-verdict {
   font: italic 800 17px var(--cond);
   letter-spacing: 0.1em;

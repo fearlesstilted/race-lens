@@ -1,6 +1,7 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { getLiveSimulatePit, getSimulatePit, getWhatIf } from '../../api/client'
 import type { DriverState, PitSim, PitSimEvidence, WhatIf, WhatIfDiff } from '../../api/types'
+import { formatRaceTime } from '../../lib/format'
 import { teamColor } from './teamColors'
 
 type Props = {
@@ -11,8 +12,11 @@ type Props = {
   /** Live mode: PIT NOW uses /api/live/simulate-pit instead (WHAT IF has no live mirror). */
   live?: boolean
   atMs: number
+  lap: number
   onStrategyRequest?: () => void
 }
+
+type PitSnapshot = { atMs: number; lap: number }
 
 function fmtLap(ms: number | null | undefined): string {
   if (!ms || ms <= 0) return '—'
@@ -52,11 +56,16 @@ function isPitLap(driver: DriverState): boolean {
 }
 
 /** Pit sim verdict card */
-function PitSimCard({ ev }: { ev: PitSimEvidence }) {
+function PitSimCard({ ev, snapshot }: { ev: PitSimEvidence; snapshot: PitSnapshot | null }) {
   const verdictColor = ev.verdict === 'UNDERCUT_LIKELY' ? '#00c853' : ev.verdict === 'UNLIKELY' ? '#f2a900' : '#a0a0ac'
   const verdictText = ev.verdict === 'UNDERCUT_LIKELY' ? 'UNDERCUT LIKELY' : ev.verdict === 'UNLIKELY' ? 'UNLIKELY' : 'NO RIVAL'
   return (
     <div className="pit-sim-card">
+      {snapshot && (
+        <div className="pit-sim-snapshot">
+          LIVE SNAPSHOT · L{snapshot.lap || '—'} · T+{formatRaceTime(snapshot.atMs)}
+        </div>
+      )}
       <div className="pit-sim-verdict" style={{ color: verdictColor }}>{verdictText}</div>
       <div className="pit-sim-rows">
         <span>REJOINS P{ev.rejoin_pos}</span>
@@ -98,7 +107,7 @@ function WhatIfCard({ result, lang }: { result: WhatIf; lang?: string }) {
 }
 
 /** Single-driver card (non-H2H mode) */
-function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest }: { driverId: string; driver: DriverState; sessionId: string | null; live?: boolean; atMs: number; onStrategyRequest?: () => void }) {
+function DriverCard({ driverId, driver, sessionId, live, atMs, lap, onStrategyRequest }: { driverId: string; driver: DriverState; sessionId: string | null; live?: boolean; atMs: number; lap: number; onStrategyRequest?: () => void }) {
   const color = teamColor(driverId)
   const laps = recentLaps(driver)
   const compound = driver.tyre_compound?.charAt(0).toUpperCase() ?? '?'
@@ -107,6 +116,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest
   const [pitSim, setPitSim] = useState<PitSim | null>(null)
   const [pitBusy, setPitBusy] = useState(false)
   const [pitError, setPitError] = useState<string | null>(null)
+  const [pitSnapshot, setPitSnapshot] = useState<PitSnapshot | null>(null)
   const [whatIf, setWhatIf] = useState<WhatIf | null>(null)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfError, setWhatIfError] = useState<string | null>(null)
@@ -125,6 +135,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest
     setPitSim(null)
     setPitBusy(false)
     setPitError(null)
+    setPitSnapshot(null)
     setWhatIf(null)
     setWhatIfBusy(false)
     setWhatIfError(null)
@@ -138,6 +149,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest
     onStrategyRequest?.()
     setPitSim(null)
     setPitError(null)
+    setPitSnapshot(live ? { atMs, lap } : null)
     setPitBusy(true)
     const req = sessionId ? getSimulatePit(sessionId, atMs, driverId) : getLiveSimulatePit(driverId)
     req
@@ -152,7 +164,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest
         pitInFlight.current = false
         setPitBusy(false)
       })
-  }, [sessionId, live, atMs, driverId, onStrategyRequest])
+  }, [sessionId, live, atMs, lap, driverId, onStrategyRequest])
 
   const handleWhatIf = useCallback((scenario: string) => {
     if (!sessionId || whatIfInFlight.current) return
@@ -223,7 +235,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest
             PIT NOW
           </button>
           {pitBusy && <div className="strategy-action-status" role="status">CALCULATING PIT WINDOW…</div>}
-          {pitSim && !pitSim.error && pitSim.evidence && <PitSimCard ev={pitSim.evidence} />}
+          {pitSim && !pitSim.error && pitSim.evidence && <PitSimCard ev={pitSim.evidence} snapshot={pitSnapshot} />}
           {(pitError || pitSim?.error) && <div className="strategy-action-error" role="alert">{pitError || pitSim?.error}</div>}
         </div>
       )}
@@ -349,7 +361,7 @@ function H2HDeltas({
   )
 }
 
-export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs, onStrategyRequest }: Props) {
+export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs, lap, onStrategyRequest }: Props) {
   if (selectedIds.length === 0) return null
 
   const [idA, idB] = selectedIds
@@ -377,7 +389,7 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers,
   return (
     <div className="focus-panel">
       <div className="focus-cards">
-        <DriverCard key={idA} driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} onStrategyRequest={onStrategyRequest} />
+        <DriverCard key={idA} driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} lap={lap} onStrategyRequest={onStrategyRequest} />
       </div>
     </div>
   )

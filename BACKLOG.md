@@ -24,8 +24,9 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
   hiding, and persisted layouts. Mobile may keep its dedicated tab model.
 - Keep replay spoiler-free: strategy, highlights, insights, and state must not
   reveal future race information.
-- Use targeted checks after each block. Run the full matrix once before a
-  push/deploy/demo, not before every small edit.
+- Do not run automated tests, lint, or builds by default during implementation.
+  Use read-only diff inspection and run only checks the owner explicitly asks
+  for; a separate reviewer chooses any further proportionate validation.
 - Do not start another broad system or UI audit while working this list.
 
 ## Closed foundations
@@ -57,8 +58,8 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
 |---|---|---|
 | Replay/feed clock alignment | **DONE** | Replay feed labels now share the timeline's lights-out origin, formation entries are labelled honestly, and raw timestamps still drive ordering and spoiler-safe cutoffs. Live keeps its session clock when no replay origin exists. |
 | Tyre strategy clarity | **DONE** | The view has one continuous 1 px `NOW` boundary without ruler overflow, visible future treatment, narrow-label suppression, and truthful tooltips without leaking future stints. |
-| What to Watch usefulness | **DONE** | Insight cards with drivers focus the relevant one or two cars, expose FOCUS beside the card header, and preserve type priority when insights are grouped. Safety-car summaries remain informational; broader widget usefulness stays open below. |
-| Pit / What If action feedback | **DONE** | Pit-window and finish-sensitivity actions now show explicit busy/error states, reject duplicate clicks, clear superseded results, and ignore responses from an older driver, session, or replay timestamp. |
+| What to Watch usefulness | **DONE** | Insight cards with drivers focus the relevant one or two cars, expose FOCUS beside the card header, and preserve current type/severity rank through grouping, rendering, and the visible-card cap. Safety-car summaries remain informational; broader widget usefulness stays open below. |
+| Pit / What If action feedback | **DONE** | Pit-window and finish-sensitivity actions show explicit busy/error states, reject duplicate clicks, clear superseded results, and ignore responses from an older driver, session, or replay timestamp. Live PIT results persist across ticks as explicitly labelled request-lap/time snapshots. |
 | Widget clickability | **OPEN** | The first useful-action contract is proven in What to Watch. Extend it to timing, battles, strategy, and events only where a natural action exists; decorative text must stay non-interactive. |
 | Typography cleanup | **DONE** | Active statistics and controls respect the 12 px floor; the two remaining 10 px declarations are documented decorative glyphs. |
 | Popup placement | **DEFER** | Review Panel ANCHOR/LEFT/RIGHT presets were removed after owner review. Highlights and DOTD are anchored to their header triggers again; any placement controls belong to the real workspace/window-manager work. |
