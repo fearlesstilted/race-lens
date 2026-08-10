@@ -15,7 +15,7 @@ written transcript event payloads include model/profile/version metadata.
 ## Checks
 
 - Focused backend: `27 passed in 14.44s`.
-- Focused frontend: `DOTD result ordering check passed`.
+- Focused frontend: `DOTD result ordering check passed` (ordering and finish refetch lifecycle).
 - Changed Python files: `ruff` passed.
 - Changed TypeScript/TSX files: `eslint` passed.
 - No Whisper model, network audio, private reference manifest, or full matrix was run.
@@ -28,3 +28,8 @@ written transcript event payloads include model/profile/version metadata.
 - Formula 1 may publish an award after archive completion. Publication remains
   successful; the private recorder retries missing completed-race awards every
   six hours and all absent, malformed, wrong-event, or ambiguous data stays null.
+
+## Review follow-up
+
+- The DOTD request key now includes the provisional/final phase, so an open panel
+  refetches once when the race finishes while ordinary `atMs` ticks remain excluded.

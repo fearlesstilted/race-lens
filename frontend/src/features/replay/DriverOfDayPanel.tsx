@@ -33,13 +33,14 @@ function loadUserPick(sessionId: string): string | null {
 export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, totalLaps, atMs }: Props) {
   const [open, setOpen] = useState(false)
   const [userPick, setUserPick] = useState<string | null>(null)
+  const isFinished = sessionStatus === 'finished'
 
   // Snapshot the pick at the moment the panel opens — spoiler-free (race so
-  // far). Not live-refreshed so it doesn't churn while reading. atMs/sessionStatus
-  // are deliberately excluded from deps for the same reason.
+  // far). Ordinary atMs changes stay excluded so it doesn't churn while reading;
+  // the finish phase is included so the official result is fetched exactly once.
   const { data, loading } = useAsync<DotdResponse>(
-    () => getDriverOfDay(sessionId, sessionStatus === 'finished' ? undefined : atMs),
-    [sessionId],
+    () => getDriverOfDay(sessionId, isFinished ? undefined : atMs),
+    [sessionId, isFinished],
     open,
   )
 
@@ -64,7 +65,6 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, t
   }
 
   const maxScore = data?.candidates[0]?.score ?? 1
-  const isFinished = sessionStatus === 'finished'
   const lapsToGo = totalLaps != null && lap != null ? totalLaps - lap : null
   const available = isFinished || (lapsToGo != null && lapsToGo <= UNLOCK_LAPS_TO_GO)
   const dotdLabel = lang === 'ru'
