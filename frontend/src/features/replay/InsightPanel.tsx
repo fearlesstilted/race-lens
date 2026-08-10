@@ -123,8 +123,6 @@ function groupByPair(insights: Insight[]): {
   }
   const result: { primary: Insight; also: string[] }[] = []
   for (const [, group] of byPair) {
-    // Sort by severity — best first
-    group.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
     const [primary, ...rest] = group
     result.push({
       primary,
@@ -183,6 +181,9 @@ const InsightCard = React.memo(function InsightCard({
         {insightTitle(ins)}
         <small>{insightSubtitle(ins)}</small>
       </h4>
+      {onFocusDrivers && focusIds.length > 0 && (
+        <span className="ins-action-label">FOCUS {focusIds.join(' / ')} →</span>
+      )}
       {also.length > 0 && (
         <div className="ins-also">also: {also.join(' · ')}</div>
       )}
@@ -209,7 +210,6 @@ const InsightCard = React.memo(function InsightCard({
         onClick={() => onFocusDrivers(focusIds)}
       >
         {content}
-        <span className="ins-action-label">FOCUS {focusIds.join(' / ')} →</span>
       </button>
     )
   }
