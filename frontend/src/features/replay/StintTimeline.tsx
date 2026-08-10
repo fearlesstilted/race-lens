@@ -52,9 +52,7 @@ export function StintTimeline({ sessionId, currentLap, order }: Props) {
             {ruler.map((lap, index) => <span key={`${lap}-${index}`}>L{lap}</span>)}
           </span>
           {currentPct < 100 && (
-            <span className="stint-future stint-future-axis" style={{ left: `${currentPct}%` }}>
-              FUTURE
-            </span>
+            <span className="stint-future stint-future-axis" style={{ left: `${currentPct}%` }} aria-hidden="true" />
           )}
           <span className="stint-now stint-now-axis" style={{ left: `${currentPct}%` }}>
             <i>NOW · L{currentLap}</i>
