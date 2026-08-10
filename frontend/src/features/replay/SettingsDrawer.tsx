@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
 import { DASHBOARD_PRESETS } from './replayTypes'
-import type { DashboardLayout, Lang, Level, ReviewDock } from './replayTypes'
+import type { DashboardLayout, Lang, Level } from './replayTypes'
 
 type Props = {
   open: boolean
@@ -13,13 +13,11 @@ type Props = {
   liveAvailable: boolean
   projection: boolean
   dashboardLayout: DashboardLayout
-  reviewDock: ReviewDock
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onModeChange: (mode: 'replay' | 'live') => void
   onProjection: (value: boolean) => void
   onDashboardLayout: (value: DashboardLayout) => void
-  onReviewDock: (value: ReviewDock) => void
   sessionId?: string | null
   onSeek?: (ms: number) => void
   sessionStatus?: string
@@ -30,8 +28,8 @@ type Props = {
 
 export function SettingsDrawer({
   open, onClose, lang, level, mode, liveAvailable, projection,
-  dashboardLayout, reviewDock, onLang, onLevel, onModeChange, onProjection,
-  onDashboardLayout, onReviewDock,
+  dashboardLayout, onLang, onLevel, onModeChange, onProjection,
+  onDashboardLayout,
   sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -153,19 +151,6 @@ export function SettingsDrawer({
             ))}
           </div>
           <small className="layout-help">Docked panels stay readable; mobile keeps its tab layout.</small>
-          <div className="settings-sub-label">REVIEW PANELS</div>
-          <div className="tog-group review-dock-options" aria-label="Review panel placement">
-            {(['anchor', 'left', 'right'] as const).map((dock) => (
-              <button
-                type="button"
-                key={dock}
-                className={`tog${reviewDock === dock ? ' tog-on' : ''}`}
-                onClick={() => onReviewDock(dock)}
-              >
-                {dock.toUpperCase()}
-              </button>
-            ))}
-          </div>
         </div>
 
         {mode === 'replay' && sessionId && onSeek && (
