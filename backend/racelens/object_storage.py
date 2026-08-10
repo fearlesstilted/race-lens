@@ -486,7 +486,7 @@ _EVIDENCE_FIELDS = {
 _DRIVER_ID = re.compile(r"^[A-Z0-9]{1,4}$")
 _UNSAFE_PUBLIC_TEXT = (
     "://", "aws_", "racelens_s3_", "/home/", "/var/", "/tmp/", "/opt/",
-    "/etc/", "\\users\\", "bucket", "endpoint", "secret_access", "access_key",
+    "/etc/", "\\users\\", "secret_access", "access_key",
     "amazonaws.com", "botocore", "boto3",
 )
 
@@ -509,14 +509,23 @@ def _number(value: object, *, nullable: bool = False) -> bool:
     return isinstance(value, float) and math.isfinite(value)
 
 
-def _public_text(value: object, *, maximum: int = 500, empty: bool = False) -> bool:
+def _public_text(
+    value: object,
+    *,
+    maximum: int = 500,
+    empty: bool = False,
+    multiline: bool = False,
+) -> bool:
     if not isinstance(value, str) or len(value) > maximum or (not empty and not value):
         return False
     lowered = value.lower()
     return (
-        not any(ord(char) < 32 and char not in "\t" for char in value)
+        not any(
+            ord(char) < 32 and char not in ("\t\n" if multiline else "\t")
+            for char in value
+        )
         and "\r" not in value
-        and "\n" not in value
+        and (multiline or "\n" not in value)
         and not value.startswith(("/", "\\"))
         and not re.match(r"^[a-zA-Z]:[\\/]", value)
         and not any(token in lowered for token in _UNSAFE_PUBLIC_TEXT)
@@ -685,7 +694,12 @@ def _validate_insights(value: object, name: str, limit: int) -> None:
             elif isinstance(item, list):
                 valid = len(item) <= 30 and all(_number(number) for number in item)
             else:
-                valid = _number(item, nullable=key == "vs_race_leader_ms")
+                valid = _number(
+                    item,
+                    nullable=key in {
+                        "vs_race_leader_ms", "defender_tyre_age_laps",
+                    },
+                )
             if not valid:
                 raise LiveRecordError(f"live snapshot {name} is invalid")
 
@@ -728,7 +742,9 @@ def _validate_feed(value: object) -> None:
             )
             or (
                 "transcript" in row
-                and not _public_text(row["transcript"], maximum=2000)
+                and not _public_text(
+                    row["transcript"], maximum=2000, multiline=True,
+                )
             )
         ):
             raise LiveRecordError("live snapshot feed is invalid")
@@ -814,7 +830,9 @@ def validate_live_snapshot(
             or len(row["audio_url"]) > 2048
             or (
                 row["transcript"] is not None
-                and not _public_text(row["transcript"], maximum=2000)
+                and not _public_text(
+                    row["transcript"], maximum=2000, multiline=True,
+                )
             )
             or (row["driver_id"] is not None and not _driver_id(row["driver_id"]))
             or not _integer(row["at_ms"])
@@ -852,6 +870,8 @@ def write_live_snapshot(
     now: datetime | None = None,
 ) -> None:
     pointer = validate_live_pointer(pointer)
+    if pointer["status"] != "live":
+        raise LiveRecordError("live snapshot pointer must have live status")
     snapshot = validate_live_snapshot(snapshot, pointer=pointer, now=now)
     current = store.get_json("live/current.json", limit=MAX_RECORD_BYTES)
     if (
@@ -860,6 +880,8 @@ def write_live_snapshot(
         and current.get("replay_session_id") == pointer["replay_session_id"]
     ):
         existing = validate_live_pointer(current)
+        if existing["status"] != "live":
+            raise LiveRecordError("live snapshot lifecycle is no longer active")
         pointer = validate_live_pointer({**pointer, "created_at": existing["created_at"]})
     store.put_json(pointer["snapshot_key"], snapshot)
     store.put_json("live/current.json", pointer)

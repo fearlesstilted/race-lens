@@ -218,6 +218,47 @@ def test_live_records_reject_inner_identity_malformed_values_and_path_text():
         storage.validate_live_snapshot(missing, pointer=pointer, now=NOW)
 
 
+def test_live_records_accept_multiline_whisper_and_nullable_undercut_evidence():
+    pointer, snapshot = _valid_records()
+    transcript = "Brake balance endpoint\nput the tyres in the bucket"
+    audio_url = "https://livetiming.formula1.com/static/2026/Dutch/Race/radio.mp3"
+    radio_feed = {
+        "id": "radio:ver",
+        "at_ms": 1_000,
+        "lap": 1,
+        "kind": "RaceControlMessage",
+        "tag": "FLAG",
+        "text": "RADIO: VER",
+        "driver_id": "VER",
+        "audio_url": audio_url,
+        "transcript": transcript,
+    }
+    snapshot["feed"] = {"en": [radio_feed], "ru": [copy.deepcopy(radio_feed)]}
+    snapshot["radio"] = [{
+        "audio_url": audio_url,
+        "transcript": transcript,
+        "driver_id": "VER",
+        "at_ms": 1_000,
+    }]
+    snapshot["active_insights"] = [{
+        "insight_id": "undercut:VER:1000",
+        "type": "UNDERCUT_RISK_MEDIUM",
+        "severity": "medium",
+        "confidence": "medium",
+        "created_at_ms": 1_000,
+        "lap": 1,
+        "driver_ids": ["VER", "NOR"],
+        "evidence": {
+            "interval_s": 1.5,
+            "attacker_tyre_age_laps": 10,
+            "defender_tyre_age_laps": None,
+            "pace_delta_ms": 100,
+        },
+    }]
+
+    assert storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW) == snapshot
+
+
 def test_recorder_snapshot_handles_partial_append_sc_vsc_and_late_transcript(tmp_path):
     store = MemoryStore()
     recorder = Recorder(_config(tmp_path), now=lambda: NOW, object_store=store)
@@ -396,6 +437,34 @@ def test_live_snapshot_preserves_created_at_for_same_identity_and_resets_for_new
     new_snapshot["race_state"]["session_id"] = "italian_2026_race"
     storage.write_live_snapshot(store, new_pointer, new_snapshot, now=later)
     assert store.objects["live/current.json"]["created_at"] == next_pointer["created_at"]
+
+
+def test_live_snapshot_writer_cannot_publish_ready_or_overwrite_terminal_state():
+    pointer, snapshot = _valid_records()
+    store = MemoryStore()
+    with pytest.raises(storage.LiveRecordError, match="snapshot pointer"):
+        storage.write_live_snapshot(
+            store, {**pointer, "status": "replay_ready"}, snapshot, now=NOW,
+        )
+    assert "live/current.json" not in store.objects
+
+    storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
+    storage.write_live_status(
+        store, SESSION.session_id, fixture_stem(SESSION), "finishing", now=NOW,
+    )
+    terminal_pointer = copy.deepcopy(store.objects["live/current.json"])
+    terminal_snapshot = copy.deepcopy(store.objects[pointer["snapshot_key"]])
+    with pytest.raises(storage.LiveRecordError, match="snapshot lifecycle"):
+        storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
+    assert store.objects["live/current.json"] == terminal_pointer
+    assert store.objects[pointer["snapshot_key"]] == terminal_snapshot
+
+    store.objects["live/current.json"] = {
+        **terminal_pointer,
+        "status": "replay_ready",
+    }
+    with pytest.raises(storage.LiveRecordError, match="snapshot lifecycle"):
+        storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
 
 
 def test_capture_loop_restarts_and_publishes_every_five_seconds_only_with_storage(
