@@ -20,6 +20,7 @@ from threading import Lock
 from typing import Any, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
@@ -160,6 +161,17 @@ app = FastAPI(
     docs_url=None if READONLY else "/docs",
     redoc_url=None if READONLY else "/redoc",
     openapi_url=None if READONLY else "/openapi.json",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://race-lens.onrender.com",
+        "http://tauri.localhost",
+        "tauri://localhost",
+        "http://localhost:5173",
+    ],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Accept", "Content-Type"],
 )
 
 

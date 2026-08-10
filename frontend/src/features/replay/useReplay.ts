@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCommentary, getFeed, getMarkers, getTimeline } from '../../api/client'
+import { apiUrl } from '../../api/url'
 import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, RecentPass, Timeline } from '../../api/types'
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
@@ -111,7 +112,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     if (positionsLoadingRef.current) return
     positionsLoadingRef.current = true
     const seq = ++positionsRequestSeq.current
-    fetch(`/api/sessions/${encodeURIComponent(sid)}/positions?at_ms=${Math.max(0, Math.round(centerMs))}`)
+    fetch(apiUrl(`/api/sessions/${encodeURIComponent(sid)}/positions?at_ms=${Math.max(0, Math.round(centerMs))}`))
       .then((response) => response.ok ? response.json() as Promise<PositionsData> : null)
       .then((data) => {
         if (seq === positionsRequestSeq.current) setPositionsData(data)
