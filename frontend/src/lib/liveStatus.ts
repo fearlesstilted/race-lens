@@ -42,7 +42,7 @@ export function liveLifecycle(
   const attachable = status?.is_running === true || remoteAttachable
 
   return {
-    canManage: !options.readonly,
+    canManage: !options.readonly && !remote,
     remoteAvailable: remote && status.status === 'live',
     enterLive: !options.explicitReplay && !options.attachedToLive && attachable,
     showLiveNow: options.explicitReplay && !options.attachedToLive && remote && status.status === 'live',
@@ -72,28 +72,8 @@ export function livePresentation(
       detail: 'LIVE ENDED · PUBLISHING REPLAY',
     }
   }
-  if (streamError) {
-    return {
-      phase: 'reconnecting',
-      badge: 'RECONNECTING',
-      detail: 'STREAM LOST · RETRYING AUTOMATICALLY',
-    }
-  }
-  if (status && !status.is_running) {
-    return { phase: 'ended', badge: 'ENDED', detail: 'SESSION FEED ENDED' }
-  }
   if (status?.capture_alive === false) {
     return { phase: 'stalled', badge: 'STALLED', detail: 'CAPTURE STOPPED · RESTART LIVE' }
-  }
-  if (!hasState) {
-    if (status?.is_running && status.events_total === 0) {
-      return {
-        phase: 'waiting',
-        badge: 'WAITING',
-        detail: 'FEED CONNECTED · WAITING FOR FIRST TIMING PACKET',
-      }
-    }
-    return { phase: 'connecting', badge: 'CONNECTING', detail: 'OPENING LIVE TIMING' }
   }
   const expiresAt = status?.expires_at ? Date.parse(status.expires_at) : Number.NaN
   if (!Number.isNaN(expiresAt) && expiresAt <= now) {
@@ -105,6 +85,26 @@ export function livePresentation(
   }
   if (status?.data_quality === 'stalled') {
     return { phase: 'stalled', badge: 'STALLED', detail: 'NO NEW DATA · RECONNECTING AUTOMATICALLY' }
+  }
+  if (streamError) {
+    return {
+      phase: 'reconnecting',
+      badge: 'RECONNECTING',
+      detail: 'STREAM LOST · RETRYING AUTOMATICALLY',
+    }
+  }
+  if (status && !status.is_running) {
+    return { phase: 'ended', badge: 'ENDED', detail: 'SESSION FEED ENDED' }
+  }
+  if (!hasState) {
+    if (status?.is_running && status.events_total === 0) {
+      return {
+        phase: 'waiting',
+        badge: 'WAITING',
+        detail: 'FEED CONNECTED · WAITING FOR FIRST TIMING PACKET',
+      }
+    }
+    return { phase: 'connecting', badge: 'CONNECTING', detail: 'OPENING LIVE TIMING' }
   }
   if (status?.data_quality === 'degraded') {
     return { phase: 'degraded', badge: 'DELAYED', detail: 'LIVE DATA IS ARRIVING LATE' }

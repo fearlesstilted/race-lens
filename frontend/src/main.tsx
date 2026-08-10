@@ -177,6 +177,7 @@ function App() {
 
   const loadSessions = useCallback(() => {
     let cancelled = false
+    const requestedAtStart = new URLSearchParams(window.location.search).get('session')
     setSessionError(null)
     setBackendPhase('connecting')
     const wakeTimer = window.setTimeout(() => {
@@ -187,6 +188,10 @@ function App() {
         if (cancelled) return
         window.clearTimeout(wakeTimer)
         const requested = new URLSearchParams(window.location.search).get('session')
+        if (requested !== requestedAtStart) {
+          setBackendPhase('ready')
+          return
+        }
         const requestedSession = items.find((item) => item.session_id === requested)
         const initialSession = requestedSession?.session_id ?? null
         setSessionId((current) => (
@@ -255,7 +260,10 @@ function App() {
   useEffect(() => {
     if (!startupReady || !(readonlyDeployment === true || mode === 'live' || isLiveActive)) return
     let cancelled = false
+    let inFlight = false
     const poll = () => {
+      if (inFlight) return
+      inFlight = true
       liveStatus()
         .then((status) => {
           if (cancelled) return
@@ -269,6 +277,7 @@ function App() {
           else if (decision.enterLive) adoptLive()
         })
         .catch(() => undefined)
+        .finally(() => { inFlight = false })
     }
     const id = window.setInterval(poll, 5000)
     return () => { cancelled = true; window.clearInterval(id) }
@@ -347,7 +356,7 @@ function App() {
     )
   }
 
-  if (sessionError) {
+  if (sessionError && mode === 'replay') {
     return (
       <div className="error-screen">
         <div>

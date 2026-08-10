@@ -60,10 +60,15 @@ assert.equal(liveLifecycle(localLive, {
 assert.equal(livePresentation(
   { ...remoteLive, expires_at: '2026-08-10T11:59:59Z' },
   true,
-  null,
+  'offline',
   Date.parse('2026-08-10T12:00:00Z'),
-).phase, 'stalled', 'expired snapshots render stalled')
-assert.equal(livePresentation(remoteLive, true, 'offline').phase, 'reconnecting')
+).phase, 'stalled', 'expired snapshots stay stalled while EventSource reconnects')
+assert.equal(livePresentation(
+  remoteLive,
+  true,
+  'offline',
+  Date.parse('2026-08-10T12:00:10Z'),
+).phase, 'reconnecting')
 
 const finishing = { ...remoteLive, is_running: false, status: 'finishing' as const }
 assert.equal(liveLifecycle(finishing, {
@@ -99,6 +104,11 @@ assert.equal(liveLifecycle(remoteLive, {
   explicitReplay: false,
   attachedToLive: true,
 }).canManage, false, 'readonly deployments expose no management actions')
+assert.equal(liveLifecycle(remoteLive, {
+  readonly: false,
+  explicitReplay: false,
+  attachedToLive: true,
+}).canManage, false, 'remote Live exposes no management actions on writable deployments')
 assert.equal(liveLifecycle(localLive, {
   readonly: false,
   explicitReplay: false,
