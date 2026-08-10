@@ -39,11 +39,12 @@ const waitingStatus = {
   last_poll_unix: 1,
   last_new_event_unix: null,
   last_error: null,
-  data_quality: 'stalled' as const,
+  data_quality: 'good' as const,
 }
 const waiting = livePresentation(waitingStatus, false, null)
 assert.equal(waiting.phase, 'waiting')
 assert.equal(livePresentation({ ...waitingStatus, capture_alive: false }, false, null).phase, 'stalled')
+assert.equal(livePresentation({ ...waitingStatus, data_quality: 'stalled' }, false, null).phase, 'stalled')
 assert.equal(livePresentation(null, true, 'offline').phase, 'reconnecting')
 
 const battle = { driver_ids: ['NOR', 'PIA'], evidence: { interval_s: 0.91 } }
