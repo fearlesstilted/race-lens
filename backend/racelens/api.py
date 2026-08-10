@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 import re
+import time
 from contextlib import AbstractContextManager, asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -53,6 +54,7 @@ from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
 from racelens.live.signalr import SignalRCapture, make_signalr_fetch
 from racelens.object_storage import (
+    LiveRecordError,
     ManifestError,
     ObjectPreparationQueue,
     REPLAY_ID,
@@ -60,6 +62,7 @@ from racelens.object_storage import (
     S3Store,
     StorageConfig,
     StorageError,
+    load_live,
 )
 from racelens.preparations import PreparationQueue, QueueFullError, SESSION_ID
 from racelens.replay.engine import ReplayEngine
@@ -116,6 +119,10 @@ _capture: Optional[SignalRCapture] = None
 # make_signalr_fetch), used by the /api/live/* predictive mirrors to look up
 # track params. None for source=openf1 sessions or when no live session runs.
 _live_session_id: Optional[str] = None
+
+# Two-second process cache: remote Live is one current pointer plus one bounded
+# snapshot, so there is no reason to hit object storage on every GET/SSE tick.
+_remote_live_cache: tuple[float, dict | None] | None = None
 
 # Lock to prevent concurrent start requests.
 _start_lock: asyncio.Lock = asyncio.Lock()
@@ -188,6 +195,70 @@ def _safe_slug(value: str) -> str:
 @lru_cache(maxsize=1)
 def _object_store() -> S3Store | None:
     return S3Store(STORAGE_CONFIG) if STORAGE_CONFIG is not None else None
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _remote_live() -> dict | None:
+    global _remote_live_cache
+    now = time.monotonic()
+    if _remote_live_cache is not None and now - _remote_live_cache[0] < 2:
+        return _remote_live_cache[1]
+    store = _object_store()
+    if store is None:
+        value = None
+    else:
+        try:
+            value = load_live(store, now=_utcnow())
+        except LiveRecordError as exc:
+            raise HTTPException(404, "No current live snapshot") from exc
+        except StorageError as exc:
+            raise HTTPException(503, "Live storage is temporarily unavailable") from exc
+    _remote_live_cache = (now, value)
+    return value
+
+
+def _remote_live_required(*, snapshot: bool = True) -> dict:
+    value = _remote_live()
+    if value is None or snapshot and value["snapshot"] is None:
+        raise HTTPException(404, "No live session active")
+    return value
+
+
+def _remote_live_status(value: dict) -> dict[str, Any]:
+    pointer = value["pointer"]
+    snapshot = value["snapshot"]
+    sequence = snapshot["sequence"] if snapshot is not None else 0
+    state = snapshot["race_state"] if snapshot is not None else {}
+    freshness = snapshot["capture_freshness"] if snapshot is not None else None
+    quality = snapshot["data_quality"] if snapshot is not None else "stalled"
+    generated = snapshot["generated_at"] if snapshot is not None else pointer["updated_at"]
+    return {
+        "polls": sequence,
+        "events_total": state.get("data_quality", {}).get("events_applied", 0),
+        "new_last_poll": 0,
+        "consecutive_failures": 0,
+        "last_poll_unix": datetime.fromisoformat(generated.replace("Z", "+00:00")).timestamp(),
+        "last_new_event_unix": (
+            datetime.fromisoformat(freshness["raw_updated_at"].replace("Z", "+00:00")).timestamp()
+            if freshness else None
+        ),
+        "last_error": pointer["failure"],
+        "data_quality": quality,
+        "last_poll_ok": quality != "stalled",
+        "is_running": pointer["status"] == "live",
+        "poll_count": sequence,
+        "source": "remote",
+        "status": pointer["status"],
+        "canonical_session_id": pointer["canonical_session_id"],
+        "replay_session_id": pointer["replay_session_id"],
+        "generated_at": generated,
+        "expires_at": snapshot["expires_at"] if snapshot is not None else None,
+        "capture_freshness": freshness,
+        "failure": pointer["failure"],
+    }
 
 
 @lru_cache(maxsize=1)
@@ -789,13 +860,14 @@ def _live_health_status() -> dict[str, Any]:
 
 @app.get("/api/live/status")
 async def live_status() -> dict:
-    if _live is None:
-        raise HTTPException(404, "No live session active")
-    status = _live_health_status()
-    # Fields the frontend contract expects (LiveStatusResult).
-    status["is_running"] = _live.is_running
-    status["poll_count"] = status["polls"]
-    return status
+    if _live is not None:
+        status = _live_health_status()
+        # Fields the frontend contract expects (LiveStatusResult).
+        status["is_running"] = _live.is_running
+        status["poll_count"] = status["polls"]
+        return status
+    remote = await asyncio.to_thread(_remote_live_required, snapshot=False)
+    return _remote_live_status(remote)
 
 
 @app.get("/api/live/stream")
@@ -806,7 +878,7 @@ async def live_stream(
 ) -> StreamingResponse:
     """SSE stream: emits state_now() every *tick_s* seconds."""
     if _live is None:
-        raise HTTPException(404, "No live session active")
+        await asyncio.to_thread(_remote_live_required, snapshot=False)
 
     async def gen():
         # Passes cache: recomputed only when the live engine's event count grows
@@ -814,6 +886,33 @@ async def live_stream(
         # be wasted work — most ticks see no new events between polls).
         passes_cache: dict[str, Any] = {"count": -1, "passes": []}
         while True:
+            if _live is None:
+                try:
+                    current = await asyncio.to_thread(
+                        _remote_live_required, snapshot=False,
+                    )
+                except HTTPException:
+                    yield "event: end\ndata: {}\n\n"
+                    return
+                pointer = current["pointer"]
+                snapshot = current["snapshot"]
+                if pointer["status"] != "live":
+                    yield "event: end\ndata: {}\n\n"
+                    return
+                if snapshot is None:
+                    yield "data: {}\n\n"
+                else:
+                    state = dict(snapshot["race_state"])
+                    state["active_insights"] = snapshot["active_insights"]
+                    state["commentary"] = snapshot["commentary"].get(
+                        lang, snapshot["commentary"]["en"]
+                    ).get(level, snapshot["commentary"]["en"]["pro"])
+                    state["recent_passes"] = snapshot["recent_passes"]
+                    state["battles"] = snapshot["battles"]
+                    state["live_status"] = _remote_live_status(current)
+                    yield f"data: {json.dumps(state)}\n\n"
+                await asyncio.sleep(tick_s)
+                continue
             if _live is None or not _live.is_running:
                 # Runner stopped (explicitly or via auto-stop) — reap the capture
                 # subprocess if it's still around, signal end, close the stream.
@@ -845,7 +944,10 @@ async def live_feed(
     limit: int = Query(default=30, ge=1, le=100),
 ) -> list:
     """Event feed for the frontend during live mode (no session_id to scope by)."""
-    if _live is None or _live.engine is None:
+    if _live is None:
+        snapshot = (await asyncio.to_thread(_remote_live_required))["snapshot"]
+        return snapshot["feed"].get(lang, snapshot["feed"]["en"])[:limit]
+    if _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
     until_ms = _live.engine.events[-1].session_time_ms
     items = render_feed(_live.engine.events, until_ms, lang=lang, limit=limit)
@@ -886,23 +988,35 @@ async def live_stop() -> dict:
 
 @app.get("/api/live/forecast")
 async def live_forecast(laps: int = Query(default=10, ge=1, le=50)) -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        state = (await asyncio.to_thread(_remote_live_required))["snapshot"]["race_state"]
+    elif _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    state = _live.state_now()
+    else:
+        state = _live.state_now()
     return project_order(state, laps_ahead=laps)
 
 
 @app.get("/api/live/win-prob")
 async def live_win_prob() -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        remote = await asyncio.to_thread(_remote_live_required)
+        state = remote["snapshot"]["race_state"]
+        session_id = remote["pointer"]["replay_session_id"]
+    elif _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    state = _live.state_now()
-    return win_probability(state, _live_session_id or "")
+    else:
+        state = _live.state_now()
+        session_id = _live_session_id or ""
+    return win_probability(state, session_id)
 
 
 @app.get("/api/live/battles")
 async def live_battles() -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        snapshot = (await asyncio.to_thread(_remote_live_required))["snapshot"]
+        return {"at_ms": snapshot["race_state"]["at_ms"], "battles": snapshot["battles"]}
+    if _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
     state = _live.state_now()
     return {"at_ms": state["at_ms"], "battles": detect_battles(state)}
@@ -910,10 +1024,16 @@ async def live_battles() -> dict:
 
 @app.get("/api/live/simulate-pit")
 async def live_simulate_pit(driver: str = Query(...)) -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        remote = await asyncio.to_thread(_remote_live_required)
+        state = remote["snapshot"]["race_state"]
+        session_id = remote["pointer"]["replay_session_id"]
+    elif _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    state = _live.state_now()
-    return simulate_pit(state, driver, _live_session_id or "")
+    else:
+        state = _live.state_now()
+        session_id = _live_session_id or ""
+    return simulate_pit(state, driver, session_id)
 
 
 # ── Static frontend (single-container deploys: HF Spaces, VPS) ────────────────

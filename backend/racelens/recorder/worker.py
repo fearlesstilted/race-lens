@@ -15,16 +15,30 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
+from racelens.adapters.f1live_adapter import ingest_f1live
+from racelens.commentary.feed import render_feed
+from racelens.commentary.renderer import render_all
+from racelens.insights.battles import detect_battles
+from racelens.insights.passes import detect_passes
+from racelens.insights.registry import detect_all
 from racelens.object_storage import (
+    LIVE_SNAPSHOT_TTL_S,
+    MAX_LIVE_SNAPSHOT_BYTES,
+    LiveRecordError,
     ObjectPreparationQueue,
     S3Store,
     StorageConfig,
+    StorageError,
+    live_snapshot_key,
     publish_session,
+    write_live_snapshot,
+    write_live_status,
 )
 from racelens.recorder.feed import inspect_feed, isolate_session
 from racelens.recorder.postprocess import merge_captured_radio, validate_archive, validate_fixture
 from racelens.recorder.schedule import ScheduledSession, load_fastf1_schedule, select_due_session
 from racelens.recorder.state import Phase, StateStore
+from racelens.replay.engine import ReplayEngine
 
 FINISH_GRACE = timedelta(minutes=10)
 CAPTURE_RETRY = timedelta(minutes=5)
@@ -129,6 +143,9 @@ class Recorder:
         self.remote_queue = (
             ObjectPreparationQueue(object_store) if object_store is not None else None
         )
+        self._live_sequences: dict[str, int] = {}
+        self._live_transport: dict[str, tuple[int, datetime]] = {}
+        self._transcripts = None
         for path in (config.state_dir, config.raw_dir, config.data_dir):
             path.mkdir(parents=True, exist_ok=True)
         self.remote_processing.unlink(missing_ok=True)
@@ -161,11 +178,172 @@ class Recorder:
             process.kill()
             process.wait(timeout=10)
 
+    def _capture_freshness(self, session: ScheduledSession, raw: Path) -> dict:
+        current = self.now().astimezone(UTC)
+        stat = raw.stat()
+        modified = datetime.fromtimestamp(stat.st_mtime, UTC)
+        previous = self._live_transport.get(session.session_id)
+        if previous is None:
+            growth_at = min(modified, current)
+        elif stat.st_size > previous[0]:
+            growth_at = current
+        else:
+            growth_at = previous[1]
+        self._live_transport[session.session_id] = (stat.st_size, growth_at)
+        age = max(0.0, (current - growth_at).total_seconds())
+        growing = age <= LIVE_SNAPSHOT_TTL_S
+        return {
+            "capture_freshness": {
+                "raw_size": stat.st_size,
+                "raw_updated_at": modified.isoformat().replace("+00:00", "Z"),
+                "seconds_since_growth": age,
+                "transport_growing": growing,
+            },
+            "data_quality": "good" if growing else "stalled",
+        }
+
+    def _publish_live_snapshot(self, session: ScheduledSession, raw: Path) -> bool:
+        if self.object_store is None or session.kind != "R":
+            return False
+        inspection = inspect_feed(raw, session)
+        if not inspection.matched or inspection.segment_ended:
+            return False
+        replay_id = fixture_stem(session)
+        events = ingest_f1live(str(raw), session_id=replay_id)
+        if not events:
+            return False
+        engine = ReplayEngine(events)
+        at_ms = engine.events[-1].session_time_ms
+        state = engine.state_at(at_ms)
+        for driver in state["drivers"].values():
+            driver.setdefault("x", None)
+            driver.setdefault("y", None)
+            driver.setdefault("progress", None)
+        state["frame_source"] = "live"
+        state["viewbox"] = None
+        insights = detect_all(state)
+        passes = [
+            {"ahead": item.ahead, "behind": item.behind, "kind": item.kind, "at_ms": item.at_ms}
+            for item in detect_passes(engine.events)
+            if at_ms - 20_000 < item.at_ms <= at_ms
+        ]
+        feeds = {
+            language: render_feed(engine.events, at_ms, lang=language, limit=100)
+            for language in ("en", "ru")
+        }
+        radio_text: dict[str, str | None] = {}
+        if self.config.transcribe_radio:
+            if self._transcripts is None:
+                from racelens.radio.transcribe import TranscriptWorker
+
+                self._transcripts = TranscriptWorker()
+            for item in feeds["en"]:
+                url = item.get("audio_url")
+                if url:
+                    radio_text[url] = item.get("transcript") or self._transcripts.get(url)
+        for items in feeds.values():
+            for item in items:
+                url = item.get("audio_url")
+                if url and radio_text.get(url):
+                    item["transcript"] = radio_text[url]
+        radio = [
+            {
+                "audio_url": item["audio_url"],
+                "transcript": item.get("transcript"),
+                "driver_id": item.get("driver_id"),
+                "at_ms": item["at_ms"],
+            }
+            for item in feeds["en"]
+            if item.get("audio_url")
+        ][:20]
+        current = self.now().astimezone(UTC)
+        stamp = current.isoformat().replace("+00:00", "Z")
+        expires = (current + timedelta(seconds=LIVE_SNAPSHOT_TTL_S)).isoformat().replace(
+            "+00:00", "Z"
+        )
+        prior_sequence = 0
+        prior_snapshot = self.object_store.get_json(
+            live_snapshot_key(session.session_id), limit=MAX_LIVE_SNAPSHOT_BYTES,
+        )
+        if (
+            isinstance(prior_snapshot, dict)
+            and prior_snapshot.get("canonical_session_id") == session.session_id
+            and prior_snapshot.get("replay_session_id") == replay_id
+            and isinstance(prior_snapshot.get("sequence"), int)
+            and not isinstance(prior_snapshot.get("sequence"), bool)
+        ):
+            prior_sequence = prior_snapshot["sequence"]
+        sequence = max(self._live_sequences.get(session.session_id, 0), prior_sequence) + 1
+        quality = self._capture_freshness(session, raw)
+        snapshot = {
+            "schema_version": 1,
+            "canonical_session_id": session.session_id,
+            "replay_session_id": replay_id,
+            "sequence": sequence,
+            "generated_at": stamp,
+            "expires_at": expires,
+            "race_state": state,
+            "battles": detect_battles(state)[:50],
+            "active_insights": insights[:100],
+            "recent_passes": passes[:100],
+            "feed": feeds,
+            "commentary": {
+                language: {
+                    level: render_all(insights, language, level)[:100]
+                    for level in ("beginner", "pro")
+                }
+                for language in ("en", "ru")
+            },
+            "radio": radio,
+            **quality,
+        }
+        pointer = {
+            "schema_version": 1,
+            "canonical_session_id": session.session_id,
+            "replay_session_id": replay_id,
+            "status": "live",
+            "snapshot_key": live_snapshot_key(session.session_id),
+            "created_at": stamp,
+            "updated_at": stamp,
+            "failure": None,
+        }
+        write_live_snapshot(self.object_store, pointer, snapshot, now=current)
+        self._live_sequences[session.session_id] = sequence
+        return True
+
+    def _set_live_status(
+        self,
+        session: ScheduledSession,
+        status: str,
+        *,
+        failure: str | None = None,
+    ) -> None:
+        if self.object_store is None or session.kind != "R":
+            return
+        write_live_status(
+            self.object_store,
+            session.session_id,
+            fixture_stem(session),
+            status,
+            failure=failure,
+            now=self.now(),
+        )
+
+    def _fail_live_archive(self, session: ScheduledSession) -> None:
+        try:
+            self._set_live_status(
+                session, "failed", failure="Archive preparation failed",
+            )
+        except (LiveRecordError, StorageError):
+            pass
+
     def capture(self, session: ScheduledSession) -> Path:
         paths = self._paths(session)
         raw, clean = paths["raw"], paths["clean"]
         prior = inspect_feed(raw, session)
         if prior.matched and (prior.finished or self.now() >= session.capture_until):
+            if self._publish_live_snapshot(session, raw):
+                self._set_live_status(session, "finishing")
             isolate_session(raw, clean, session)
             return clean
 
@@ -176,11 +354,27 @@ class Recorder:
         process = subprocess.Popen(command, start_new_session=True)
         finished_at: datetime | None = None
         inspection = prior
+        live_published = False
+        last_live_snapshot_at: datetime | None = None
         try:
             while True:
                 self._beat()
                 now = self.now()
                 inspection = inspect_feed(raw, session, inspection)
+                if (
+                    inspection.matched
+                    and session.kind == "R"
+                    and self.object_store is not None
+                    and (
+                        last_live_snapshot_at is None
+                        or now - last_live_snapshot_at >= timedelta(seconds=5)
+                    )
+                ):
+                    try:
+                        live_published = self._publish_live_snapshot(session, raw) or live_published
+                    except (LiveRecordError, StorageError, ValueError):
+                        pass
+                    last_live_snapshot_at = now
                 if inspection.finished and finished_at is None:
                     finished_at = now
                 if finished_at is not None and now >= finished_at + FINISH_GRACE:
@@ -202,6 +396,8 @@ class Recorder:
         if not inspection.matched:
             raise RuntimeError("live feed never matched the scheduled session")
         isolate_session(raw, clean, session)
+        if live_published:
+            self._set_live_status(session, "finishing")
         return clean
 
     def _run(self, argv: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -315,6 +511,11 @@ class Recorder:
                 session.session_id,
                 replay_session_id=replay_id,
             )
+            try:
+                self._set_live_status(session, "replay_ready")
+            except LiveRecordError as exc:
+                if "pointer is missing" not in str(exc) and "identity differs" not in str(exc):
+                    raise
 
     def process(self, session: ScheduledSession) -> None:
         paths = self._paths(session)
@@ -457,6 +658,7 @@ class Recorder:
                 self.store.transition(
                     session_id, Phase.FAILED, self.now(), error=str(exc), retry_at=retry,
                 )
+                self._fail_live_archive(session)
                 return f"processing failed: {session_id}: {exc}"
             self.store.transition(session_id, Phase.COMPLETE, self.now())
             return f"complete: {session_id}"
