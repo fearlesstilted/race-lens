@@ -531,6 +531,7 @@ function App() {
                       key={mode === 'replay' ? sessionId : 'live'}
                       items={replay.feed}
                       loading={replay.loading}
+                      clockOriginMs={mode === 'replay' && timeline?.session_id === sessionId ? timeline.lights_out_ms : undefined}
                     />
                   )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (

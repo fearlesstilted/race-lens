@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { FeedItem } from '../../api/types'
+import { formatRaceTime } from '../../lib/format'
 
-function fmtSessionTime(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000)
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
-  const s = totalSeconds % 60
-  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+function fmtFeedTime(ms: number, clockOriginMs?: number): string {
+  if (clockOriginMs === undefined) return formatRaceTime(ms)
+  return ms < clockOriginMs ? 'FORMATION' : formatRaceTime(ms - clockOriginMs)
 }
 
 type Tag = 'PIT' | 'FLAG' | 'FASTEST' | 'FINISH' | 'PASS' | 'INFO'
@@ -28,11 +26,13 @@ const FeedRow = React.memo(function FeedRow({
   flash,
   playingUrl,
   onToggleRadio,
+  clockOriginMs,
 }: {
   item: FeedItem
   flash: boolean
   playingUrl: string | null
   onToggleRadio: (url: string) => void
+  clockOriginMs?: number
 }) {
   const isStatus = item.kind === 'status' || item.kind === 'red_flag' || item.kind === 'safety_car'
   const isFastest = item.kind === 'fastest_lap' || item.kind === 'LapCompleted'
@@ -52,7 +52,7 @@ const FeedRow = React.memo(function FeedRow({
       ) : (
         <span className="ev-lap" />
       )}
-      <span className="t">{fmtSessionTime(item.at_ms)}</span>
+      <span className="t">{fmtFeedTime(item.at_ms, clockOriginMs)}</span>
       <span className="x">
         <span className={`ev-tag ev-tag-${tag.toLowerCase()}`}>{TAG_LABELS[tag]}</span>
         {item.audio_url && (
@@ -82,7 +82,7 @@ function itemKey(item: FeedItem): string {
   return item.id
 }
 
-export function RaceFeed({ items, loading = false }: { items: FeedItem[]; loading?: boolean }) {
+export function RaceFeed({ items, loading = false, clockOriginMs }: { items: FeedItem[]; loading?: boolean; clockOriginMs?: number }) {
   const prevKeysRef = useRef<Set<string>>(new Set())
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set())
   const [playingUrl, setPlayingUrl] = useState<string | null>(null)
@@ -146,6 +146,7 @@ export function RaceFeed({ items, loading = false }: { items: FeedItem[]; loadin
             flash={flashKeys.has(k)}
             playingUrl={playingUrl}
             onToggleRadio={handleToggleRadio}
+            clockOriginMs={clockOriginMs}
           />
         )
       })}
