@@ -12,6 +12,7 @@ type Props = {
   currentLap: number
   totalLaps: number | null
   onSelectDriver: (id: string) => void
+  onSelectBattle: (ids: string[]) => void
 }
 
 const recentPace = (driver: DriverRow): number | null => {
@@ -28,6 +29,7 @@ export function BattleIntelligence({
   currentLap,
   totalLaps,
   onSelectDriver,
+  onSelectBattle,
 }: Props) {
   const leadFlow = rows.slice(0, 3)
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
@@ -118,7 +120,7 @@ export function BattleIntelligence({
                   type="button"
                   className="bi-battle-row"
                   key={`${leaderId}-${chaserId}`}
-                  onClick={() => onSelectDriver(chaserId)}
+                  onClick={() => onSelectBattle([leaderId, chaserId])}
                 >
                   <span>P{leader?.position ?? '—'}</span>
                   <strong>{leaderId} / {chaserId}</strong>

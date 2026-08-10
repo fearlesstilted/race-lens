@@ -26,12 +26,14 @@ const FeedRow = React.memo(function FeedRow({
   flash,
   playingUrl,
   onToggleRadio,
+  onActivate,
   clockOriginMs,
 }: {
   item: FeedItem
   flash: boolean
   playingUrl: string | null
   onToggleRadio: (url: string) => void
+  onActivate?: (item: FeedItem) => void
   clockOriginMs?: number
 }) {
   const isStatus = item.kind === 'status' || item.kind === 'red_flag' || item.kind === 'safety_car'
@@ -46,6 +48,15 @@ const FeedRow = React.memo(function FeedRow({
         isFastest ? 'fast' : '',
         flash ? 'ev-flash' : '',
       ].filter(Boolean).join(' ')}
+      role={onActivate ? 'button' : undefined}
+      tabIndex={onActivate ? 0 : undefined}
+      onClick={onActivate ? () => onActivate(item) : undefined}
+      onKeyDown={onActivate ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onActivate(item)
+        }
+      } : undefined}
     >
       {item.lap !== null ? (
         <span className="ev-lap">L{item.lap}</span>
@@ -59,7 +70,7 @@ const FeedRow = React.memo(function FeedRow({
           <button
             type="button"
             className={`ev-radio-btn${isPlaying ? ' playing' : ''}`}
-            onClick={() => onToggleRadio(item.audio_url!)}
+            onClick={(event) => { event.stopPropagation(); onToggleRadio(item.audio_url!) }}
             aria-label={isPlaying ? 'Stop team radio' : 'Play team radio'}
             title={isPlaying ? 'Stop team radio' : 'Play team radio'}
           >
@@ -82,7 +93,19 @@ function itemKey(item: FeedItem): string {
   return item.id
 }
 
-export function RaceFeed({ items, loading = false, clockOriginMs }: { items: FeedItem[]; loading?: boolean; clockOriginMs?: number }) {
+export function RaceFeed({
+  items,
+  loading = false,
+  clockOriginMs,
+  onActivate,
+  isActionable,
+}: {
+  items: FeedItem[]
+  loading?: boolean
+  clockOriginMs?: number
+  onActivate?: (item: FeedItem) => void
+  isActionable?: (item: FeedItem) => boolean
+}) {
   const prevKeysRef = useRef<Set<string>>(new Set())
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set())
   const [playingUrl, setPlayingUrl] = useState<string | null>(null)
@@ -146,6 +169,7 @@ export function RaceFeed({ items, loading = false, clockOriginMs }: { items: Fee
             flash={flashKeys.has(k)}
             playingUrl={playingUrl}
             onToggleRadio={handleToggleRadio}
+            onActivate={onActivate && (isActionable?.(item) ?? true) ? onActivate : undefined}
             clockOriginMs={clockOriginMs}
           />
         )

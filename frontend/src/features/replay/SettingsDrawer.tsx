@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
-import { DASHBOARD_PRESETS } from './replayTypes'
-import type { DashboardLayout, Lang, Level } from './replayTypes'
+import { WIDGET_IDS, WIDGET_REGISTRY, updateWorkspaceWidget } from './workspace'
+import type { WorkspaceLayout, WidgetDensity } from './workspace'
+import type { Lang, Level } from './replayTypes'
 
 type Props = {
   open: boolean
@@ -12,13 +13,12 @@ type Props = {
   mode: 'replay' | 'live'
   liveAvailable: boolean
   liveNowAvailable: boolean
-  projection: boolean
-  dashboardLayout: DashboardLayout
+  workspace: WorkspaceLayout
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onModeChange: (mode: 'replay' | 'live') => void
-  onProjection: (value: boolean) => void
-  onDashboardLayout: (value: DashboardLayout) => void
+  onWorkspace: (value: WorkspaceLayout) => void
+  onWorkspaceReset: () => void
   sessionId?: string | null
   onSeek?: (ms: number) => void
   sessionStatus?: string
@@ -28,9 +28,9 @@ type Props = {
 }
 
 export function SettingsDrawer({
-  open, onClose, lang, level, mode, liveAvailable, liveNowAvailable, projection,
-  dashboardLayout, onLang, onLevel, onModeChange, onProjection,
-  onDashboardLayout,
+  open, onClose, lang, level, mode, liveAvailable, liveNowAvailable,
+  workspace, onLang, onLevel, onModeChange,
+  onWorkspace, onWorkspaceReset,
   sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -99,59 +99,56 @@ export function SettingsDrawer({
         </div>
 
         <div className="settings-group">
-          <div className="settings-group-label">OVERLAYS</div>
-          <div className="tog-group" style={{ marginBottom: 8 }}>
-            <button type="button" className={`tog${projection ? ' tog-on' : ''}`} onClick={() => onProjection(!projection)}>PACE OUTLOOK</button>
-          </div>
-        </div>
-
-        <div className="settings-group">
           <div className="settings-group-label">DESKTOP WORKSPACE</div>
-          <div className="tog-group layout-presets">
-            {Object.entries(DASHBOARD_PRESETS).map(([name, preset]) => {
-              const active = Object.entries(preset).every(
-                ([key, value]) => dashboardLayout[key as keyof DashboardLayout] === value,
-              )
+          <div className="layout-options">
+            {WIDGET_IDS.map((id) => {
+              const definition = WIDGET_REGISTRY[id]
+              const item = workspace.widgets[id]
+              const available = definition.modes.includes(mode)
+              const state = !available
+                ? 'UNAVAILABLE'
+                : item.visible
+                  ? definition.anchored ? 'PINNED' : 'ON'
+                  : definition.anchored ? 'ANCHORED' : 'OFF'
               return (
-                <button
-                  type="button"
-                  key={name}
-                  className={`tog${active ? ' tog-on' : ''}`}
-                  onClick={() => onDashboardLayout({ ...preset })}
-                >
-                  {name.toUpperCase()}
-                </button>
+                <div className={`workspace-setting${available ? '' : ' disabled'}`} key={id}>
+                  <button
+                    type="button"
+                    className={`layer-row layer-toggle${item.visible && available ? ' on' : ''}`}
+                    disabled={!available}
+                    onClick={() => onWorkspace(updateWorkspaceWidget(
+                      workspace,
+                      mode,
+                      id,
+                      { visible: !item.visible },
+                    ))}
+                  >
+                    <span className="layer-name">{definition.label.toUpperCase()}</span>
+                    <span className="layer-state">{state}</span>
+                  </button>
+                  <label>
+                    <span className="sr-only">{definition.label} density</span>
+                    <select
+                      value={item.density}
+                      disabled={!available || !item.visible}
+                      onChange={(event) => onWorkspace(updateWorkspaceWidget(
+                        workspace,
+                        mode,
+                        id,
+                        { density: event.target.value as WidgetDensity },
+                      ))}
+                    >
+                      {definition.densities.map((density) => (
+                        <option value={density} key={density}>{density.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               )
             })}
           </div>
-          <div className="layout-options">
-            <button
-              type="button"
-              className={`layer-row layer-toggle${dashboardLayout.center === 'battles' ? ' on' : ''}`}
-              onClick={() => onDashboardLayout({
-                ...dashboardLayout,
-                center: dashboardLayout.center === 'battles' ? 'track' : 'battles',
-              })}
-            >
-              <span className="layer-name">CENTER</span>
-              <span className="layer-state">{dashboardLayout.center === 'battles' ? 'BATTLES' : 'TRACK'}</span>
-            </button>
-            {(['timing', 'insights', 'feed'] as const).map((panel) => (
-              <button
-                type="button"
-                key={panel}
-                className={`layer-row layer-toggle${dashboardLayout[panel] ? ' on' : ''}`}
-                onClick={() => onDashboardLayout({
-                  ...dashboardLayout,
-                  [panel]: !dashboardLayout[panel],
-                })}
-              >
-                <span className="layer-name">{panel.toUpperCase()}</span>
-                <span className="layer-state">{dashboardLayout[panel] ? 'ON' : 'OFF'}</span>
-              </button>
-            ))}
-          </div>
-          <small className="layout-help">Docked panels stay readable; mobile keeps its tab layout.</small>
+          <button type="button" className="b workspace-reset" onClick={onWorkspaceReset}>RESET DEFAULT</button>
+          <small className="layout-help">Drag widget headers. Arrow keys move; Shift + arrows resize. Mobile keeps its tab layout.</small>
         </div>
 
         {mode === 'replay' && sessionId && onSeek && (

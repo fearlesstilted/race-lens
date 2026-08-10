@@ -13,9 +13,10 @@ type Props = {
   currentLap: number
   /** Current classification order (driver ids) to sort rows by; falls back to map order. */
   order?: string[]
+  onSelectDriver?: (id: string) => void
 }
 
-export function StintTimeline({ sessionId, currentLap, order }: Props) {
+export function StintTimeline({ sessionId, currentLap, order, onSelectDriver }: Props) {
   const { data, loading, error } = useAsync<StintsResponse>(() => getStints(sessionId), [sessionId])
 
   if (loading) return <div className="stints stints-state">LOADING TYRE STRATEGY…</div>
@@ -61,7 +62,19 @@ export function StintTimeline({ sessionId, currentLap, order }: Props) {
       </div>
       <div className="stints-rows">
         {sorted.map((id) => (
-          <div className="stint-row" key={id}>
+          <div
+            className={`stint-row${onSelectDriver ? ' stint-row-action' : ''}`}
+            key={id}
+            role={onSelectDriver ? 'button' : undefined}
+            tabIndex={onSelectDriver ? 0 : undefined}
+            onClick={onSelectDriver ? () => onSelectDriver(id) : undefined}
+            onKeyDown={onSelectDriver ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelectDriver(id)
+              }
+            } : undefined}
+          >
             <span className="stint-drv">{id}</span>
             <span className="stint-bar" aria-label={`${id} strategy through lap ${currentLap} of ${total}`}>
               {clipStints(data.stints[id], currentLap).map((s, i) => (

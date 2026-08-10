@@ -19,8 +19,10 @@ import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
-import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
-import type { DashboardLayout } from './features/replay/replayTypes'
+import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
+import { HighlightsPanel } from './features/replay/HighlightsPanel'
+import { WorkspaceGrid } from './features/replay/WorkspaceGrid'
+import { readWorkspaces, resetWorkspace, updateWorkspaceWidget, workspaceAction, writeWorkspace } from './features/replay/workspace'
 import { useReplay } from './features/replay/useReplay'
 import { lapAtTime, sessionLabel } from './lib/format'
 import { focusDriverIds } from './lib/insightFocus'
@@ -29,6 +31,8 @@ import './style.css'
 import './styles/dashboard.css'
 import './styles/responsive.css'
 import './styles/features.css'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
 
 // ── Live status pill ──────────────────────────────────────────────────────────
 
@@ -83,6 +87,17 @@ type AppMode = 'replay' | 'live'
 type MobTab = 'TIMING' | 'MAP' | 'INSIGHTS' | 'FEED'
 const MOB_TABS: MobTab[] = ['TIMING', 'MAP', 'INSIGHTS', 'FEED']
 
+function useDesktopWorkspace() {
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1025px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1025px)')
+    const update = () => setDesktop(query.matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+  return desktop
+}
+
 function App() {
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const initialCatalogId = initialParams.get('catalog')
@@ -92,8 +107,11 @@ function App() {
     : undefined
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
+  const [workspaces, setWorkspaces] = useState(readWorkspaces)
+  const [mobileCenter, setMobileCenter] = useState<'battles' | 'track'>(() => (
+    workspaces.replay.widgets.track.visible && !workspaces.replay.widgets.battles.visible ? 'track' : 'battles'
+  ))
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
   const [replayPinned, setReplayPinned] = useState(Boolean(initialSessionId))
@@ -109,10 +127,14 @@ function App() {
   const [signalrAvailable, setSignalrAvailable] = useState(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
-  const handleDashboardLayout = useCallback((layout: DashboardLayout) => {
-    setDashboardLayout(layout)
-    writeDashboardLayout(layout)
-  }, [])
+  const desktopWorkspace = useDesktopWorkspace()
+  const workspace = workspaces[mode]
+  const handleWorkspace = useCallback((layout: typeof workspace) => {
+    setWorkspaces(writeWorkspace(mode, layout))
+  }, [mode])
+  const handleWorkspaceReset = useCallback(() => {
+    setWorkspaces(resetWorkspace(mode))
+  }, [mode])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -292,14 +314,18 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const handleSelectDriver = useCallback((id: string) => {
-    setMobTab('INSIGHTS')
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id)
-      if (prev.length >= 2) return [prev[1], id]
-      return [...prev, id]
-    })
-  }, [])
+  const handleWidgetAction = useCallback((
+    source: 'timing' | 'battle' | 'strategy' | 'feed',
+    ids: string[],
+    atMs?: number,
+  ) => {
+    const action = workspaceAction(mode, source, ids, atMs)
+    if (action.focusIds.length > 0) {
+      setSelectedIds(action.focusIds)
+      setMobTab('INSIGHTS')
+    }
+    if (action.seekMs !== null) replay.scrub(action.seekMs)
+  }, [mode, replay.scrub])
 
   const handleFocusDrivers = useCallback((ids: string[]) => {
     const focused = focusDriverIds(ids)
@@ -385,6 +411,123 @@ function App() {
   const liveSessionName = state?.session_name ?? (
     liveStatusData?.replay_session_id ? sessionLabel(liveStatusData.replay_session_id) : null
   )
+  const projectionOn = desktopWorkspace ? workspace.widgets.pace.visible : projection
+  const handleProjection = (value: boolean) => {
+    setProjection(value)
+    if (desktopWorkspace) {
+      handleWorkspace(updateWorkspaceWidget(workspace, mode, 'pace', { visible: value }))
+    }
+  }
+
+  const workspaceWidgets = {
+    timing: (
+      <TimingTower
+        rows={rows}
+        battles={replay.battles}
+        selectedIds={selectedIds}
+        onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+      />
+    ),
+    battles: (
+      <>
+        {mode === 'replay' && (
+          <BroadcastOverlay
+            atMs={replay.atMs}
+            playing={replay.playing}
+            speed={replay.speed}
+            lang={replay.lang}
+            markers={replay.markers}
+            feed={replay.feed}
+          />
+        )}
+        <BattleIntelligence
+          rows={rows}
+          battles={replay.battles}
+          currentLap={currentLap}
+          totalLaps={state?.total_laps ?? null}
+          onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+          onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
+        />
+      </>
+    ),
+    track: (
+      <TrackMap
+        key={mode === 'replay' ? sessionId ?? 'replay' : state?.session_id ?? 'live'}
+        sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
+        atMs={replay.atMs}
+        playing={replay.playing}
+        playbackSpeed={replay.speed}
+        drivers={state?.drivers ?? {}}
+        classification={state?.classification ?? []}
+        totalLaps={state?.total_laps}
+        sessionStatus={sessionStatus}
+        neutralizationStartMs={replay.neutralizationStartMs}
+        selectedIds={selectedIds}
+        positionsData={effectivePositionsData}
+        battles={replay.battles}
+        recentPasses={replay.recentPasses}
+      />
+    ),
+    insights: hasFocus ? (
+      <div className="col col-insights col-focus">
+        <div className="label">DRIVER FOCUS</div>
+        <FocusPanel
+          selectedIds={selectedIds}
+          drivers={state?.drivers ?? {}}
+          sessionId={mode === 'replay' ? sessionId : null}
+          live={mode === 'live' && isLiveActive}
+          atMs={replay.atMs}
+          lap={currentLap}
+          onStrategyRequest={mode === 'replay' ? replay.pause : undefined}
+        />
+      </div>
+    ) : (
+      <InsightPanel
+        key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
+        insights={mode !== 'replay' || timeline?.session_id === sessionId ? replay.insights : []}
+        commentary={mode !== 'replay' || timeline?.session_id === sessionId ? replay.commentary : []}
+        selectedIds={selectedIds}
+        sessionStatus={sessionStatus}
+        sessionId={mode === 'replay' ? sessionId : null}
+        atMs={replay.atMs}
+        onFocusDrivers={handleFocusDrivers}
+      />
+    ),
+    feed: (
+      <RaceFeed
+        key={mode === 'replay' ? sessionId : 'live'}
+        items={replay.feed}
+        loading={replay.loading}
+        clockOriginMs={mode === 'replay' && timeline?.session_id === sessionId ? timeline.lights_out_ms : undefined}
+        onActivate={(item) => handleWidgetAction('feed', item.driver_id ? [item.driver_id] : [], item.at_ms)}
+        isActionable={(item) => mode === 'replay' || Boolean(item.driver_id)}
+      />
+    ),
+    strategy: mode === 'replay' && sessionId ? (
+      <StintTimeline
+        sessionId={sessionId}
+        currentLap={currentLap}
+        order={state?.classification}
+        onSelectDriver={(id) => handleWidgetAction('strategy', [id])}
+      />
+    ) : null,
+    pace: mode === 'replay'
+      ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+      : isLiveActive && <ForecastStrip live atMs={replay.atMs} />,
+    highlights: mode === 'replay' && sessionId ? (
+      <HighlightsPanel sessionId={sessionId} lang={replay.lang} untilMs={replay.atMs} onSeek={replay.scrub} />
+    ) : null,
+    dotd: mode === 'replay' && sessionId ? (
+      <DriverOfDayPanel
+        sessionId={sessionId}
+        lang={replay.lang}
+        sessionStatus={sessionStatus}
+        lap={currentLap}
+        totalLaps={state?.total_laps ?? null}
+        atMs={replay.atMs}
+      />
+    ) : null,
+  }
 
   return (
     <>
@@ -403,13 +546,12 @@ function App() {
         mode={mode}
         liveAvailable={liveAvailable}
         liveNowAvailable={liveDecision.showLiveNow}
-        projection={projection}
-        dashboardLayout={dashboardLayout}
+        workspace={workspace}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
-        onProjection={setProjection}
-        onDashboardLayout={handleDashboardLayout}
+        onWorkspace={handleWorkspace}
+        onWorkspaceReset={handleWorkspaceReset}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         sessionStatus={sessionStatus}
@@ -426,17 +568,19 @@ function App() {
         mode={mode}
         liveAvailable={liveAvailable}
         liveNowAvailable={liveDecision.showLiveNow}
-        projection={projection}
+        projection={projectionOn}
         voice={voice}
         onModeChange={handleModeSwitch}
         onLevel={replay.setLevel}
         onVoice={setVoice}
-        onProjection={setProjection}
+        onProjection={handleProjection}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
+        anchoredHighlights={!desktopWorkspace || !workspace.widgets.highlights.visible}
+        anchoredDotd={!desktopWorkspace || !workspace.widgets.dotd.visible}
         sessionName={mode === 'live' ? liveSessionName : null}
       />
 
@@ -516,23 +660,25 @@ function App() {
                   type="button"
                   className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
                   onClick={() => setMobTab(tab)}
-                >{tab === 'MAP' ? dashboardLayout.center.toUpperCase() : tab}</button>
+                >{tab === 'MAP' ? mobileCenter.toUpperCase() : tab}</button>
               ))}
             </div>
           </div>
 
-          <div
-            className="wrap"
-            data-mob-tab={mobTab}
-            data-show-timing={dashboardLayout.timing}
-            data-show-insights={dashboardLayout.insights}
-            data-show-feed={dashboardLayout.feed}
-          >
+          {desktopWorkspace ? (
+            <WorkspaceGrid
+              mode={mode}
+              workspace={workspace}
+              widgets={workspaceWidgets}
+              onChange={handleWorkspace}
+            />
+          ) : (
+          <div className="wrap" data-mob-tab={mobTab}>
             <TimingTower
               rows={rows}
               battles={replay.battles}
               selectedIds={selectedIds}
-              onSelectDriver={handleSelectDriver}
+              onSelectDriver={(id) => handleWidgetAction('timing', [id])}
             />
 
             <div className="col col-center">
@@ -553,22 +699,23 @@ function App() {
                     <button
                       key={center}
                       type="button"
-                      className={dashboardLayout.center === center ? 'on' : ''}
-                      aria-pressed={dashboardLayout.center === center}
-                      onClick={() => handleDashboardLayout({ ...dashboardLayout, center })}
+                      className={mobileCenter === center ? 'on' : ''}
+                      aria-pressed={mobileCenter === center}
+                      onClick={() => setMobileCenter(center)}
                     >
                       {center.toUpperCase()}
                     </button>
                   ))}
                 </div>
               </div>
-              {dashboardLayout.center === 'battles' ? (
+              {mobileCenter === 'battles' ? (
                 <BattleIntelligence
                   rows={rows}
                   battles={replay.battles}
                   currentLap={currentLap}
                   totalLaps={state?.total_laps ?? null}
-                  onSelectDriver={handleSelectDriver}
+                  onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+                  onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
                 />
               ) : (
                 <TrackMap
@@ -603,10 +750,17 @@ function App() {
                       items={replay.feed}
                       loading={replay.loading}
                       clockOriginMs={mode === 'replay' && timeline?.session_id === sessionId ? timeline.lights_out_ms : undefined}
+                      onActivate={(item) => handleWidgetAction('feed', item.driver_id ? [item.driver_id] : [], item.at_ms)}
+                      isActionable={(item) => mode === 'replay' || Boolean(item.driver_id)}
                     />
                   )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
-                    <StintTimeline sessionId={sessionId} currentLap={currentLap} order={state?.classification} />
+                    <StintTimeline
+                      sessionId={sessionId}
+                      currentLap={currentLap}
+                      order={state?.classification}
+                      onSelectDriver={(id) => handleWidgetAction('strategy', [id])}
+                    />
                   )}
                   {centerTab === 'PACE' && projection && (
                     mode === 'replay'
@@ -644,6 +798,7 @@ function App() {
               />
             )}
           </div>
+          )}
 
           <ReplayDeck
             timeline={timeline}

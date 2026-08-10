@@ -12,12 +12,14 @@
     "check:stints": "node scripts/check-stints.ts",
     "check:ui": "node scripts/check-broadcast-overlay.ts",
     "check:track": "node scripts/check-track-interpolation.ts",
+    "check:workspace": "node scripts/check-workspace.ts",
     "lint": "eslint src",
     "preview": "vite preview"
   },
   "dependencies": {
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "react-grid-layout": "2.2.4"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

@@ -141,6 +141,7 @@ export type FeedItem = {
   id: string
   at_ms: number
   lap: number | null
+  driver_id?: string | null
   text: string
   kind: string // 'status' | 'fastest_lap' | 'pit' | 'info' | ...
   tag?: 'PIT' | 'FLAG' | 'FASTEST' | 'FINISH' | 'PASS' | 'INFO'
