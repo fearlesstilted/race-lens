@@ -367,9 +367,20 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
         }
       }
 
+      // Current rank owns render and cap order; historical cards trail it.
+      const ordered = new Map<string, CardState>()
+      for (const group of incomingGroups) {
+        const key = stableKey(group.primary)
+        const card = next.get(key)
+        if (card) ordered.set(key, card)
+      }
+      for (const [key, card] of next) {
+        if (!ordered.has(key)) ordered.set(key, card)
+      }
+
       // Cap visible cards: 1 focused + 2 non-focused. Evicted cards leave
       // (animated) once past their minimum visible time.
-      const active = [...next.entries()].filter(([, c]) => !c.leaving)
+      const active = [...ordered.entries()].filter(([, c]) => !c.leaving)
       const keep = new Set([
         ...active.filter(([, c]) => isFocused(c.ins)).slice(0, 1),
         ...active.filter(([, c]) => !isFocused(c.ins)).slice(0, 2),
@@ -380,7 +391,10 @@ export const InsightPanel = React.memo(function InsightPanel({ insights, comment
         }
       }
 
-      return next
+      return new Map([
+        ...[...ordered].filter(([, card]) => !card.leaving),
+        ...[...ordered].filter(([, card]) => card.leaving),
+      ])
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomingGroups, commentaryMap])
