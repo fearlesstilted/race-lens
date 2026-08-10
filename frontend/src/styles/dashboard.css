@@ -516,7 +516,7 @@
 }
 .ins-action-label {
   display: block;
-  margin-top: 9px;
+  margin: 4px 0 2px;
   color: var(--amber);
   font: 800 12px var(--cond);
   letter-spacing: .12em;

@@ -1297,10 +1297,9 @@
   bottom: 0;
   width: 1px;
   background: var(--red);
-  box-shadow: 0 0 0 1px #e8002d24;
   pointer-events: none;
 }
-.stint-now-axis { top: 15px; bottom: -25px; }
+.stint-now-axis { top: 15px; bottom: 0; }
 .stint-now-axis i {
   position: absolute;
   right: 4px;
