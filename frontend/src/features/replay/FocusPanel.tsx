@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { getLiveSimulatePit, getSimulatePit, getWhatIf } from '../../api/client'
 import type { DriverState, PitSim, PitSimEvidence, WhatIf, WhatIfDiff } from '../../api/types'
 import { teamColor } from './teamColors'
@@ -105,28 +105,73 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
   const pitLap = !inPit && isPitLap(driver)
   const [pitSim, setPitSim] = useState<PitSim | null>(null)
   const [pitBusy, setPitBusy] = useState(false)
+  const [pitError, setPitError] = useState<string | null>(null)
   const [whatIf, setWhatIf] = useState<WhatIf | null>(null)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
+  const [whatIfError, setWhatIfError] = useState<string | null>(null)
   const [whatIfScenario, setWhatIfScenario] = useState<string | null>(null)
+  const pitRequestSeq = useRef(0)
+  const whatIfRequestSeq = useRef(0)
+  const pitInFlight = useRef(false)
+  const whatIfInFlight = useRef(false)
+  const replayAtMs = sessionId ? atMs : 0
+
+  useLayoutEffect(() => {
+    pitRequestSeq.current++
+    whatIfRequestSeq.current++
+    pitInFlight.current = false
+    whatIfInFlight.current = false
+    setPitSim(null)
+    setPitBusy(false)
+    setPitError(null)
+    setWhatIf(null)
+    setWhatIfBusy(false)
+    setWhatIfError(null)
+    setWhatIfScenario(null)
+  }, [driverId, sessionId, live, replayAtMs])
 
   const handlePitNow = useCallback(() => {
-    if (!sessionId && !live) return
+    if ((!sessionId && !live) || pitInFlight.current) return
+    pitInFlight.current = true
+    const seq = ++pitRequestSeq.current
+    setPitSim(null)
+    setPitError(null)
     setPitBusy(true)
     const req = sessionId ? getSimulatePit(sessionId, atMs, driverId) : getLiveSimulatePit(driverId)
     req
-      .then((res) => { setPitSim(res) })
-      .catch(() => undefined)
-      .finally(() => setPitBusy(false))
+      .then((res) => {
+        if (seq === pitRequestSeq.current) setPitSim(res)
+      })
+      .catch(() => {
+        if (seq === pitRequestSeq.current) setPitError('Pit calculation failed · try again')
+      })
+      .finally(() => {
+        if (seq !== pitRequestSeq.current) return
+        pitInFlight.current = false
+        setPitBusy(false)
+      })
   }, [sessionId, live, atMs, driverId])
 
   const handleWhatIf = useCallback((scenario: string) => {
-    if (!sessionId) return
+    if (!sessionId || whatIfInFlight.current) return
+    whatIfInFlight.current = true
+    const seq = ++whatIfRequestSeq.current
+    setWhatIf(null)
+    setWhatIfError(null)
     setWhatIfBusy(true)
     setWhatIfScenario(scenario)
     getWhatIf(sessionId, atMs, scenario, driverId)
-      .then((res) => { setWhatIf(res) })
-      .catch(() => undefined)
-      .finally(() => setWhatIfBusy(false))
+      .then((res) => {
+        if (seq === whatIfRequestSeq.current) setWhatIf(res)
+      })
+      .catch(() => {
+        if (seq === whatIfRequestSeq.current) setWhatIfError('Finish calculation failed · try again')
+      })
+      .finally(() => {
+        if (seq !== whatIfRequestSeq.current) return
+        whatIfInFlight.current = false
+        setWhatIfBusy(false)
+      })
   }, [sessionId, atMs, driverId])
 
   return (
@@ -170,17 +215,18 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
         </div>
       )}
       {(sessionId || live) && (
-        <div className="focus-pit-row">
+        <div className="focus-pit-row" aria-busy={pitBusy}>
           <button className="b pit-now-btn" type="button" onClick={handlePitNow} disabled={pitBusy}>
-            {pitBusy ? '…' : 'PIT NOW'}
+            PIT NOW
           </button>
+          {pitBusy && <div className="strategy-action-status" role="status">CALCULATING PIT WINDOW…</div>}
           {pitSim && !pitSim.error && pitSim.evidence && <PitSimCard ev={pitSim.evidence} />}
-          {pitSim?.error && <span className="live-err">{pitSim.error}</span>}
+          {(pitError || pitSim?.error) && <div className="strategy-action-error" role="alert">{pitError || pitSim?.error}</div>}
         </div>
       )}
       {sessionId && (
         // WHAT IF has no live mirror (server-side) — replay only.
-        <div className="focus-whatif-section">
+        <div className="focus-whatif-section" aria-busy={whatIfBusy}>
           <div className="focus-whatif-label">WHAT IF</div>
           <div className="focus-whatif-btns">
             <button
@@ -190,7 +236,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
               disabled={whatIfBusy}
               title="Full race projection if driver pits right now"
             >
-              {whatIfBusy && whatIfScenario === 'pit_now' ? '…' : 'PIT FINISH'}
+              PIT FINISH
             </button>
             <button
               className={`b whatif-btn${whatIfScenario === 'stay_out' ? ' active' : ''}`}
@@ -199,9 +245,11 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
               disabled={whatIfBusy}
               title="Full race projection if driver stays out on current tyres"
             >
-              {whatIfBusy && whatIfScenario === 'stay_out' ? '…' : 'STAY OUT'}
+              STAY OUT
             </button>
           </div>
+          {whatIfBusy && <div className="strategy-action-status" role="status">CALCULATING FINISH…</div>}
+          {whatIfError && <div className="strategy-action-error" role="alert">{whatIfError}</div>}
           {whatIf && !whatIfBusy && <WhatIfCard result={whatIf} />}
         </div>
       )}

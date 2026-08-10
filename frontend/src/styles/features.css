@@ -371,6 +371,14 @@
 }
 .pit-now-btn:hover { border-color: var(--amber); color: var(--amber); }
 .pit-now-btn:disabled { opacity: 0.4; cursor: default; }
+.strategy-action-status,
+.strategy-action-error {
+  margin-bottom: 8px;
+  font: 700 12px var(--cond);
+  letter-spacing: .08em;
+}
+.strategy-action-status { color: var(--amber); }
+.strategy-action-error { color: #ff4444; }
 .pit-sim-card {
   padding: 6px 0;
 }
