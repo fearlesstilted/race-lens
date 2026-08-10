@@ -63,7 +63,7 @@ function PitSimCard({ ev, snapshot }: { ev: PitSimEvidence; snapshot: PitSnapsho
     <div className="pit-sim-card">
       {snapshot && (
         <div className="pit-sim-snapshot">
-          LIVE SNAPSHOT · L{snapshot.lap || '—'} · T+{formatRaceTime(snapshot.atMs)}
+          REQUESTED AT · L{snapshot.lap || '—'} · T+{formatRaceTime(snapshot.atMs)}
         </div>
       )}
       <div className="pit-sim-verdict" style={{ color: verdictColor }}>{verdictText}</div>
