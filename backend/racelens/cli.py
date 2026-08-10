@@ -5,6 +5,7 @@
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -223,6 +224,13 @@ def _cmd_state(args: argparse.Namespace) -> None:
     print(json.dumps(engine.state_at(args.at_ms), indent=2))
 
 
+def _cmd_recorder_status(args: argparse.Namespace) -> None:
+    from racelens.recorder.status import recorder_status
+
+    base = Path(os.environ.get("RACELENS_RECORDER_DATA", "/var/lib/race-lens-recorder"))
+    print(json.dumps(recorder_status(base), indent=None if args.json else 2, sort_keys=True))
+
+
 # ── Parser / dispatch ──────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -326,6 +334,12 @@ def main() -> None:
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
     p_state.set_defaults(func=_cmd_state)
+
+    p_recorder_status = sub.add_parser(
+        "recorder-status", help="print sanitized recorder health and publication state",
+    )
+    p_recorder_status.add_argument("--json", action="store_true", help="emit compact JSON")
+    p_recorder_status.set_defaults(func=_cmd_recorder_status)
 
     args = parser.parse_args()
     args.func(args)

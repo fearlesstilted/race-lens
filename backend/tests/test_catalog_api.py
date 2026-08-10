@@ -253,7 +253,6 @@ def test_readonly_api_queues_and_replays_a_verified_remote_session(tmp_path, mon
         "_remote_cache",
         lambda: RemoteSessionCache(store, tmp_path / "remote-cache"),
     )
-    api._remote_fixture_root.cache_clear()
     client = TestClient(api.app)
 
     first = client.post("/api/catalog/2024-08-r/prepare")
@@ -307,7 +306,6 @@ def test_readonly_api_queues_and_replays_a_verified_remote_session(tmp_path, mon
     assert {"session_id": "monaco_2024_race", "source": "object-storage"} in (
         client.get("/api/sessions").json()
     )
-    api._remote_fixture_root.cache_clear()
 
 
 def test_storage_errors_are_publicly_sanitized(tmp_path, monkeypatch):

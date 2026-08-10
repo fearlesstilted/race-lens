@@ -11,12 +11,12 @@ import importlib.util
 import json
 import os
 import re
-from contextlib import asynccontextmanager
+from contextlib import AbstractContextManager, asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -152,6 +152,18 @@ app = FastAPI(
 )
 
 
+class _LeasedFileResponse(FileResponse):
+    def __init__(self, *args, lease: AbstractContextManager[Path], **kwargs) -> None:
+        self._lease = lease
+        super().__init__(*args, **kwargs)
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._lease.__exit__(None, None, None)
+
+
 @app.middleware("http")
 async def add_security_headers(
     request: Request, call_next: RequestResponseEndpoint
@@ -227,29 +239,36 @@ def _remote_cache() -> RemoteSessionCache | None:
     )
 
 
-@lru_cache(maxsize=1)
-def _remote_fixture_root(session_id: str) -> Path:
+@contextmanager
+def _fixture_lease(session_id: str, suffix: str = ".jsonl") -> Iterator[Path]:
+    """Yield a local root or hold a remote root until the current read finishes."""
+    if (FIXTURES_DIR / f"{session_id}.jsonl").is_file():
+        yield FIXTURES_DIR
+        return
+    local_component = (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
     cache = _remote_cache()
     if cache is None or not REPLAY_ID.fullmatch(session_id):
+        if local_component:
+            yield FIXTURES_DIR
+            return
         raise HTTPException(404, f"session '{session_id}' not found")
+    lease = cache.lease(session_id)
     try:
-        return cache.materialize(session_id)
+        root = lease.__enter__()
     except ManifestError as exc:
+        if local_component:
+            yield FIXTURES_DIR
+            return
         raise HTTPException(404, f"session '{session_id}' is not ready") from exc
     except StorageError as exc:
-        raise HTTPException(503, "Replay storage is temporarily unavailable") from exc
-
-
-def _fixture_root(session_id: str, suffix: str = ".jsonl") -> Path:
-    if (FIXTURES_DIR / f"{session_id}.jsonl").is_file():
-        return FIXTURES_DIR
-    local_component = (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
-    try:
-        return _remote_fixture_root(session_id)
-    except HTTPException:
         if local_component:
-            return FIXTURES_DIR
-        raise
+            yield FIXTURES_DIR
+            return
+        raise HTTPException(503, "Replay storage is temporarily unavailable") from exc
+    try:
+        yield root
+    finally:
+        lease.__exit__(None, None, None)
 
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
@@ -282,14 +301,14 @@ def _engine(session_id: str) -> ReplayEngine:
     Keeps monkeypatched FIXTURES_DIR (tests) from colliding with real cache
     entries, and picks up regenerated fixture files without a restart.
     """
-    fixtures_dir = _fixture_root(session_id)
-    path = fixtures_dir / f"{session_id}.jsonl"
-    mtime = path.stat().st_mtime if path.is_file() else 0.0
-    with _engine_load_lock:
-        return _engine_cached(session_id, str(fixtures_dir), mtime)
+    with _fixture_lease(session_id) as fixtures_dir:
+        path = fixtures_dir / f"{session_id}.jsonl"
+        mtime = path.stat().st_mtime if path.is_file() else 0.0
+        with _engine_load_lock:
+            return _engine_cached(session_id, str(fixtures_dir), mtime)
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=1)  # One parsed payload keeps Render's 512 MB instance bounded.
 def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> dict | None:
     path = Path(fixtures_dir) / f"{session_id}.positions.json"
     if not path.is_file():
@@ -299,11 +318,11 @@ def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> 
 
 def _positions_data(session_id: str) -> dict | None:
     """Thin wrapper so the cache key includes FIXTURES_DIR (see _engine)."""
-    fixtures_dir = _fixture_root(session_id, ".positions.json")
-    path = fixtures_dir / f"{session_id}.positions.json"
-    mtime = path.stat().st_mtime if path.is_file() else 0.0
-    with _engine_load_lock:
-        return _positions_data_cached(session_id, str(fixtures_dir), mtime)
+    with _fixture_lease(session_id, ".positions.json") as fixtures_dir:
+        path = fixtures_dir / f"{session_id}.positions.json"
+        mtime = path.stat().st_mtime if path.is_file() else 0.0
+        with _engine_load_lock:
+            return _positions_data_cached(session_id, str(fixtures_dir), mtime)
 
 
 def _positions_window(pos: dict, at_ms: int) -> dict:
@@ -413,9 +432,54 @@ def _clamp_at_ms(at_ms: int) -> int:
     return max(0, at_ms)
 
 
+def _revision() -> str:
+    value = os.environ.get("RACELENS_REVISION") or os.environ.get("RENDER_GIT_COMMIT", "")
+    return value if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value) else "unknown"
+
+
+def _cache_stats(cache) -> dict[str, int]:
+    info = cache.cache_info()
+    return {
+        "hits": info.hits,
+        "misses": info.misses,
+        "size": info.currsize,
+        "max_size": info.maxsize,
+    }
+
+
 @app.get("/api/ping")
 def ping():
     return {"status": "ok"}
+
+
+@app.get("/api/diagnostics")
+def diagnostics() -> dict:
+    cache = _remote_cache()
+    remote = cache.stats() if cache is not None else {
+        "materializations": 0,
+        "hits": 0,
+        "evictions": 0,
+        "bytes": 0,
+        "disk_bytes": 0,
+        "max_bytes": REMOTE_CACHE_MAX,
+    }
+    if _live is None:
+        live = {"source": "none", "freshness": "inactive"}
+    else:
+        quality = _live.status().get("data_quality")
+        freshness = {"good": "fresh", "degraded": "degraded", "stalled": "stale"}.get(
+            quality, "unknown",
+        )
+        live = {"source": "signalr" if _capture is not None else "openf1", "freshness": freshness}
+    return {
+        "revision": _revision(),
+        "parsed_cache": {
+            "engine": _cache_stats(_engine_cached),
+            "positions": _cache_stats(_positions_data_cached),
+        },
+        "remote_cache": remote,
+        "live": live,
+    }
 
 
 @app.get("/api/capabilities")
@@ -973,10 +1037,11 @@ def overtake_endpoint(
 @app.get("/api/sessions/{session_id}/track")
 def track(session_id: str) -> dict:
     """Return pre-computed track outline as {session_id, viewbox, points}."""
-    path = _fixture_root(session_id, ".track.json") / f"{session_id}.track.json"
-    if not path.is_file():
-        raise HTTPException(404, f"track data for '{session_id}' not found")
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _fixture_lease(session_id, ".track.json") as root:
+        path = root / f"{session_id}.track.json"
+        if not path.is_file():
+            raise HTTPException(404, f"track data for '{session_id}' not found")
+        return json.loads(path.read_text(encoding="utf-8"))
 
 
 @app.get("/api/sessions/{session_id}/positions")
@@ -989,15 +1054,25 @@ def positions(
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
     404 if positions.json has not been generated yet.
     """
-    path = _fixture_root(session_id, ".positions.json") / f"{session_id}.positions.json"
-    if not path.is_file():
-        raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
     if at_ms is not None:
-        pos = _positions_data(session_id)
-        if pos is None:
-            raise HTTPException(404, f"positions data for '{session_id}' not found")
-        return _positions_window(pos, at_ms)
-    return FileResponse(path, media_type="application/json")
+        with _fixture_lease(session_id, ".positions.json") as root:
+            path = root / f"{session_id}.positions.json"
+            if not path.is_file():
+                raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
+            pos = _positions_data(session_id)
+            if pos is None:
+                raise HTTPException(404, f"positions data for '{session_id}' not found")
+            return _positions_window(pos, at_ms)
+    lease = _fixture_lease(session_id, ".positions.json")
+    root = lease.__enter__()
+    try:
+        path = root / f"{session_id}.positions.json"
+        if not path.is_file():
+            raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
+        return _LeasedFileResponse(path, lease=lease, media_type="application/json")
+    except Exception:
+        lease.__exit__(None, None, None)
+        raise
 
 
 @app.get("/api/sessions/{session_id}/feed")
@@ -1057,33 +1132,34 @@ def get_driver_of_day(session_id: str, at_ms: Optional[int] = Query(default=None
 def timeline(session_id: str) -> dict:
     """Replay bounds + lap markers for the scrubber. No future-revealing
     detail beyond what a replay slider inherently needs."""
-    eng = _engine(session_id)
-    lap_marks = {}
-    for e in eng.events:
-        if e.type == "LapCompleted" and e.lap and e.lap not in lap_marks:
-            lap_marks[e.lap] = e.session_time_ms
-    start_ms = eng.events[0].session_time_ms if eng.events else 0
-    # The formation lap lives only in telemetry. When a positions.json exists the
-    # events are lead-shifted (see _engine), so lights-out = LIGHTS_OUT_MS and the
-    # scrubber starts at the formation origin from positions.json. Without it there
-    # is no formation: lights-out stays at 0.
-    pos_path = _fixture_root(session_id) / f"{session_id}.positions.json"
-    lights_out_ms = 0
-    if pos_path.is_file():
-        lights_out_ms = LIGHTS_OUT_MS
-        try:
-            pos_start = int(json.loads(pos_path.read_text(encoding="utf-8")).get("start_ms", 0))
-            start_ms = min(start_ms, pos_start)
-        except (ValueError, KeyError, TypeError):
-            pass
-    return {
-        "session_id": session_id,
-        "start_ms": start_ms,
-        "end_ms": _race_end_ms(eng),
-        "lights_out_ms": lights_out_ms,
-        "events_total": len(eng.events),
-        "lap_marks": lap_marks,
-    }
+    with _fixture_lease(session_id) as root:
+        eng = _engine(session_id)
+        lap_marks = {}
+        for e in eng.events:
+            if e.type == "LapCompleted" and e.lap and e.lap not in lap_marks:
+                lap_marks[e.lap] = e.session_time_ms
+        start_ms = eng.events[0].session_time_ms if eng.events else 0
+        # The formation lap lives only in telemetry. When a positions.json exists the
+        # events are lead-shifted (see _engine), so lights-out = LIGHTS_OUT_MS and the
+        # scrubber starts at the formation origin from positions.json. Without it there
+        # is no formation: lights-out stays at 0.
+        pos_path = root / f"{session_id}.positions.json"
+        lights_out_ms = 0
+        if pos_path.is_file():
+            lights_out_ms = LIGHTS_OUT_MS
+            try:
+                pos_start = int(json.loads(pos_path.read_text(encoding="utf-8")).get("start_ms", 0))
+                start_ms = min(start_ms, pos_start)
+            except (ValueError, KeyError, TypeError):
+                pass
+        return {
+            "session_id": session_id,
+            "start_ms": start_ms,
+            "end_ms": _race_end_ms(eng),
+            "lights_out_ms": lights_out_ms,
+            "events_total": len(eng.events),
+            "lap_marks": lap_marks,
+        }
 
 
 @app.get("/api/sessions/{session_id}/stints")

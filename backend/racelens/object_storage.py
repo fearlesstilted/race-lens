@@ -8,10 +8,11 @@ import re
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Iterator
 
 from racelens.preparations import QueueFullError, SESSION_ID
 
@@ -856,63 +857,93 @@ class RemoteSessionCache:
         self.store = store
         self.directory = Path(directory)
         self.max_bytes = max(MAX_SESSION_BYTES, max_bytes)
+        self._active: dict[str, int] = {}
+        self._stats = {"materializations": 0, "hits": 0, "evictions": 0, "bytes": 0}
 
     @staticmethod
     def _size(path: Path) -> int:
         return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
-    def _evict(self, keep: Path) -> None:
+    def _evict(self) -> None:
         entries = [
             path for path in self.directory.iterdir()
-            if path.is_dir() and path != keep and REPLAY_ID.fullmatch(path.name)
+            if path.is_dir() and REPLAY_ID.fullmatch(path.name)
         ]
-        total = sum(self._size(path) for path in entries) + self._size(keep)
+        total = sum(self._size(path) for path in entries)
         for path in sorted(entries, key=lambda item: item.stat().st_mtime):
             if total <= self.max_bytes:
                 break
+            if self._active.get(path.name, 0):
+                continue
             size = self._size(path)
             shutil.rmtree(path)
             total -= size
+            self._stats["evictions"] += 1
 
-    def materialize(self, replay_session_id: str) -> Path:
+    def _materialize(self, replay_session_id: str) -> Path:
         if not REPLAY_ID.fullmatch(replay_session_id):
             raise ValueError("invalid replay session ID")
         manifest = load_manifest(self.store, replay_session_id)
         marker = hashlib.sha256(
             json.dumps(manifest, separators=(",", ":"), sort_keys=True).encode()
         ).hexdigest()
+        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target = self.directory / replay_session_id
+        ready = target / ".manifest-sha256"
+        complete = all(
+            (path := target / f"{replay_session_id}{ARCHIVE_FILES[name]}").is_file()
+            and path.stat().st_size == row["size"]
+            for name, row in manifest["files"].items()
+        )
+        if (
+            complete
+            and ready.is_file()
+            and ready.read_text(encoding="ascii").strip() == marker
+        ):
+            os.utime(target)
+            self._stats["hits"] += 1
+            return target
+        temporary = Path(tempfile.mkdtemp(prefix=".session-", dir=self.directory))
+        try:
+            for name, suffix in ARCHIVE_FILES.items():
+                row = manifest["files"][name]
+                self.store.download_verified(
+                    row["key"],
+                    temporary / f"{replay_session_id}{suffix}",
+                    size=row["size"],
+                    sha256=row["sha256"],
+                )
+            (temporary / ".manifest-sha256").write_text(marker + "\n", encoding="ascii")
+            if target.exists():
+                shutil.rmtree(target)
+            os.replace(temporary, target)
+            self._stats["materializations"] += 1
+            self._stats["bytes"] += sum(row["size"] for row in manifest["files"].values())
+            return target
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+
+    @contextmanager
+    def lease(self, replay_session_id: str) -> Iterator[Path]:
+        """Keep a materialized session alive until its caller finishes reading."""
         with self._lock:
-            self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-            target = self.directory / replay_session_id
-            ready = target / ".manifest-sha256"
-            complete = all(
-                (path := target / f"{replay_session_id}{ARCHIVE_FILES[name]}").is_file()
-                and path.stat().st_size == row["size"]
-                for name, row in manifest["files"].items()
-            )
-            if (
-                complete
-                and ready.is_file()
-                and ready.read_text(encoding="ascii").strip() == marker
-            ):
-                os.utime(target)
-                return target
-            temporary = Path(tempfile.mkdtemp(prefix=".session-", dir=self.directory))
-            try:
-                for name, suffix in ARCHIVE_FILES.items():
-                    row = manifest["files"][name]
-                    self.store.download_verified(
-                        row["key"],
-                        temporary / f"{replay_session_id}{suffix}",
-                        size=row["size"],
-                        sha256=row["sha256"],
-                    )
-                (temporary / ".manifest-sha256").write_text(marker + "\n", encoding="ascii")
-                if target.exists():
-                    shutil.rmtree(target)
-                os.replace(temporary, target)
-                self._evict(target)
-                return target
-            finally:
-                if temporary.exists():
-                    shutil.rmtree(temporary)
+            target = self._materialize(replay_session_id)
+            self._active[replay_session_id] = self._active.get(replay_session_id, 0) + 1
+            self._evict()
+        try:
+            yield target
+        finally:
+            with self._lock:
+                remaining = self._active[replay_session_id] - 1
+                if remaining:
+                    self._active[replay_session_id] = remaining
+                else:
+                    del self._active[replay_session_id]
+                # ponytail: retry globally; per-session eviction queues only matter at scale.
+                self._evict()
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            disk_bytes = self._size(self.directory) if self.directory.is_dir() else 0
+            return {**self._stats, "disk_bytes": disk_bytes, "max_bytes": self.max_bytes}

@@ -1,5 +1,7 @@
 import copy
 import hashlib
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -101,17 +103,58 @@ def test_manifest_is_final_and_remote_cache_rejects_corruption(tmp_path):
     )
     assert load_manifest(store, "monaco_2024_race") == manifest
     cache = RemoteSessionCache(store, tmp_path / "cache")
-    root = cache.materialize("monaco_2024_race")
-    assert (root / "monaco_2024_race.jsonl").read_bytes() == fixture.read_bytes()
-    (root / "monaco_2024_race.positions.json").unlink()
-    assert cache.materialize(
-        "monaco_2024_race",
-    ).joinpath("monaco_2024_race.positions.json").is_file()
+    with cache.lease("monaco_2024_race") as root:
+        assert (root / "monaco_2024_race.jsonl").read_bytes() == fixture.read_bytes()
+        (root / "monaco_2024_race.positions.json").unlink()
+    with cache.lease("monaco_2024_race") as root:
+        assert root.joinpath("monaco_2024_race.positions.json").is_file()
 
     store.objects["sessions/monaco_2024_race/events.jsonl"] = b"corrupt"
-    (root / ".manifest-sha256").unlink()
+    with cache.lease("monaco_2024_race") as root:
+        (root / ".manifest-sha256").unlink()
     with pytest.raises(ManifestError, match="checksum"):
-        cache.materialize("monaco_2024_race")
+        with cache.lease("monaco_2024_race"):
+            pass
+
+
+def test_remote_cache_leases_block_eviction_and_cold_load_once(tmp_path):
+    class CountingStore(MemoryStore):
+        downloads = 0
+
+        def download_verified(self, *args, **kwargs):
+            self.downloads += 1
+            time.sleep(0.01)
+            return super().download_verified(*args, **kwargs)
+
+    store = CountingStore()
+    fixture, track, positions = _archive(tmp_path)
+    for replay_id in ("alpha_2024_race", "beta_2024_race"):
+        publish_session(
+            store, "2024-08-r", replay_id, fixture, track, positions, event_count=1,
+        )
+    cache = RemoteSessionCache(store, tmp_path / "cache")
+    cache.max_bytes = sum(path.stat().st_size for path in (fixture, track, positions)) + 100
+
+    with cache.lease("alpha_2024_race") as alpha:
+        with cache.lease("beta_2024_race") as beta:
+            assert alpha.is_dir() and beta.is_dir()
+        assert alpha.is_dir()
+        assert not beta.exists()
+
+    cold = RemoteSessionCache(store, tmp_path / "cold")
+
+    def load_once(_):
+        with cold.lease("alpha_2024_race") as root:
+            return root.joinpath("alpha_2024_race.jsonl").read_bytes()
+
+    before = store.downloads
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        payloads = list(pool.map(load_once, range(4)))
+
+    assert payloads == [fixture.read_bytes()] * 4
+    assert store.downloads - before == 3
+    assert cold.stats()["materializations"] == 1
+    assert cold.stats()["hits"] == 3
 
 
 def test_manifest_rejects_oversized_or_unexpected_objects(tmp_path):
