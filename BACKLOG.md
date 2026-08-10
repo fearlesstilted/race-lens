@@ -1,6 +1,6 @@
 # Race Lens product backlog
 
-Updated: 2026-08-06
+Updated: 2026-08-10
 
 This is the active source of truth assembled from the repository Markdown,
 the July audits, the August UX specification, and owner notes from chat. It is
@@ -19,8 +19,9 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
   secondary view; it is not allowed to invent overtakes or look into future
   telemetry to make motion prettier.
 - Do not patch every desktop resolution separately. A configurable workspace
-  should ultimately absorb different screen sizes through widget constraints,
-  docking, resizing, hiding, and persisted layouts.
+  should ultimately absorb different screen sizes through widget minimums,
+  per-widget full/compact/summary density, container queries, docking, resizing,
+  hiding, and persisted layouts. Mobile may keep its dedicated tab model.
 - Keep replay spoiler-free: strategy, highlights, insights, and state must not
   reveal future race information.
 - Use targeted checks after each block. Run the full matrix once before a
@@ -54,11 +55,13 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
 
 | Item | Status | What is actually missing |
 |---|---|---|
-| Tyre strategy clarity | **DONE** | The view has an explicit `NOW` marker, visible future treatment, narrow-label suppression, and truthful tooltips without leaking future stints. |
-| What to Watch usefulness | **DONE** | Insight cards with drivers now focus the relevant one or two cars atomically and expose the action before click. Safety-car summaries remain informational. |
+| Replay/feed clock alignment | **DONE** | Replay feed labels now share the timeline's lights-out origin, formation entries are labelled honestly, and raw timestamps still drive ordering and spoiler-safe cutoffs. Live keeps its session clock when no replay origin exists. |
+| Tyre strategy clarity | **DONE** | The view has one continuous 1 px `NOW` boundary without ruler overflow, visible future treatment, narrow-label suppression, and truthful tooltips without leaking future stints. |
+| What to Watch usefulness | **DONE** | Insight cards with drivers focus the relevant one or two cars, expose FOCUS beside the card header, and preserve type priority when insights are grouped. Safety-car summaries remain informational; broader widget usefulness stays open below. |
+| Pit / What If action feedback | **DONE** | Pit-window and finish-sensitivity actions now show explicit busy/error states, reject duplicate clicks, clear superseded results, and ignore responses from an older driver, session, or replay timestamp. |
 | Widget clickability | **OPEN** | The first useful-action contract is proven in What to Watch. Extend it to timing, battles, strategy, and events only where a natural action exists; decorative text must stay non-interactive. |
 | Typography cleanup | **DONE** | Active statistics and controls respect the 12 px floor; the two remaining 10 px declarations are documented decorative glyphs. |
-| Popup placement | **DONE** | Highlights and DOTD can be anchored normally or docked to deterministic left/right desktop positions; the choice persists without a window-manager dependency. |
+| Popup placement | **DEFER** | Review Panel ANCHOR/LEFT/RIGHT presets were removed after owner review. Highlights and DOTD are anchored to their header triggers again; any placement controls belong to the real workspace/window-manager work. |
 | DOTD credibility | **OPEN** | Keep model pick and local vote clearly labelled. If a reliable official F1 fan-result source exists, show it as a separate result; never call the model result official. |
 | Track motion | **DEFER** | Smoothing and terminal-tail fixes exist, but sector/telemetry updates can still create implausible relative surges at 10×. Battles-first is the current mitigation. Reopen interpolation only with an exact reproducible scene and no future-data leakage. |
 | Whisper quality | **DEFER** | Machine transcripts are labelled honestly, but transcription quality itself was not improved. Re-transcribe only when radio becomes a product priority. |
@@ -119,12 +122,16 @@ evidence, **DEFER** is intentionally waiting, and **DONE** is implemented.
 
 ## Suggested order
 
-1. Deploy the current recorder release, verify its revision, then use the next
-   real session for capture/publication proof.
-2. Extend useful click actions to the next widgets that clearly earn one.
-3. Build the docking workspace around widgets that are now worth arranging;
+1. Use the next real scheduled session to prove reconnects, quiet periods,
+   SC/VSC, radio, and clean replay publication on the deployed recorder release.
+2. Verify remote prepared-session path lifetime against disk eviction and
+   document `maxsize=1` with two-session switching behavior.
+3. Add focused visibility for memory/cache misses and recorder/archive
+   publication under concurrent use.
+4. Extend useful click actions to the next widgets that clearly earn one.
+5. Build the docking workspace around widgets that are now worth arranging;
    extend it to Live afterward.
-4. Research a reliable official DOTD result source without mixing it with the
+6. Research a reliable official DOTD result source without mixing it with the
    local model or vote.
-5. Whisper data work, desktop packaging, and TUI experiments when they become
+7. Whisper data work, desktop packaging, and TUI experiments when they become
    interesting again.
