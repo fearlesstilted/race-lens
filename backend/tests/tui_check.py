@@ -6,7 +6,7 @@ import importlib.util
 
 import httpx
 from textual.containers import Horizontal
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 
 assert importlib.util.find_spec("racelens.tui") is not None, "racelens.tui is missing"
@@ -46,6 +46,43 @@ async def check_resize_ui() -> None:
         await pilot.pause()
         assert str(app.query_one("#resize", Static).styles.display) == "none"
         assert str(app.query_one("#workspace", Horizontal).styles.display) == "block"
+
+        app.mode = "replay"
+        app.session_id = "demo"
+        app.track = {
+            "viewbox": [10, 10],
+            "points": [[0, 0], [2.5, 2.5], [5, 5], [7.5, 7.5], [10, 10]],
+        }
+        app._update_track({"drivers": {"VER": {"x": 5, "y": 5}}})
+        track_widget = app.query_one("#track", Static)
+        track_lines = track_widget.content.splitlines()
+        assert len(track_lines) <= track_widget.content_region.height
+        assert max(map(len, track_lines)) <= track_widget.content_region.width
+
+        app.timeline = {"start_ms": 0, "end_ms": 100_000}
+        app.at_ms = 50_000
+        app.paused = True
+        timing = app.query_one("#timing", DataTable)
+        timing.cursor_type = "cell"
+        timing.focus()
+        await pilot.pause()
+        assert app.focused is timing
+        await pilot.press("left")
+        await pilot.pause()
+        assert app.at_ms == 40_000
+
+        app.at_ms = 100_000
+        app.ended = True
+        app.paused = False
+        app.action_seek(-10_000)
+        assert app.at_ms == 90_000
+        assert app.ended is False and app.paused is False
+        await pilot.pause()
+
+        app.ended = True
+        app.action_toggle_pause()
+        assert app.ended is False and app.paused is False
+        await pilot.pause()
 
 
 def main() -> None:
@@ -103,6 +140,13 @@ def main() -> None:
         ended=False,
         lang="en",
     ) == "STALE · RECONNECTING"
+    degraded_ru = {"is_running": True, "data_quality": "degraded", "status": "live"}
+    assert status_text(
+        degraded_ru, connected=True, ended=False, lang="ru",
+    ) == "ДАННЫЕ ЗАДЕРЖИВАЮТСЯ"
+    assert status_text(
+        degraded_ru, connected=False, ended=False, lang="ru",
+    ) == "ДАННЫЕ ЗАДЕРЖИВАЮТСЯ · ПЕРЕПОДКЛЮЧЕНИЕ"
 
     asyncio.run(check_resize_ui())
     print("TUI check passed")

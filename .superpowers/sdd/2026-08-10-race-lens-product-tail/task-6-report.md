@@ -24,8 +24,20 @@ when the terminal encoding supports it and ASCII otherwise.
 
 The focused check uses HTTPX's in-process mock transport and Textual's headless
 runner. It covers the 100x28 boundary, catalog/replay/Live route selection,
-Braille and ASCII rendering, truthful stale/replay-ready labels, and bounded
-reconnect state. No full backend/frontend/Rust matrix was run.
+actual track content fit, timing-table-focused seek controls, completed-replay
+resume, Braille and ASCII rendering, truthful English/Russian lifecycle labels,
+and bounded reconnect state. No full backend/frontend/Rust matrix was run.
+
+## Review follow-up
+
+- Left/right are priority bindings, so the read-only timing table cannot consume
+  replay seeking when it has focus.
+- A backward seek or play action before the timeline end clears the terminal
+  replay state and restarts with one action.
+- Track raster width and height come from the mounted widget's content region;
+  the heading plus drawing fits the measured 27x12 region at exactly 100x28.
+- Russian Live status now distinguishes degraded data from healthy Live and
+  preserves the reconnecting suffix.
 
 ## Limitations
 

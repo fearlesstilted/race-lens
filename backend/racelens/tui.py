@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 import httpx
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.events import Resize
 from textual.widgets import DataTable, Footer, Header, Label, ListItem, ListView, Static
@@ -112,6 +113,10 @@ def status_text(
             return "ЭФИР ЗАВЕРШЁН"
         if stale:
             return "ДАННЫЕ УСТАРЕЛИ" + (" · ПЕРЕПОДКЛЮЧЕНИЕ" if not connected else "")
+        if status.get("data_quality") == "degraded":
+            return "ДАННЫЕ ЗАДЕРЖИВАЮТСЯ" + (
+                " · ПЕРЕПОДКЛЮЧЕНИЕ" if not connected else ""
+            )
         return "ЭФИР" if connected else "ПЕРЕПОДКЛЮЧЕНИЕ"
     if phase == "failed":
         return "ENDED · REPLAY FAILED"
@@ -193,8 +198,8 @@ class RaceLensTUI(App[None]):
         ("1", "set_speed(1)", "1x"),
         ("5", "set_speed(5)", "5x"),
         ("0", "set_speed(10)", "10x"),
-        ("left", "seek(-10000)", "-10s"),
-        ("right", "seek(10000)", "+10s"),
+        Binding("left", "seek(-10000)", "-10s", priority=True),
+        Binding("right", "seek(10000)", "+10s", priority=True),
     ]
     CSS = """
     Screen { background: #090b10; color: #e7eaf0; }
@@ -524,6 +529,7 @@ class RaceLensTUI(App[None]):
             )
 
     def _update_track(self, state: dict[str, Any]) -> None:
+        widget = self.query_one("#track", Static)
         drivers = state.get("drivers") if isinstance(state.get("drivers"), dict) else {}
         if self.mode == "replay" and self.positions:
             tick = max(1, int(self.positions.get("tick_ms") or 500))
@@ -541,11 +547,13 @@ class RaceLensTUI(App[None]):
         drawing = render_track(
             self.track,
             drivers,
+            width=max(1, widget.content_region.width),
+            height=max(1, widget.content_region.height - 1),
             ascii_only=self.ascii_only,
             live=self.mode == "live",
             lang=self.lang,
         )
-        self.query_one("#track", Static).update(f"{_TEXT[self.lang]['track']}\n{drawing}")
+        widget.update(f"{_TEXT[self.lang]['track']}\n{drawing}")
 
     def _update_lists(self, battles: Any, commentary: Any, feed: Any) -> None:
         battle_lines = []
@@ -604,6 +612,12 @@ class RaceLensTUI(App[None]):
     def action_toggle_pause(self) -> None:
         if self.mode != "replay":
             return
+        end = int(self.timeline.get("end_ms") or self.at_ms)
+        if self.ended and self.at_ms < end:
+            self.ended = self.paused = False
+            self._start_stream()
+            self._update_status()
+            return
         self.paused = not self.paused
         if self.paused:
             if self.stream_worker is not None:
@@ -625,6 +639,8 @@ class RaceLensTUI(App[None]):
         start = int(self.timeline.get("start_ms") or 0)
         end = int(self.timeline.get("end_ms") or max(start, self.at_ms))
         self.at_ms = min(end, max(start, self.at_ms + delta_ms))
+        if self.at_ms < end:
+            self.ended = False
         self.run_worker(self._seek_frame(), exclusive=True, group="stream")
 
     async def _seek_frame(self) -> None:
