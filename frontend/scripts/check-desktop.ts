@@ -18,6 +18,7 @@ const config = JSON.parse(read('src-tauri/tauri.conf.json'))
 assert.deepEqual(config.bundle.targets, ['nsis'])
 assert.equal(config.build.beforeBuildCommand, 'npm run build:desktop')
 assert.match(config.app.security.csp, /https:\/\/race-lens\.onrender\.com/)
+assert.match(config.app.security.csp, /media-src 'self' https:\/\/livetiming\.formula1\.com/)
 
 const api = read('../backend/racelens/api.py')
 for (const origin of [

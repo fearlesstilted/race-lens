@@ -22,7 +22,7 @@
     ],
     "security": {
       "capabilities": ["main-capability"],
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://race-lens.onrender.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://race-lens.onrender.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost data:; media-src 'self' https://livetiming.formula1.com; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
     }
   },
   "bundle": {
