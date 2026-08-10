@@ -259,6 +259,23 @@ def test_live_records_accept_multiline_whisper_and_nullable_undercut_evidence():
     assert storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW) == snapshot
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["/root/private", "/srv/race-lens/secret", r"C:\private\secret"],
+)
+def test_live_transcript_rejects_absolute_path_on_later_line(path):
+    pointer, snapshot = _valid_records()
+    snapshot["radio"] = [{
+        "audio_url": "https://livetiming.formula1.com/static/2026/Dutch/Race/radio.mp3",
+        "transcript": f"Box this lap\n{path}",
+        "driver_id": "VER",
+        "at_ms": 1_000,
+    }]
+
+    with pytest.raises(storage.LiveRecordError, match="radio"):
+        storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW)
+
+
 def test_recorder_snapshot_handles_partial_append_sc_vsc_and_late_transcript(tmp_path):
     store = MemoryStore()
     recorder = Recorder(_config(tmp_path), now=lambda: NOW, object_store=store)

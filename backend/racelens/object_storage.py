@@ -519,6 +519,7 @@ def _public_text(
     if not isinstance(value, str) or len(value) > maximum or (not empty and not value):
         return False
     lowered = value.lower()
+    lines = value.splitlines() if multiline else [value]
     return (
         not any(
             ord(char) < 32 and char not in ("\t\n" if multiline else "\t")
@@ -526,8 +527,11 @@ def _public_text(
         )
         and "\r" not in value
         and (multiline or "\n" not in value)
-        and not value.startswith(("/", "\\"))
-        and not re.match(r"^[a-zA-Z]:[\\/]", value)
+        and all(
+            not line.startswith(("/", "\\"))
+            and not re.match(r"^[a-zA-Z]:[\\/]", line)
+            for line in lines
+        )
         and not any(token in lowered for token in _UNSAFE_PUBLIC_TEXT)
     )
 
