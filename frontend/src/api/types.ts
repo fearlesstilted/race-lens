@@ -128,6 +128,8 @@ export type RaceState = {
   recent_passes?: RecentPass[]
   /** Live-only: battles embedded directly in the stream frame (replay fetches via /battles). */
   battles?: Battle[]
+  /** Stream-rendered WTW copy for the selected language and detail level. */
+  commentary?: CommentaryItem[]
 }
 
 export type InsightsResponse = {

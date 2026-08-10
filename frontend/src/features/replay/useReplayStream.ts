@@ -108,6 +108,7 @@ export function useReplayStream(
         set.setAtMs(nextState.at_ms)
         set.setState(nextState)
         set.setInsights(nextState.active_insights ?? [])
+        set.setCommentary(nextState.commentary ?? [])
         // recent_passes drives the on-map overtake flash — pushed every frame
         // (not throttled) so the flash triggers promptly, same as insights.
         set.setRecentPasses(nextState.recent_passes ?? [])

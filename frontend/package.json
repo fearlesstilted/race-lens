@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "check:insight-focus": "node scripts/check-insight-focus.ts",
+    "check:live-lifecycle": "node scripts/check-live-lifecycle.ts",
     "check:stints": "node scripts/check-stints.ts",
     "check:ui": "node scripts/check-broadcast-overlay.ts",
     "check:track": "node scripts/check-track-interpolation.ts",

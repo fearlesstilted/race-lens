@@ -212,8 +212,10 @@
 .live-pill-ended { color: var(--dim); }
 .live-pill-waiting,
 .live-pill-reconnecting,
-.live-pill-degraded { color: var(--amber); }
-.live-pill-stalled { color: #ff4444; }
+.live-pill-degraded,
+.live-pill-preparing { color: var(--amber); }
+.live-pill-stalled,
+.live-pill-failed { color: #ff4444; }
 .live-status-detail {
   color: var(--dim);
   font: 700 10px var(--cond);
@@ -240,8 +242,10 @@
 .live-badge--ended { color: var(--dim); }
 .live-badge--waiting,
 .live-badge--reconnecting,
-.live-badge--degraded { color: var(--amber); }
-.live-badge--stalled { color: #ff4444; }
+.live-badge--degraded,
+.live-badge--preparing { color: var(--amber); }
+.live-badge--stalled,
+.live-badge--failed { color: #ff4444; }
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.35; }

@@ -11,6 +11,7 @@ type Props = {
   level: Level
   mode: 'replay' | 'live'
   liveAvailable: boolean
+  liveNowAvailable: boolean
   projection: boolean
   dashboardLayout: DashboardLayout
   onLang: (lang: Lang) => void
@@ -27,7 +28,7 @@ type Props = {
 }
 
 export function SettingsDrawer({
-  open, onClose, lang, level, mode, liveAvailable, projection,
+  open, onClose, lang, level, mode, liveAvailable, liveNowAvailable, projection,
   dashboardLayout, onLang, onLevel, onModeChange, onProjection,
   onDashboardLayout,
   sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
@@ -77,7 +78,7 @@ export function SettingsDrawer({
           <div className="settings-group-label">MODE</div>
           <div className="tog-group">
             <button type="button" className={`tog${mode === 'replay' ? ' tog-on' : ''}`} onClick={() => { onModeChange('replay'); onClose() }}>REPLAY</button>
-            <button type="button" className={`tog${mode === 'live' ? ' tog-on' : ''}`} disabled={!liveAvailable} onClick={() => { onModeChange('live'); onClose() }}>LIVE</button>
+            <button type="button" className={`tog${mode === 'live' ? ' tog-on' : ''}`} disabled={!liveAvailable} onClick={() => { onModeChange('live'); onClose() }}>{liveNowAvailable ? 'LIVE NOW' : 'LIVE'}</button>
           </div>
         </div>
 

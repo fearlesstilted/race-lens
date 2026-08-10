@@ -22,9 +22,9 @@ import { TrackMap } from './features/replay/TrackMap'
 import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
 import type { DashboardLayout } from './features/replay/replayTypes'
 import { useReplay } from './features/replay/useReplay'
-import { lapAtTime } from './lib/format'
+import { lapAtTime, sessionLabel } from './lib/format'
 import { focusDriverIds } from './lib/insightFocus'
-import { livePresentation } from './lib/liveStatus'
+import { liveLifecycle, livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
 import './styles/responsive.css'
@@ -84,7 +84,7 @@ type MobTab = 'TIMING' | 'MAP' | 'INSIGHTS' | 'FEED'
 const MOB_TABS: MobTab[] = ['TIMING', 'MAP', 'INSIGHTS', 'FEED']
 
 function App() {
-  const initialParams = new URLSearchParams(window.location.search)
+  const initialParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const initialCatalogId = initialParams.get('catalog')
   const initialSessionId = initialParams.get('session')
   const initialCatalogSeason = initialCatalogId && /^\d{4}-/.test(initialCatalogId)
@@ -94,16 +94,18 @@ function App() {
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
-  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
+  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
+  const [replayPinned, setReplayPinned] = useState(Boolean(initialSessionId))
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
+  const [startupReady, setStartupReady] = useState(false)
+  const [readonlyDeployment, setReadonlyDeployment] = useState<boolean | null>(null)
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveStopping, setLiveStopping] = useState(false)
-  const [liveAvailable, setLiveAvailable] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
@@ -138,6 +140,40 @@ function App() {
 
   const replay = useReplay(source)
   useVoiceAlerts(replay.feed, voice, replay.lang, mode === 'replay' ? sessionId : 'live')
+
+  const liveDecision = liveLifecycle(liveStatusData, {
+    readonly: readonlyDeployment !== false,
+    explicitReplay: replayPinned,
+    attachedToLive: mode === 'live' && isLiveActive,
+  })
+  const liveAvailable = liveDecision.canManage || liveDecision.remoteAvailable || isLiveActive
+
+  const adoptReplay = useCallback((id: string) => {
+    replay.pause()
+    setMode('replay')
+    setIsLiveActive(false)
+    setReplayPinned(true)
+    setSelectedIds([])
+    setCenterTab('FEED')
+    setSessionNotice(null)
+    setSessionId(id)
+    setCatalogOpen(false)
+    const url = new URL(window.location.href)
+    url.searchParams.set('session', id)
+    url.searchParams.delete('catalog')
+    window.history.replaceState(null, '', url)
+  }, [replay.pause])
+
+  const adoptLive = useCallback(() => {
+    replay.pause()
+    setMode('live')
+    setIsLiveActive(true)
+    setReplayPinned(false)
+    setCatalogOpen(false)
+    setLiveError(null)
+    setCenterTab('FEED')
+    setSelectedIds([])
+  }, [replay.pause])
 
   const loadSessions = useCallback(() => {
     let cancelled = false
@@ -185,42 +221,58 @@ function App() {
     return loadSessions()
   }, [loadSessions])
 
+  // Resolve public/live routing before opening the catalog, so production Live
+  // never flashes the replay picker on first load.
   useEffect(() => {
     let cancelled = false
-    getCapabilities()
-      .then((value) => {
-        if (cancelled) return
-        setLiveAvailable(!value.readonly)
-        setSignalrAvailable(value.signalr_available)
-      })
-      .catch(() => undefined)
+    void Promise.allSettled([getCapabilities(), liveStatus()]).then(([capabilities, status]) => {
+      if (cancelled) return
+      const readonly = capabilities.status === 'fulfilled' ? capabilities.value.readonly : true
+      setReadonlyDeployment(readonly)
+      if (capabilities.status === 'fulfilled') {
+        setSignalrAvailable(capabilities.value.signalr_available)
+      }
+      if (status.status === 'fulfilled') {
+        setLiveStatusData(status.value)
+        const decision = liveLifecycle(status.value, {
+          readonly,
+          explicitReplay: Boolean(initialSessionId),
+          attachedToLive: false,
+        })
+        if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
+        else if (decision.enterLive) adoptLive()
+        else if (!initialSessionId) setCatalogOpen(true)
+      } else if (!initialSessionId) {
+        setCatalogOpen(true)
+      }
+      setStartupReady(true)
+    })
     return () => { cancelled = true }
-  }, [])
+  }, [adoptLive, adoptReplay, initialSessionId])
 
-  // Reattach after refresh: if the backend already runs a live session, adopt
-  // it — otherwise F5 lands in the lobby and a new START just 409s.
+  // Public deployments keep discovering lifecycle changes; attached local Live
+  // uses the same five-second poll. Failed polls retain the last truthful state.
   useEffect(() => {
-    if (mode !== 'live' || isLiveActive) return
-    let cancelled = false
-    liveStatus()
-      .then((s) => { if (!cancelled && s.is_running) setIsLiveActive(true) })
-      .catch(() => undefined)
-    return () => { cancelled = true }
-  }, [mode, isLiveActive])
-
-  // Poll live status every 5 s when live is active
-  useEffect(() => {
-    if (!isLiveActive || mode !== 'live') return
+    if (!startupReady || !(readonlyDeployment === true || mode === 'live' || isLiveActive)) return
     let cancelled = false
     const poll = () => {
       liveStatus()
-        .then((s) => { if (!cancelled) setLiveStatusData(s) })
-        .catch(() => { if (!cancelled) setLiveStatusData(null) })
+        .then((status) => {
+          if (cancelled) return
+          setLiveStatusData(status)
+          const decision = liveLifecycle(status, {
+            readonly: readonlyDeployment !== false,
+            explicitReplay: replayPinned,
+            attachedToLive: mode === 'live' && isLiveActive,
+          })
+          if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
+          else if (decision.enterLive) adoptLive()
+        })
+        .catch(() => undefined)
     }
-    poll()
     const id = window.setInterval(poll, 5000)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [isLiveActive, mode])
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [adoptLive, adoptReplay, isLiveActive, mode, readonlyDeployment, replayPinned, startupReady])
 
   // Esc to clear selection
   useEffect(() => {
@@ -250,22 +302,21 @@ function App() {
   const handleModeSwitch = (next: AppMode) => {
     if (next === mode) return
     if (next === 'live' && !liveAvailable) return
+    if (next === 'live' && (liveDecision.remoteAvailable || liveStatusData?.is_running)) {
+      adoptLive()
+      return
+    }
     replay.pause()
     setMode(next)
+    setIsLiveActive(false)
+    setReplayPinned(next === 'replay')
     setLiveError(null)
     setCenterTab('FEED')
     setSelectedIds([])
   }
 
   const handleSessionChange = (id: string) => {
-    replay.pause()
-    setSelectedIds([])
-    setSessionNotice(null)
-    setSessionId(id)
-    const url = new URL(window.location.href)
-    url.searchParams.set('session', id)
-    url.searchParams.delete('catalog')
-    window.history.replaceState(null, '', url)
+    adoptReplay(id)
   }
 
   const state = replay.state
@@ -283,6 +334,18 @@ function App() {
 
   const sessionStatus = state?.session_status ?? 'started'
   const liveView = livePresentation(liveStatusData, state !== null, replay.error)
+
+  if (!startupReady) {
+    return (
+      <div className="error-screen wake-screen" role="status" aria-live="polite">
+        <div>
+          <span className="wake-pulse" />
+          <h2>Connecting</h2>
+          <p>Checking replay and Live availability.</p>
+        </div>
+      </div>
+    )
+  }
 
   if (sessionError) {
     return (
@@ -310,6 +373,9 @@ function App() {
 
   // Build liveLabel for deck clock from current state lap
   const liveLabel = state && currentLap > 0 ? `LAP ${currentLap}` : null
+  const liveSessionName = state?.session_name ?? (
+    liveStatusData?.replay_session_id ? sessionLabel(liveStatusData.replay_session_id) : null
+  )
 
   return (
     <>
@@ -327,6 +393,7 @@ function App() {
         level={replay.level}
         mode={mode}
         liveAvailable={liveAvailable}
+        liveNowAvailable={liveDecision.showLiveNow}
         projection={projection}
         dashboardLayout={dashboardLayout}
         onLang={replay.setLang}
@@ -349,6 +416,7 @@ function App() {
         level={replay.level}
         mode={mode}
         liveAvailable={liveAvailable}
+        liveNowAvailable={liveDecision.showLiveNow}
         projection={projection}
         voice={voice}
         onModeChange={handleModeSwitch}
@@ -360,10 +428,10 @@ function App() {
         onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
-        sessionName={mode === 'live' ? state?.session_name ?? null : null}
+        sessionName={mode === 'live' ? liveSessionName : null}
       />
 
-      {mode === 'live' && !isLiveActive && (
+      {liveDecision.canManage && mode === 'live' && !isLiveActive && (
         <LiveLobby
           signalrAvailable={signalrAvailable}
           onStart={async (y, c, sessionName, source) => {
@@ -378,26 +446,28 @@ function App() {
         <div className="live-bar">
           <LiveStatusPill presentation={liveView} />
           {liveError && <span className="live-err">{liveError}</span>}
-          <button
-            className="b danger"
-            type="button"
-            disabled={liveStopping}
-            onClick={async () => {
-              setLiveStopping(true)
-              try {
-                await liveStop()
-                setIsLiveActive(false)
-                setLiveStatusData(null)
-                setLiveError(null)
-              } catch (error) {
-                setLiveError(error instanceof Error ? error.message : 'Failed to stop live session')
-              } finally {
-                setLiveStopping(false)
-              }
-            }}
-          >
-            {liveStopping ? 'STOPPING…' : 'STOP'}
-          </button>
+          {liveDecision.canManage && (
+            <button
+              className="b danger"
+              type="button"
+              disabled={liveStopping}
+              onClick={async () => {
+                setLiveStopping(true)
+                try {
+                  await liveStop()
+                  setIsLiveActive(false)
+                  setLiveStatusData(null)
+                  setLiveError(null)
+                } catch (error) {
+                  setLiveError(error instanceof Error ? error.message : 'Failed to stop live session')
+                } finally {
+                  setLiveStopping(false)
+                }
+              }}
+            >
+              {liveStopping ? 'STOPPING…' : 'STOP'}
+            </button>
+          )}
         </div>
       )}
 

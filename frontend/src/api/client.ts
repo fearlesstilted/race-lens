@@ -124,6 +124,12 @@ export const getDriverOfDay = (sessionId: string, atMs?: number) =>
 // ── Live endpoints ────────────────────────────────────────────────────────────
 
 export type LiveStartResult = { session_key: number; poll_interval_s: number; status: string }
+export type LiveCaptureFreshness = {
+  raw_size: number
+  raw_updated_at: string
+  seconds_since_growth: number
+  transport_growing: boolean
+}
 export type LiveStatusResult = {
   is_running: boolean
   poll_count: number
@@ -134,6 +140,14 @@ export type LiveStatusResult = {
   last_error: string | null
   capture_alive?: boolean
   data_quality: 'good' | 'degraded' | 'stalled'
+  source?: string
+  status?: 'live' | 'finishing' | 'replay_ready' | 'failed'
+  canonical_session_id?: string
+  replay_session_id?: string
+  generated_at?: string
+  expires_at?: string | null
+  capture_freshness?: LiveCaptureFreshness | null
+  failure?: string | null
 }
 
 const post = async <T>(path: string): Promise<T> => {
