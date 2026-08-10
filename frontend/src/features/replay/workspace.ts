@@ -1,6 +1,8 @@
-import type { LayoutItem } from 'react-grid-layout'
+import { moveElement } from 'react-grid-layout'
+import type { Layout, LayoutItem } from 'react-grid-layout'
 
 export type WorkspaceMode = 'replay' | 'live'
+export type MobileCenter = 'battles' | 'track'
 export type WidgetId = typeof WIDGET_IDS[number]
 export type WidgetDensity = 'auto' | 'full' | 'compact' | 'summary'
 export type ResolvedDensity = Exclude<WidgetDensity, 'auto'>
@@ -48,7 +50,7 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
     initial: { x: 3, y: 0, w: 5, h: 7 }, visible: true,
   },
   track: {
-    label: 'Track', minW: 4, minH: 6, densities: ['auto', 'full', 'compact'], modes: BOTH_MODES,
+    label: 'Track', minW: 4, minH: 6, densities: ['auto', 'full'], modes: BOTH_MODES,
     initial: { x: 8, y: 0, w: 4, h: 7 }, visible: true,
   },
   insights: {
@@ -68,16 +70,17 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
     initial: { x: 0, y: 20, w: 8, h: 6 }, visible: false,
   },
   highlights: {
-    label: 'Highlights', minW: 4, minH: 5, densities: ['auto', 'full', 'compact'], modes: ['replay'],
+    label: 'Highlights', minW: 4, minH: 5, densities: ['auto', 'full'], modes: ['replay'],
     initial: { x: 8, y: 20, w: 4, h: 6 }, visible: false, anchored: true,
   },
   dotd: {
-    label: 'Driver of the day', minW: 4, minH: 5, densities: ['auto', 'full', 'compact'], modes: ['replay'],
+    label: 'Driver of the day', minW: 4, minH: 5, densities: ['auto', 'full'], modes: ['replay'],
     initial: { x: 0, y: 26, w: 6, h: 6 }, visible: false, anchored: true,
   },
 }
 
 export const WORKSPACE_KEY = 'racelens_workspace_layout_v2'
+export const MOBILE_CENTER_KEY = 'racelens_mobile_center'
 const LEGACY_DASHBOARD_KEY = 'racelens_dashboard_layout'
 
 function storageOrBrowser(storage?: WorkspaceStorage): WorkspaceStorage {
@@ -149,6 +152,7 @@ function migrateLegacy(storage: WorkspaceStorage): Workspaces | null {
     replay.widgets.feed.visible = old.feed !== false
     replay.widgets.battles.visible = old.center !== 'track'
     replay.widgets.track.visible = old.center === 'track'
+    storage.setItem(MOBILE_CENTER_KEY, old.center === 'track' ? 'track' : 'battles')
     return { version: 2, replay, live: defaultWorkspace('live') }
   } catch {
     return null
@@ -191,6 +195,20 @@ export function resetWorkspace(mode: WorkspaceMode, storage?: WorkspaceStorage):
   return writeWorkspace(mode, defaultWorkspace(mode), storage)
 }
 
+export function readMobileCenter(storage?: WorkspaceStorage): MobileCenter {
+  try {
+    const value = storageOrBrowser(storage).getItem(MOBILE_CENTER_KEY)
+    return value === 'track' ? 'track' : 'battles'
+  } catch {
+    return 'battles'
+  }
+}
+
+export function writeMobileCenter(center: MobileCenter, storage?: WorkspaceStorage): MobileCenter {
+  try { storageOrBrowser(storage).setItem(MOBILE_CENTER_KEY, center) } catch { /* noop */ }
+  return center
+}
+
 export function updateWorkspaceWidget(
   workspace: WorkspaceLayout,
   mode: WorkspaceMode,
@@ -204,6 +222,42 @@ export function updateWorkspaceWidget(
       [id]: { ...workspace.widgets[id], ...update, i: id },
     },
   }, mode)
+}
+
+export function applyWorkspaceLayout(
+  workspace: WorkspaceLayout,
+  mode: WorkspaceMode,
+  layout: Layout,
+): WorkspaceLayout {
+  const widgets = { ...workspace.widgets }
+  for (const next of layout) {
+    if (!WIDGET_IDS.includes(next.i as WidgetId)) continue
+    const id = next.i as WidgetId
+    widgets[id] = {
+      ...widgets[id],
+      x: next.x,
+      y: next.y,
+      w: next.w,
+      h: next.h,
+    }
+  }
+  return normalizeWorkspace({ ...workspace, widgets }, mode)
+}
+
+export function moveWorkspaceItem(
+  layout: Layout,
+  id: string,
+  x: number,
+  y: number,
+): Layout {
+  const nextLayout = layout.map((item) => ({ ...item }))
+  const current = nextLayout.find((item) => item.i === id)
+  if (!current) return nextLayout
+  return moveElement(nextLayout, current, x, y, true, false, 'vertical', 12, false)
+}
+
+export function isDirectActivation(currentTarget: unknown, target: unknown): boolean {
+  return currentTarget === target
 }
 
 export function selectDensity(

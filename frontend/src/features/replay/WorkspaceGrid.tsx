@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import ReactGridLayout, { moveElement, useContainerWidth, verticalCompactor } from 'react-grid-layout'
+import ReactGridLayout, { useContainerWidth, verticalCompactor } from 'react-grid-layout'
 import type { KeyboardEvent, ReactNode } from 'react'
 import type { Layout, LayoutItem } from 'react-grid-layout'
 import {
   WIDGET_IDS,
   WIDGET_REGISTRY,
+  applyWorkspaceLayout,
+  moveWorkspaceItem,
   selectDensity,
   updateWorkspaceWidget,
 } from './workspace'
@@ -102,19 +104,8 @@ export function WorkspaceGrid({ mode, workspace, widgets, onChange }: Props) {
 
   const applyLayout = useCallback((nextLayout: Layout) => {
     if (nextLayout.every((next) => sameGridItem(workspace.widgets[next.i as WidgetId], next))) return
-    const nextWidgets = { ...workspace.widgets }
-    for (const next of nextLayout) {
-      const id = next.i as WidgetId
-      nextWidgets[id] = {
-        ...nextWidgets[id],
-        x: next.x,
-        y: next.y,
-        w: next.w,
-        h: next.h,
-      }
-    }
-    onChange({ ...workspace, widgets: nextWidgets })
-  }, [onChange, workspace])
+    onChange(applyWorkspaceLayout(workspace, mode, nextLayout))
+  }, [mode, onChange, workspace])
 
   const handleKeyboard = useCallback((id: WidgetId, event: KeyboardEvent<HTMLElement>) => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
@@ -134,16 +125,11 @@ export function WorkspaceGrid({ mode, workspace, widgets, onChange }: Props) {
       ))
       return
     }
-    applyLayout(moveElement(
+    applyLayout(moveWorkspaceItem(
       layout,
-      gridItem(current),
+      id,
       Math.min(12 - current.w, Math.max(0, current.x + dx)),
       Math.max(0, current.y + dy),
-      true,
-      false,
-      'vertical',
-      12,
-      false,
     ))
   }, [applyLayout, layout, workspace.widgets])
 

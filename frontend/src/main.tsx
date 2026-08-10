@@ -22,7 +22,16 @@ import { TrackMap } from './features/replay/TrackMap'
 import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
 import { HighlightsPanel } from './features/replay/HighlightsPanel'
 import { WorkspaceGrid } from './features/replay/WorkspaceGrid'
-import { readWorkspaces, resetWorkspace, updateWorkspaceWidget, workspaceAction, writeWorkspace } from './features/replay/workspace'
+import {
+  readMobileCenter,
+  readWorkspaces,
+  resetWorkspace,
+  updateWorkspaceWidget,
+  workspaceAction,
+  writeMobileCenter,
+  writeWorkspace,
+} from './features/replay/workspace'
+import type { MobileCenter } from './features/replay/workspace'
 import { useReplay } from './features/replay/useReplay'
 import { lapAtTime, sessionLabel } from './lib/format'
 import { focusDriverIds } from './lib/insightFocus'
@@ -108,9 +117,7 @@ function App() {
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [workspaces, setWorkspaces] = useState(readWorkspaces)
-  const [mobileCenter, setMobileCenter] = useState<'battles' | 'track'>(() => (
-    workspaces.replay.widgets.track.visible && !workspaces.replay.widgets.battles.visible ? 'track' : 'battles'
-  ))
+  const [mobileCenter, setMobileCenter] = useState<MobileCenter>(() => readMobileCenter())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
@@ -135,6 +142,9 @@ function App() {
   const handleWorkspaceReset = useCallback(() => {
     setWorkspaces(resetWorkspace(mode))
   }, [mode])
+  const handleMobileCenter = useCallback((center: MobileCenter) => {
+    setMobileCenter(writeMobileCenter(center))
+  }, [])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -701,7 +711,7 @@ function App() {
                       type="button"
                       className={mobileCenter === center ? 'on' : ''}
                       aria-pressed={mobileCenter === center}
-                      onClick={() => setMobileCenter(center)}
+                      onClick={() => handleMobileCenter(center)}
                     >
                       {center.toUpperCase()}
                     </button>

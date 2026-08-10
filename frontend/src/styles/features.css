@@ -1431,6 +1431,26 @@
 }
 
 /* Density removes secondary detail; the underlying actions remain unchanged. */
+.workspace-widget[data-density="full"] .trow-hdr,
+.workspace-widget[data-density="full"] .trow {
+  grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 38px 22px;
+}
+.workspace-widget[data-density="full"] .col-age,
+.workspace-widget[data-density="full"] .col-int,
+.workspace-widget[data-density="full"] .col-pit { display: block; }
+.workspace-widget[data-density="compact"] .trow-hdr,
+.workspace-widget[data-density="compact"] .trow {
+  grid-template-columns: 26px 4px 42px 22px 22px 70px 14px 46px 0 0;
+}
+.workspace-widget[data-density="compact"] .col-int,
+.workspace-widget[data-density="compact"] .col-pit { display: none; }
+.workspace-widget[data-density="summary"] .trow-hdr,
+.workspace-widget[data-density="summary"] .trow {
+  grid-template-columns: 24px 4px 40px 22px 0 66px 12px 44px 0 0;
+}
+.workspace-widget[data-density="summary"] .col-age,
+.workspace-widget[data-density="summary"] .col-int,
+.workspace-widget[data-density="summary"] .col-pit { display: none; }
 .workspace-widget[data-density="compact"] .bi-state,
 .workspace-widget[data-density="compact"] .bi-pace,
 .workspace-widget[data-density="compact"] .ev-transcript,
@@ -1468,20 +1488,48 @@
 .workspace-widget .focus-pitlap-ann,
 .workspace-widget .pit-now-btn,
 .workspace-widget .pit-sim-card,
+.workspace-widget .pit-sim-rows,
 .workspace-widget .focus-whatif-label,
 .workspace-widget .whatif-btn,
+.workspace-widget .what-if-diff-row,
 .workspace-widget .what-if-metric,
 .workspace-widget .what-if-note { font-size: 12px; }
 
 @media (min-width: 1025px) {
   .feed-error,
   .live-pill,
-  .live-status-detail { font-size: 12px; }
+  .live-status-detail,
+  .live-lobby-kicker,
+  .live-lobby-guide > span,
+  .live-lobby-controls label > span,
+  .live-source-row p,
+  .deck-live-state small { font-size: 12px; }
 }
 
-.ev[role="button"],
+.ev { position: relative; }
+.ev-row-action {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.ev > .ev-lap,
+.ev > .t,
+.ev > .x {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.ev-radio-btn {
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+}
 .stint-row-action { cursor: pointer; }
-.ev[role="button"]:focus-visible,
+.ev-row-action:focus-visible,
 .stint-row-action:focus-visible {
   outline: 2px solid var(--rb-yellow);
   outline-offset: -2px;

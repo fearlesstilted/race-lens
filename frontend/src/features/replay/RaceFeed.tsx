@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { FeedItem } from '../../api/types'
 import { formatRaceTime } from '../../lib/format'
+import { isDirectActivation } from './workspace'
 
 function fmtFeedTime(ms: number, clockOriginMs?: number): string {
   if (clockOriginMs === undefined) return formatRaceTime(ms)
@@ -48,16 +49,17 @@ const FeedRow = React.memo(function FeedRow({
         isFastest ? 'fast' : '',
         flash ? 'ev-flash' : '',
       ].filter(Boolean).join(' ')}
-      role={onActivate ? 'button' : undefined}
-      tabIndex={onActivate ? 0 : undefined}
-      onClick={onActivate ? () => onActivate(item) : undefined}
-      onKeyDown={onActivate ? (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onActivate(item)
-        }
-      } : undefined}
     >
+      {onActivate && (
+        <button
+          type="button"
+          className="ev-row-action"
+          aria-label={`Open feed event: ${item.text}`}
+          onClick={(event) => {
+            if (isDirectActivation(event.currentTarget, event.target)) onActivate(item)
+          }}
+        />
+      )}
       {item.lap !== null ? (
         <span className="ev-lap">L{item.lap}</span>
       ) : (
@@ -70,7 +72,7 @@ const FeedRow = React.memo(function FeedRow({
           <button
             type="button"
             className={`ev-radio-btn${isPlaying ? ' playing' : ''}`}
-            onClick={(event) => { event.stopPropagation(); onToggleRadio(item.audio_url!) }}
+            onClick={() => onToggleRadio(item.audio_url!)}
             aria-label={isPlaying ? 'Stop team radio' : 'Play team radio'}
             title={isPlaying ? 'Stop team radio' : 'Play team radio'}
           >
