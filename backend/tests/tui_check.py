@@ -1,0 +1,112 @@
+"""Focused dependency-light check for the terminal viewer."""
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+
+import httpx
+from textual.containers import Horizontal
+from textual.widgets import Static
+
+
+assert importlib.util.find_spec("racelens.tui") is not None, "racelens.tui is missing"
+
+from racelens.tui import (  # noqa: E402
+    api_path,
+    RaceLensTUI,
+    reconnect_delay,
+    render_track,
+    resize_message,
+    status_text,
+)
+
+
+async def check_resize_ui() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/catalog":
+            return httpx.Response(200, json={
+                "season": 2026,
+                "seasons": [2026],
+                "catalog_available": True,
+                "preparation_enabled": False,
+                "events": [],
+            })
+        return httpx.Response(404, json={"detail": "No live session active"})
+
+    app = RaceLensTUI("https://api.example", "en")
+    await app.client.aclose()
+    app.client = httpx.AsyncClient(
+        base_url="https://api.example/", transport=httpx.MockTransport(handler),
+    )
+    async with app.run_test(size=(99, 28)) as pilot:
+        await pilot.pause()
+        assert str(app.query_one("#resize", Static).styles.display) == "block"
+        assert str(app.query_one("#workspace", Horizontal).styles.display) == "none"
+        await pilot.resize_terminal(100, 28)
+        await pilot.pause()
+        assert str(app.query_one("#resize", Static).styles.display) == "none"
+        assert str(app.query_one("#workspace", Horizontal).styles.display) == "block"
+
+
+def main() -> None:
+    assert resize_message(99, 28, "en") == "Resize terminal to at least 100x28 (now 99x28)."
+    assert resize_message(100, 28, "en") is None
+    assert resize_message(100, 27, "ru") == "Увеличьте терминал до 100x28 (сейчас 100x27)."
+
+    assert api_path("catalog", "catalog") == "/api/catalog"
+    assert api_path("catalog", "sessions") == "/api/sessions"
+    assert api_path("live", "stream") == "/api/live/stream"
+    assert api_path("live", "track") is None
+    assert api_path("replay", "stream", "monaco_2024_race") == (
+        "/api/sessions/monaco_2024_race/stream"
+    )
+    assert api_path("replay", "positions", "monaco_2024_race") == (
+        "/api/sessions/monaco_2024_race/positions"
+    )
+
+    track = {
+        "viewbox": [10, 10],
+        "points": [[0, 0], [2.5, 2.5], [5, 5], [7.5, 7.5], [10, 10]],
+    }
+    drivers = {"VER": {"x": 5, "y": 5}}
+    braille = render_track(track, drivers, width=10, height=4, ascii_only=False)
+    ascii_track = render_track(track, drivers, width=10, height=4, ascii_only=True)
+    assert "V" in braille and any("\u2800" <= char <= "\u28ff" for char in braille)
+    assert "V" in ascii_track and "#" in ascii_track
+    assert not any("\u2800" <= char <= "\u28ff" for char in ascii_track)
+    assert render_track(None, {"VER": {"x": None, "y": None}}, live=True) == (
+        "Live track telemetry unavailable."
+    )
+
+    assert [reconnect_delay(attempt) for attempt in range(6)] == [0.5, 1, 2, 4, 8, 8]
+    assert reconnect_delay(10_000) == 8
+    assert status_text(
+        {"is_running": True, "data_quality": "stalled", "status": "live"},
+        connected=False,
+        ended=False,
+        lang="en",
+    ) == "STALE · RECONNECTING"
+    assert status_text(
+        {"is_running": False, "data_quality": "good", "status": "replay_ready"},
+        connected=True,
+        ended=False,
+        lang="en",
+    ) == "ENDED · REPLAY READY"
+    assert status_text(
+        {
+            "is_running": True,
+            "data_quality": "good",
+            "status": "live",
+            "expires_at": "2000-01-01T00:00:00Z",
+        },
+        connected=False,
+        ended=False,
+        lang="en",
+    ) == "STALE · RECONNECTING"
+
+    asyncio.run(check_resize_ui())
+    print("TUI check passed")
+
+
+if __name__ == "__main__":
+    main()
