@@ -297,6 +297,13 @@ export type DotdCandidate = {
 export type DotdResponse = {
   candidates: DotdCandidate[]
   computed_pick: string | null
+  official_result: {
+    driver: string
+    percentage: number
+    provider: 'Formula 1 fan vote'
+    source_url: string
+    fetched_at: string
+  } | null
 }
 
 // ── What-If counterfactual ────────────────────────────────────────────────────

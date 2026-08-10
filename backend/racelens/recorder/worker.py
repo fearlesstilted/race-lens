@@ -43,6 +43,7 @@ from racelens.replay.engine import ReplayEngine
 FINISH_GRACE = timedelta(minutes=10)
 CAPTURE_RETRY = timedelta(minutes=5)
 ARCHIVE_RETRY = timedelta(minutes=15)
+AWARD_SYNC_INTERVAL = timedelta(hours=6)
 PROCESS_TIMEOUT = 60 * 60
 SCHEDULE_REFRESH = timedelta(hours=6)
 REMOTE_CAPTURE_GUARD = timedelta(hours=2)
@@ -146,6 +147,7 @@ class Recorder:
         self._live_sequences: dict[str, int] = {}
         self._live_transport: dict[str, tuple[int, datetime]] = {}
         self._transcripts = None
+        self._award_sync_at: datetime | None = None
         for path in (config.state_dir, config.raw_dir, config.data_dir):
             path.mkdir(parents=True, exist_ok=True)
         self.remote_processing.unlink(missing_ok=True)
@@ -516,6 +518,45 @@ class Recorder:
             except LiveRecordError as exc:
                 if "pointer is missing" not in str(exc) and "identity differs" not in str(exc):
                     raise
+        if session.kind == "R":
+            try:
+                from racelens.driver_of_day import sync_official_award
+
+                sync_official_award(
+                    session.year,
+                    session.event_name,
+                    fixture_stem(session),
+                    self.config.data_dir / "archive",
+                    self.object_store,
+                )
+            except Exception as exc:
+                # Official results can legitimately lag archive publication.
+                print(
+                    f"official DOTD pending for {session.session_id}: {type(exc).__name__}",
+                    file=sys.stderr,
+                )
+
+    def _sync_completed_awards(self, sessions: list[ScheduledSession]) -> None:
+        current = self.now()
+        if (
+            self._award_sync_at is not None
+            and current - self._award_sync_at < AWARD_SYNC_INTERVAL
+        ):
+            return
+        self._award_sync_at = current
+        try:
+            from racelens.driver_of_day import sync_completed_official_awards
+
+            for year in sorted({session.year for session in sessions}):
+                sync_completed_official_awards(
+                    year,
+                    sessions,
+                    self.config.data_dir / "archive",
+                    self.object_store,
+                    now=current,
+                )
+        except Exception as exc:
+            print(f"official DOTD sync deferred: {type(exc).__name__}", file=sys.stderr)
 
     def process(self, session: ScheduledSession) -> None:
         paths = self._paths(session)
@@ -682,7 +723,10 @@ class Recorder:
             )
             if next_capture is not None and next_capture <= now + REMOTE_CAPTURE_GUARD:
                 return "idle: scheduled capture is approaching"
-            return self._run_remote_once()
+            remote = self._run_remote_once()
+            if remote == "idle":
+                self._sync_completed_awards(sessions)
+            return remote
         self.store.transition(session.session_id, Phase.RECORDING, now)
         try:
             self.capture(session)

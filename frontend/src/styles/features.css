@@ -1035,7 +1035,8 @@
 .dotd-sub,
 .dotd-hero-note { margin-top: 2px; color: var(--dim); font: 13px var(--body); }
 .dotd-empty { padding: 16px 12px; color: var(--dim); font: 600 12px var(--cond); }
-.dotd-hero {
+.dotd-results { flex-shrink: 0; }
+.dotd-result {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -1045,6 +1046,9 @@
   border-left: 3px solid var(--dim);
   background: #0c0c14;
 }
+.dotd-result-pending { border-color: var(--dim); }
+.dotd-result a { text-decoration: none; }
+.dotd-result a:hover { color: var(--ink); }
 .dotd-hero-code { font: italic 800 26px/1 var(--cond); letter-spacing: .06em; }
 .dotd-hero-label { color: var(--dim); font: 600 12px var(--cond); letter-spacing: .2em; }
 .dotd-list { flex: 1; overflow-y: auto; padding: 4px 0; }

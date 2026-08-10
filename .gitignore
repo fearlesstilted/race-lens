@@ -31,3 +31,6 @@ frontend/dist/
 frontend/tsconfig.tsbuildinfo
 backend/fixtures/_capture_*
 backend/fixtures/_radio_cache/
+# Private Whisper evaluation references and audio never enter Git.
+backend/private-radio-eval/
+backend/*radio-reference*.jsonl

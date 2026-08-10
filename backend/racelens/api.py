@@ -40,7 +40,11 @@ from racelens.catalog import (
 )
 from racelens.events_significant import significant_events
 from racelens.commentary.renderer import render_all
-from racelens.driver_of_day import driver_of_day as _driver_of_day
+from racelens.driver_of_day import (
+    award_key,
+    driver_of_day as _driver_of_day,
+    load_official_award,
+)
 from racelens.events.models import load_jsonl
 from racelens.highlights import highlights as _highlights
 from racelens.forecast.overtake import overtake_probability
@@ -1250,13 +1254,28 @@ def get_highlights(
 
 @app.get("/api/sessions/{session_id}/driver-of-day")
 def get_driver_of_day(session_id: str, at_ms: Optional[int] = Query(default=None)) -> dict:
-    """Algorithmic Driver of the Day: top candidates ranked by performance score.
+    """Official fan result plus Race Lens' distinct algorithmic candidates.
 
     Pass at_ms for a spoiler-free provisional pick from the race so far (used when
     the panel unlocks in the final laps). Omit for the full-race result.
     """
     eng = _engine(session_id)
-    return _driver_of_day(eng.events, eng, at_ms=None if at_ms is None else _clamp_at_ms(at_ms))
+    cutoff = None if at_ms is None else _clamp_at_ms(at_ms)
+    result = _driver_of_day(eng.events, eng, at_ms=cutoff)
+    state = eng.state_at(cutoff if cutoff is not None else _race_end_ms(eng))
+    official = None
+    if state["session_status"] == "finished":
+        drivers = {event.driver_id for event in eng.events if event.driver_id is not None}
+        local_award = FIXTURES_DIR / award_key(session_id)
+        record = load_official_award(
+            FIXTURES_DIR, None if local_award.exists() else _object_store(), session_id, drivers,
+        )
+        if record is not None:
+            official = {
+                key: record[key]
+                for key in ("driver", "percentage", "provider", "source_url", "fetched_at")
+            }
+    return {**result, "official_result": official}
 
 
 @app.get("/api/sessions/{session_id}/timeline")
