@@ -76,8 +76,17 @@ def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
             }
 
     class Live:
+        auto_stopped = False
+
         def status(self):
-            return {"data_quality": "good", "last_error": "SECRET_ACCESS_KEY=hidden"}
+            return {
+                "consecutive_failures": 0,
+                "data_quality": "good",
+                "last_error": "SECRET_ACCESS_KEY=hidden",
+            }
+
+    class Capture:
+        alive = False
 
     monkeypatch.setenv("RACELENS_REVISION", "abc1234")
     monkeypatch.setattr(api, "STORAGE_CONFIG", SimpleNamespace(
@@ -86,7 +95,8 @@ def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "REMOTE_CACHE_DIR", tmp_path / "private-bucket")
     monkeypatch.setattr(api, "_remote_cache", lambda: Cache())
     monkeypatch.setattr(api, "_live", Live())
-    monkeypatch.setattr(api, "_capture", object())
+    monkeypatch.setattr(api, "_capture", Capture())
+    monkeypatch.setattr(api, "_live_session_id", "monaco_2024_race")
 
     response = TestClient(api.app).get("/api/diagnostics")
     body = response.json()
@@ -103,8 +113,34 @@ def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
         "disk_bytes": 123,
         "max_bytes": 789,
     }
-    assert body["live"] == {"source": "signalr", "freshness": "fresh"}
+    assert body["live"] == {"source": "signalr", "freshness": "stale"}
     encoded = json.dumps(body)
     assert "SECRET_ACCESS_KEY" not in encoded
     assert "private-bucket" not in encoded
     assert str(tmp_path) not in encoded
+
+
+def test_diagnostics_preserve_signalr_source_after_capture_reap(monkeypatch):
+    import racelens.api as api
+
+    class Live:
+        auto_stopped = True
+
+        def status(self):
+            return {"consecutive_failures": 0, "data_quality": "good"}
+
+    class Capture:
+        alive = False
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(api, "_remote_cache", lambda: None)
+    monkeypatch.setattr(api, "_live", Live())
+    monkeypatch.setattr(api, "_capture", Capture())
+    monkeypatch.setattr(api, "_live_session_id", "monaco_2024_race")
+
+    body = TestClient(api.app).get("/api/diagnostics").json()
+
+    assert api._capture is None
+    assert body["live"] == {"source": "signalr", "freshness": "fresh"}

@@ -55,3 +55,34 @@ def test_recorder_status_reports_current_files_without_paths_or_errors(
     command = json.loads(capsys.readouterr().out)
     assert command["session"]["session_id"] == "2026-10-fp1"
     assert str(tmp_path) not in json.dumps(command)
+
+
+def test_recorder_status_cli_sanitizes_corrupt_state(tmp_path, monkeypatch, capsys):
+    from racelens import cli
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "recorder.json").write_text("not json: /private/recorder", encoding="utf-8")
+    monkeypatch.setenv("RACELENS_RECORDER_DATA", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["racelens", "recorder-status", "--json"])
+
+    cli.main()
+    output = capsys.readouterr()
+    body = json.loads(output.out)
+
+    assert output.err == ""
+    assert body["error"] == "state_unavailable"
+    assert str(tmp_path) not in output.out
+    assert "/private/recorder" not in output.out
+
+
+def test_recorder_status_sanitizes_state_permission_failure(tmp_path, monkeypatch):
+    def denied(_self):
+        raise PermissionError(f"denied: {tmp_path}")
+
+    monkeypatch.setattr(StateStore, "load", denied)
+
+    body = recorder_status(tmp_path)
+
+    assert body["error"] == "state_unavailable"
+    assert str(tmp_path) not in json.dumps(body)

@@ -5,13 +5,16 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from racelens.recorder.state import StateStore
+from racelens.recorder.state import CorruptStateError, StateStore
 
 
 def _age(path: Path, now: datetime) -> float | None:
-    if path.is_symlink() or not path.is_file():
+    try:
+        if path.is_symlink() or not path.is_file():
+            return None
+        return round(max(0.0, now.timestamp() - path.stat().st_mtime), 3)
+    except OSError:
         return None
-    return round(max(0.0, now.timestamp() - path.stat().st_mtime), 3)
 
 
 def _publication(directory: Path, session_id: str) -> str:
@@ -33,9 +36,18 @@ def _publication(directory: Path, session_id: str) -> str:
 
 def recorder_status(base: Path, now: datetime | None = None) -> dict:
     current = now or datetime.now(UTC)
-    state = StateStore(base / "state" / "recorder.json").load()
-    latest = max(state.sessions.items(), key=lambda item: item[1].updated_at, default=None)
     heartbeat_age = _age(base / "state" / "heartbeat", current)
+    try:
+        state = StateStore(base / "state" / "recorder.json").load()
+    except (CorruptStateError, OSError):
+        return {
+            "heartbeat_age_seconds": heartbeat_age,
+            "session": None,
+            "raw": None,
+            "publication": "unknown",
+            "error": "state_unavailable",
+        }
+    latest = max(state.sessions.items(), key=lambda item: item[1].updated_at, default=None)
     if latest is None:
         return {
             "heartbeat_age_seconds": heartbeat_age,

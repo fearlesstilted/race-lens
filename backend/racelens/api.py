@@ -466,11 +466,14 @@ def diagnostics() -> dict:
     if _live is None:
         live = {"source": "none", "freshness": "inactive"}
     else:
-        quality = _live.status().get("data_quality")
+        quality = _live_health_status().get("data_quality")
         freshness = {"good": "fresh", "degraded": "degraded", "stalled": "stale"}.get(
             quality, "unknown",
         )
-        live = {"source": "signalr" if _capture is not None else "openf1", "freshness": freshness}
+        live = {
+            "source": "signalr" if _live_session_id is not None else "openf1",
+            "freshness": freshness,
+        }
     return {
         "revision": _revision(),
         "parsed_cache": {
@@ -770,21 +773,28 @@ def _reap_capture_if_stopped() -> None:
         _capture = None
 
 
-@app.get("/api/live/status")
-async def live_status() -> dict:
-    if _live is None:
-        raise HTTPException(404, "No live session active")
+def _live_health_status() -> dict[str, Any]:
+    """Apply source-specific liveness once for public status and diagnostics."""
+    assert _live is not None
     _reap_capture_if_stopped()
     status = _live.status()
-    # Fields the frontend contract expects (LiveStatusResult).
-    status["is_running"] = _live.is_running
-    status["poll_count"] = status["polls"]
     status["last_poll_ok"] = status["consecutive_failures"] == 0
-    if _capture is not None:
+    if _live_session_id is not None and _capture is not None:
         status["capture_alive"] = _capture.alive
         if not _capture.alive:
             status["data_quality"] = "stalled"
             status["last_poll_ok"] = False
+    return status
+
+
+@app.get("/api/live/status")
+async def live_status() -> dict:
+    if _live is None:
+        raise HTTPException(404, "No live session active")
+    status = _live_health_status()
+    # Fields the frontend contract expects (LiveStatusResult).
+    status["is_running"] = _live.is_running
+    status["poll_count"] = status["polls"]
     return status
 
 
