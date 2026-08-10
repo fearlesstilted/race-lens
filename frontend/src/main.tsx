@@ -19,8 +19,8 @@ import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
-import { readDashboardLayout, readReviewDock, writeDashboardLayout, writeReviewDock } from './features/replay/replayTypes'
-import type { DashboardLayout, ReviewDock } from './features/replay/replayTypes'
+import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
+import type { DashboardLayout } from './features/replay/replayTypes'
 import { useReplay } from './features/replay/useReplay'
 import { lapAtTime } from './lib/format'
 import { focusDriverIds } from './lib/insightFocus'
@@ -94,7 +94,6 @@ function App() {
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
-  const [reviewDock, setReviewDock] = useState(readReviewDock)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
@@ -111,10 +110,6 @@ function App() {
   const handleDashboardLayout = useCallback((layout: DashboardLayout) => {
     setDashboardLayout(layout)
     writeDashboardLayout(layout)
-  }, [])
-  const handleReviewDock = useCallback((dock: ReviewDock) => {
-    setReviewDock(dock)
-    writeReviewDock(dock)
   }, [])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
@@ -334,13 +329,11 @@ function App() {
         liveAvailable={liveAvailable}
         projection={projection}
         dashboardLayout={dashboardLayout}
-        reviewDock={reviewDock}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
         onProjection={setProjection}
         onDashboardLayout={handleDashboardLayout}
-        onReviewDock={handleReviewDock}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         sessionStatus={sessionStatus}
@@ -358,7 +351,6 @@ function App() {
         liveAvailable={liveAvailable}
         projection={projection}
         voice={voice}
-        reviewDock={reviewDock}
         onModeChange={handleModeSwitch}
         onLevel={replay.setLevel}
         onVoice={setVoice}
