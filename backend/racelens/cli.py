@@ -5,6 +5,7 @@
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -214,6 +215,41 @@ def _cmd_radio_transcribe(args: argparse.Namespace) -> None:
     print(f"radio-transcribe: {done} transcripts → {args.fixture}", file=sys.stderr)
 
 
+def _award_store():
+    from racelens.object_storage import S3Store, StorageConfig
+
+    config = StorageConfig.from_env()
+    return S3Store(config) if config is not None else None
+
+
+def _cmd_driver_of_day_import(args: argparse.Namespace) -> None:
+    from racelens.driver_of_day import sync_official_award
+
+    root = Path(args.fixtures)
+    record = sync_official_award(
+        args.year, args.meeting, args.replay_id, root, _award_store(),
+    )
+    print(json.dumps(record, separators=(",", ":"), sort_keys=True))
+
+
+def _cmd_driver_of_day_sync_2026(args: argparse.Namespace) -> None:
+    from racelens.driver_of_day import sync_completed_official_awards
+    from racelens.recorder.schedule import load_fastf1_schedule
+
+    report = sync_completed_official_awards(
+        2026, load_fastf1_schedule(2026), Path(args.fixtures), _award_store(),
+    )
+    print(json.dumps(report, separators=(",", ":"), sort_keys=True))
+
+
+def _cmd_radio_evaluate(args: argparse.Namespace) -> None:
+    from racelens.radio.evaluate import format_report, evaluate_manifest
+
+    report = evaluate_manifest(Path(args.manifest))
+    print(json.dumps(report, separators=(",", ":"), sort_keys=True))
+    print(format_report(report), file=sys.stderr)
+
+
 def _cmd_state(args: argparse.Namespace) -> None:
     from racelens.events.models import load_jsonl
     from racelens.replay.engine import ReplayEngine
@@ -221,6 +257,13 @@ def _cmd_state(args: argparse.Namespace) -> None:
     events = load_jsonl(Path(args.events_file).read_text(encoding="utf-8"))
     engine = ReplayEngine(events)
     print(json.dumps(engine.state_at(args.at_ms), indent=2))
+
+
+def _cmd_recorder_status(args: argparse.Namespace) -> None:
+    from racelens.recorder.status import recorder_status
+
+    base = Path(os.environ.get("RACELENS_RECORDER_DATA", "/var/lib/race-lens-recorder"))
+    print(json.dumps(recorder_status(base), indent=None if args.json else 2, sort_keys=True))
 
 
 # ── Parser / dispatch ──────────────────────────────────────────────────────────
@@ -322,10 +365,41 @@ def main() -> None:
     p_radio.add_argument("fixture", help="replay fixture .jsonl with audio_url radio events")
     p_radio.set_defaults(func=_cmd_radio_transcribe)
 
+    p_radio_eval = sub.add_parser(
+        "radio-evaluate", help="evaluate three Whisper profiles on 50 private local clips"
+    )
+    p_radio_eval.add_argument("manifest", help="gitignored 50-record JSONL reference manifest")
+    p_radio_eval.set_defaults(func=_cmd_radio_evaluate)
+
+    p_dotd = sub.add_parser(
+        "driver-of-day-import", help="import one exact official F1 fan-vote result"
+    )
+    p_dotd.add_argument("year", type=int)
+    p_dotd.add_argument("meeting", help="exact meeting identity, e.g. 'Hungarian Grand Prix'")
+    p_dotd.add_argument("replay_id", help="existing Race replay fixture ID")
+    p_dotd.add_argument(
+        "--fixtures", default=os.environ.get("RACELENS_FIXTURES", "fixtures"),
+    )
+    p_dotd.set_defaults(func=_cmd_driver_of_day_import)
+
+    p_dotd_sync = sub.add_parser(
+        "driver-of-day-sync-2026", help="one-shot sync of completed 2026 Race replays"
+    )
+    p_dotd_sync.add_argument(
+        "--fixtures", default=os.environ.get("RACELENS_FIXTURES", "fixtures"),
+    )
+    p_dotd_sync.set_defaults(func=_cmd_driver_of_day_sync_2026)
+
     p_state = sub.add_parser("state", help="print race state at a timestamp")
     p_state.add_argument("events_file", help="events .jsonl")
     p_state.add_argument("--at-ms", type=int, required=True)
     p_state.set_defaults(func=_cmd_state)
+
+    p_recorder_status = sub.add_parser(
+        "recorder-status", help="print sanitized recorder health and publication state",
+    )
+    p_recorder_status.add_argument("--json", action="store_true", help="emit compact JSON")
+    p_recorder_status.set_defaults(func=_cmd_recorder_status)
 
     args = parser.parse_args()
     args.func(args)

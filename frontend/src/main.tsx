@@ -19,16 +19,29 @@ import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
-import { readDashboardLayout, writeDashboardLayout } from './features/replay/replayTypes'
-import type { DashboardLayout } from './features/replay/replayTypes'
+import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
+import { HighlightsPanel } from './features/replay/HighlightsPanel'
+import { WorkspaceGrid } from './features/replay/WorkspaceGrid'
+import {
+  readMobileCenter,
+  readWorkspaces,
+  resetWorkspace,
+  updateWorkspaceWidget,
+  workspaceAction,
+  writeMobileCenter,
+  writeWorkspace,
+} from './features/replay/workspace'
+import type { MobileCenter } from './features/replay/workspace'
 import { useReplay } from './features/replay/useReplay'
-import { lapAtTime } from './lib/format'
+import { lapAtTime, sessionLabel } from './lib/format'
 import { focusDriverIds } from './lib/insightFocus'
-import { livePresentation } from './lib/liveStatus'
+import { liveLifecycle, livePresentation } from './lib/liveStatus'
 import './style.css'
 import './styles/dashboard.css'
 import './styles/responsive.css'
 import './styles/features.css'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
 
 // ── Live status pill ──────────────────────────────────────────────────────────
 
@@ -83,8 +96,19 @@ type AppMode = 'replay' | 'live'
 type MobTab = 'TIMING' | 'MAP' | 'INSIGHTS' | 'FEED'
 const MOB_TABS: MobTab[] = ['TIMING', 'MAP', 'INSIGHTS', 'FEED']
 
+function useDesktopWorkspace() {
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1025px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1025px)')
+    const update = () => setDesktop(query.matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+  return desktop
+}
+
 function App() {
-  const initialParams = new URLSearchParams(window.location.search)
+  const initialParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const initialCatalogId = initialParams.get('catalog')
   const initialSessionId = initialParams.get('session')
   const initialCatalogSeason = initialCatalogId && /^\d{4}-/.test(initialCatalogId)
@@ -92,24 +116,34 @@ function App() {
     : undefined
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
+  const [workspaces, setWorkspaces] = useState(readWorkspaces)
+  const [mobileCenter, setMobileCenter] = useState<MobileCenter>(() => readMobileCenter())
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [dashboardLayout, setDashboardLayout] = useState(readDashboardLayout)
-  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) || !initialSessionId)
+  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
+  const [replayPinned, setReplayPinned] = useState(Boolean(initialSessionId))
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
+  const [startupReady, setStartupReady] = useState(false)
+  const [readonlyDeployment, setReadonlyDeployment] = useState<boolean | null>(null)
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveStopping, setLiveStopping] = useState(false)
-  const [liveAvailable, setLiveAvailable] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
-  const handleDashboardLayout = useCallback((layout: DashboardLayout) => {
-    setDashboardLayout(layout)
-    writeDashboardLayout(layout)
+  const desktopWorkspace = useDesktopWorkspace()
+  const workspace = workspaces[mode]
+  const handleWorkspace = useCallback((layout: typeof workspace) => {
+    setWorkspaces(writeWorkspace(mode, layout))
+  }, [mode])
+  const handleWorkspaceReset = useCallback(() => {
+    setWorkspaces(resetWorkspace(mode))
+  }, [mode])
+  const handleMobileCenter = useCallback((center: MobileCenter) => {
+    setMobileCenter(writeMobileCenter(center))
   }, [])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
@@ -139,8 +173,43 @@ function App() {
   const replay = useReplay(source)
   useVoiceAlerts(replay.feed, voice, replay.lang, mode === 'replay' ? sessionId : 'live')
 
+  const liveDecision = liveLifecycle(liveStatusData, {
+    readonly: readonlyDeployment !== false,
+    explicitReplay: replayPinned,
+    attachedToLive: mode === 'live' && isLiveActive,
+  })
+  const liveAvailable = liveDecision.canManage || liveDecision.remoteAvailable || isLiveActive
+
+  const adoptReplay = useCallback((id: string) => {
+    replay.pause()
+    setMode('replay')
+    setIsLiveActive(false)
+    setReplayPinned(true)
+    setSelectedIds([])
+    setCenterTab('FEED')
+    setSessionNotice(null)
+    setSessionId(id)
+    setCatalogOpen(false)
+    const url = new URL(window.location.href)
+    url.searchParams.set('session', id)
+    url.searchParams.delete('catalog')
+    window.history.replaceState(null, '', url)
+  }, [replay.pause])
+
+  const adoptLive = useCallback(() => {
+    replay.pause()
+    setMode('live')
+    setIsLiveActive(true)
+    setReplayPinned(false)
+    setCatalogOpen(false)
+    setLiveError(null)
+    setCenterTab('FEED')
+    setSelectedIds([])
+  }, [replay.pause])
+
   const loadSessions = useCallback(() => {
     let cancelled = false
+    const requestedAtStart = new URLSearchParams(window.location.search).get('session')
     setSessionError(null)
     setBackendPhase('connecting')
     const wakeTimer = window.setTimeout(() => {
@@ -151,6 +220,10 @@ function App() {
         if (cancelled) return
         window.clearTimeout(wakeTimer)
         const requested = new URLSearchParams(window.location.search).get('session')
+        if (requested !== requestedAtStart) {
+          setBackendPhase('ready')
+          return
+        }
         const requestedSession = items.find((item) => item.session_id === requested)
         const initialSession = requestedSession?.session_id ?? null
         setSessionId((current) => (
@@ -185,42 +258,62 @@ function App() {
     return loadSessions()
   }, [loadSessions])
 
+  // Resolve public/live routing before opening the catalog, so production Live
+  // never flashes the replay picker on first load.
   useEffect(() => {
     let cancelled = false
-    getCapabilities()
-      .then((value) => {
-        if (cancelled) return
-        setLiveAvailable(!value.readonly)
-        setSignalrAvailable(value.signalr_available)
-      })
-      .catch(() => undefined)
+    void Promise.allSettled([getCapabilities(), liveStatus()]).then(([capabilities, status]) => {
+      if (cancelled) return
+      const readonly = capabilities.status === 'fulfilled' ? capabilities.value.readonly : true
+      setReadonlyDeployment(readonly)
+      if (capabilities.status === 'fulfilled') {
+        setSignalrAvailable(capabilities.value.signalr_available)
+      }
+      if (status.status === 'fulfilled') {
+        setLiveStatusData(status.value)
+        const decision = liveLifecycle(status.value, {
+          readonly,
+          explicitReplay: Boolean(initialSessionId),
+          attachedToLive: false,
+        })
+        if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
+        else if (decision.enterLive) adoptLive()
+        else if (!initialSessionId) setCatalogOpen(true)
+      } else if (!initialSessionId) {
+        setCatalogOpen(true)
+      }
+      setStartupReady(true)
+    })
     return () => { cancelled = true }
-  }, [])
+  }, [adoptLive, adoptReplay, initialSessionId])
 
-  // Reattach after refresh: if the backend already runs a live session, adopt
-  // it — otherwise F5 lands in the lobby and a new START just 409s.
+  // Public deployments keep discovering lifecycle changes; attached local Live
+  // uses the same five-second poll. Failed polls retain the last truthful state.
   useEffect(() => {
-    if (mode !== 'live' || isLiveActive) return
+    if (!startupReady || !(readonlyDeployment === true || mode === 'live' || isLiveActive)) return
     let cancelled = false
-    liveStatus()
-      .then((s) => { if (!cancelled && s.is_running) setIsLiveActive(true) })
-      .catch(() => undefined)
-    return () => { cancelled = true }
-  }, [mode, isLiveActive])
-
-  // Poll live status every 5 s when live is active
-  useEffect(() => {
-    if (!isLiveActive || mode !== 'live') return
-    let cancelled = false
+    let inFlight = false
     const poll = () => {
+      if (inFlight) return
+      inFlight = true
       liveStatus()
-        .then((s) => { if (!cancelled) setLiveStatusData(s) })
-        .catch(() => { if (!cancelled) setLiveStatusData(null) })
+        .then((status) => {
+          if (cancelled) return
+          setLiveStatusData(status)
+          const decision = liveLifecycle(status, {
+            readonly: readonlyDeployment !== false,
+            explicitReplay: replayPinned,
+            attachedToLive: mode === 'live' && isLiveActive,
+          })
+          if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
+          else if (decision.enterLive) adoptLive()
+        })
+        .catch(() => undefined)
+        .finally(() => { inFlight = false })
     }
-    poll()
     const id = window.setInterval(poll, 5000)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [isLiveActive, mode])
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [adoptLive, adoptReplay, isLiveActive, mode, readonlyDeployment, replayPinned, startupReady])
 
   // Esc to clear selection
   useEffect(() => {
@@ -231,14 +324,18 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const handleSelectDriver = useCallback((id: string) => {
-    setMobTab('INSIGHTS')
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id)
-      if (prev.length >= 2) return [prev[1], id]
-      return [...prev, id]
-    })
-  }, [])
+  const handleWidgetAction = useCallback((
+    source: 'timing' | 'battle' | 'strategy' | 'feed',
+    ids: string[],
+    atMs?: number,
+  ) => {
+    const action = workspaceAction(mode, source, ids, atMs)
+    if (action.focusIds.length > 0) {
+      setSelectedIds(action.focusIds)
+      setMobTab('INSIGHTS')
+    }
+    if (action.seekMs !== null) replay.scrub(action.seekMs)
+  }, [mode, replay.scrub])
 
   const handleFocusDrivers = useCallback((ids: string[]) => {
     const focused = focusDriverIds(ids)
@@ -250,22 +347,21 @@ function App() {
   const handleModeSwitch = (next: AppMode) => {
     if (next === mode) return
     if (next === 'live' && !liveAvailable) return
+    if (next === 'live' && (liveDecision.remoteAvailable || liveStatusData?.is_running)) {
+      adoptLive()
+      return
+    }
     replay.pause()
     setMode(next)
+    setIsLiveActive(false)
+    setReplayPinned(next === 'replay')
     setLiveError(null)
     setCenterTab('FEED')
     setSelectedIds([])
   }
 
   const handleSessionChange = (id: string) => {
-    replay.pause()
-    setSelectedIds([])
-    setSessionNotice(null)
-    setSessionId(id)
-    const url = new URL(window.location.href)
-    url.searchParams.set('session', id)
-    url.searchParams.delete('catalog')
-    window.history.replaceState(null, '', url)
+    adoptReplay(id)
   }
 
   const state = replay.state
@@ -284,7 +380,19 @@ function App() {
   const sessionStatus = state?.session_status ?? 'started'
   const liveView = livePresentation(liveStatusData, state !== null, replay.error)
 
-  if (sessionError) {
+  if (!startupReady) {
+    return (
+      <div className="error-screen wake-screen" role="status" aria-live="polite">
+        <div>
+          <span className="wake-pulse" />
+          <h2>Connecting</h2>
+          <p>Checking replay and Live availability.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (sessionError && mode === 'replay') {
     return (
       <div className="error-screen">
         <div>
@@ -310,6 +418,126 @@ function App() {
 
   // Build liveLabel for deck clock from current state lap
   const liveLabel = state && currentLap > 0 ? `LAP ${currentLap}` : null
+  const liveSessionName = state?.session_name ?? (
+    liveStatusData?.replay_session_id ? sessionLabel(liveStatusData.replay_session_id) : null
+  )
+  const projectionOn = desktopWorkspace ? workspace.widgets.pace.visible : projection
+  const handleProjection = (value: boolean) => {
+    setProjection(value)
+    if (desktopWorkspace) {
+      handleWorkspace(updateWorkspaceWidget(workspace, mode, 'pace', { visible: value }))
+    }
+  }
+
+  const workspaceWidgets = {
+    timing: (
+      <TimingTower
+        rows={rows}
+        battles={replay.battles}
+        selectedIds={selectedIds}
+        onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+      />
+    ),
+    battles: (
+      <>
+        {mode === 'replay' && (
+          <BroadcastOverlay
+            atMs={replay.atMs}
+            playing={replay.playing}
+            speed={replay.speed}
+            lang={replay.lang}
+            markers={replay.markers}
+            feed={replay.feed}
+          />
+        )}
+        <BattleIntelligence
+          rows={rows}
+          battles={replay.battles}
+          currentLap={currentLap}
+          totalLaps={state?.total_laps ?? null}
+          onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+          onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
+        />
+      </>
+    ),
+    track: (
+      <TrackMap
+        key={mode === 'replay' ? sessionId ?? 'replay' : state?.session_id ?? 'live'}
+        sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
+        atMs={replay.atMs}
+        playing={replay.playing}
+        playbackSpeed={replay.speed}
+        drivers={state?.drivers ?? {}}
+        classification={state?.classification ?? []}
+        totalLaps={state?.total_laps}
+        sessionStatus={sessionStatus}
+        neutralizationStartMs={replay.neutralizationStartMs}
+        selectedIds={selectedIds}
+        positionsData={effectivePositionsData}
+        battles={replay.battles}
+        recentPasses={replay.recentPasses}
+      />
+    ),
+    insights: hasFocus ? (
+      <div className="col col-insights col-focus">
+        <div className="label">DRIVER FOCUS</div>
+        <FocusPanel
+          selectedIds={selectedIds}
+          drivers={state?.drivers ?? {}}
+          sessionId={mode === 'replay' ? sessionId : null}
+          live={mode === 'live' && isLiveActive}
+          atMs={replay.atMs}
+          lap={currentLap}
+          onStrategyRequest={mode === 'replay' ? replay.pause : undefined}
+        />
+      </div>
+    ) : (
+      <InsightPanel
+        key={mode === 'replay' ? sessionId ?? 'replay' : 'live'}
+        insights={mode !== 'replay' || timeline?.session_id === sessionId ? replay.insights : []}
+        commentary={mode !== 'replay' || timeline?.session_id === sessionId ? replay.commentary : []}
+        selectedIds={selectedIds}
+        sessionStatus={sessionStatus}
+        sessionId={mode === 'replay' ? sessionId : null}
+        atMs={replay.atMs}
+        onFocusDrivers={handleFocusDrivers}
+      />
+    ),
+    feed: (
+      <RaceFeed
+        key={mode === 'replay' ? sessionId : 'live'}
+        items={replay.feed}
+        loading={replay.loading}
+        clockOriginMs={mode === 'replay' && timeline?.session_id === sessionId ? timeline.lights_out_ms : undefined}
+        onActivate={(item) => handleWidgetAction('feed', item.driver_id ? [item.driver_id] : [], item.at_ms)}
+        isActionable={(item) => mode === 'replay' || Boolean(item.driver_id)}
+      />
+    ),
+    strategy: mode === 'replay' && sessionId ? (
+      <StintTimeline
+        sessionId={sessionId}
+        currentLap={currentLap}
+        order={state?.classification}
+        onSelectDriver={(id) => handleWidgetAction('strategy', [id])}
+      />
+    ) : null,
+    pace: mode === 'replay'
+      ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
+      : isLiveActive && <ForecastStrip live atMs={replay.atMs} />,
+    highlights: mode === 'replay' && sessionId ? (
+      <HighlightsPanel sessionId={sessionId} lang={replay.lang} untilMs={replay.atMs} onSeek={replay.scrub} />
+    ) : null,
+    dotd: mode === 'replay' && sessionId ? (
+      <DriverOfDayPanel
+        sessionId={sessionId}
+        lang={replay.lang}
+        sessionStatus={sessionStatus}
+        lap={currentLap}
+        totalLaps={state?.total_laps ?? null}
+        atMs={replay.atMs}
+      />
+    ) : null,
+  }
 
   return (
     <>
@@ -327,13 +555,13 @@ function App() {
         level={replay.level}
         mode={mode}
         liveAvailable={liveAvailable}
-        projection={projection}
-        dashboardLayout={dashboardLayout}
+        liveNowAvailable={liveDecision.showLiveNow}
+        workspace={workspace}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
-        onProjection={setProjection}
-        onDashboardLayout={handleDashboardLayout}
+        onWorkspace={handleWorkspace}
+        onWorkspaceReset={handleWorkspaceReset}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         sessionStatus={sessionStatus}
@@ -349,21 +577,24 @@ function App() {
         level={replay.level}
         mode={mode}
         liveAvailable={liveAvailable}
-        projection={projection}
+        liveNowAvailable={liveDecision.showLiveNow}
+        projection={projectionOn}
         voice={voice}
         onModeChange={handleModeSwitch}
         onLevel={replay.setLevel}
         onVoice={setVoice}
-        onProjection={setProjection}
+        onProjection={handleProjection}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
-        sessionName={mode === 'live' ? state?.session_name ?? null : null}
+        anchoredHighlights={!desktopWorkspace || !workspace.widgets.highlights.visible}
+        anchoredDotd={!desktopWorkspace || !workspace.widgets.dotd.visible}
+        sessionName={mode === 'live' ? liveSessionName : null}
       />
 
-      {mode === 'live' && !isLiveActive && (
+      {liveDecision.canManage && mode === 'live' && !isLiveActive && (
         <LiveLobby
           signalrAvailable={signalrAvailable}
           onStart={async (y, c, sessionName, source) => {
@@ -378,26 +609,28 @@ function App() {
         <div className="live-bar">
           <LiveStatusPill presentation={liveView} />
           {liveError && <span className="live-err">{liveError}</span>}
-          <button
-            className="b danger"
-            type="button"
-            disabled={liveStopping}
-            onClick={async () => {
-              setLiveStopping(true)
-              try {
-                await liveStop()
-                setIsLiveActive(false)
-                setLiveStatusData(null)
-                setLiveError(null)
-              } catch (error) {
-                setLiveError(error instanceof Error ? error.message : 'Failed to stop live session')
-              } finally {
-                setLiveStopping(false)
-              }
-            }}
-          >
-            {liveStopping ? 'STOPPING…' : 'STOP'}
-          </button>
+          {liveDecision.canManage && (
+            <button
+              className="b danger"
+              type="button"
+              disabled={liveStopping}
+              onClick={async () => {
+                setLiveStopping(true)
+                try {
+                  await liveStop()
+                  setIsLiveActive(false)
+                  setLiveStatusData(null)
+                  setLiveError(null)
+                } catch (error) {
+                  setLiveError(error instanceof Error ? error.message : 'Failed to stop live session')
+                } finally {
+                  setLiveStopping(false)
+                }
+              }}
+            >
+              {liveStopping ? 'STOPPING…' : 'STOP'}
+            </button>
+          )}
         </div>
       )}
 
@@ -437,23 +670,25 @@ function App() {
                   type="button"
                   className={`mob-tab${mobTab === tab ? ' mob-tab-on' : ''}`}
                   onClick={() => setMobTab(tab)}
-                >{tab === 'MAP' ? dashboardLayout.center.toUpperCase() : tab}</button>
+                >{tab === 'MAP' ? mobileCenter.toUpperCase() : tab}</button>
               ))}
             </div>
           </div>
 
-          <div
-            className="wrap"
-            data-mob-tab={mobTab}
-            data-show-timing={dashboardLayout.timing}
-            data-show-insights={dashboardLayout.insights}
-            data-show-feed={dashboardLayout.feed}
-          >
+          {desktopWorkspace ? (
+            <WorkspaceGrid
+              mode={mode}
+              workspace={workspace}
+              widgets={workspaceWidgets}
+              onChange={handleWorkspace}
+            />
+          ) : (
+          <div className="wrap" data-mob-tab={mobTab}>
             <TimingTower
               rows={rows}
               battles={replay.battles}
               selectedIds={selectedIds}
-              onSelectDriver={handleSelectDriver}
+              onSelectDriver={(id) => handleWidgetAction('timing', [id])}
             />
 
             <div className="col col-center">
@@ -474,22 +709,23 @@ function App() {
                     <button
                       key={center}
                       type="button"
-                      className={dashboardLayout.center === center ? 'on' : ''}
-                      aria-pressed={dashboardLayout.center === center}
-                      onClick={() => handleDashboardLayout({ ...dashboardLayout, center })}
+                      className={mobileCenter === center ? 'on' : ''}
+                      aria-pressed={mobileCenter === center}
+                      onClick={() => handleMobileCenter(center)}
                     >
                       {center.toUpperCase()}
                     </button>
                   ))}
                 </div>
               </div>
-              {dashboardLayout.center === 'battles' ? (
+              {mobileCenter === 'battles' ? (
                 <BattleIntelligence
                   rows={rows}
                   battles={replay.battles}
                   currentLap={currentLap}
                   totalLaps={state?.total_laps ?? null}
-                  onSelectDriver={handleSelectDriver}
+                  onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+                  onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
                 />
               ) : (
                 <TrackMap
@@ -524,10 +760,17 @@ function App() {
                       items={replay.feed}
                       loading={replay.loading}
                       clockOriginMs={mode === 'replay' && timeline?.session_id === sessionId ? timeline.lights_out_ms : undefined}
+                      onActivate={(item) => handleWidgetAction('feed', item.driver_id ? [item.driver_id] : [], item.at_ms)}
+                      isActionable={(item) => mode === 'replay' || Boolean(item.driver_id)}
                     />
                   )}
                   {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
-                    <StintTimeline sessionId={sessionId} currentLap={currentLap} order={state?.classification} />
+                    <StintTimeline
+                      sessionId={sessionId}
+                      currentLap={currentLap}
+                      order={state?.classification}
+                      onSelectDriver={(id) => handleWidgetAction('strategy', [id])}
+                    />
                   )}
                   {centerTab === 'PACE' && projection && (
                     mode === 'replay'
@@ -565,6 +808,7 @@ function App() {
               />
             )}
           </div>
+          )}
 
           <ReplayDeck
             timeline={timeline}

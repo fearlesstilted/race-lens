@@ -6,18 +6,26 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:desktop": "tsc -b && vite build --mode desktop",
     "check:insight-focus": "node scripts/check-insight-focus.ts",
+    "check:live-lifecycle": "node scripts/check-live-lifecycle.ts",
+    "check:dotd": "node scripts/check-dotd-order.ts",
     "check:stints": "node scripts/check-stints.ts",
     "check:ui": "node scripts/check-broadcast-overlay.ts",
     "check:track": "node scripts/check-track-interpolation.ts",
+    "check:workspace": "node scripts/check-workspace.ts",
+    "check:desktop": "node scripts/check-desktop.ts",
     "lint": "eslint src",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "react-grid-layout": "2.2.4"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",

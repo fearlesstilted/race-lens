@@ -128,6 +128,8 @@ export type RaceState = {
   recent_passes?: RecentPass[]
   /** Live-only: battles embedded directly in the stream frame (replay fetches via /battles). */
   battles?: Battle[]
+  /** Stream-rendered WTW copy for the selected language and detail level. */
+  commentary?: CommentaryItem[]
 }
 
 export type InsightsResponse = {
@@ -139,6 +141,7 @@ export type FeedItem = {
   id: string
   at_ms: number
   lap: number | null
+  driver_id?: string | null
   text: string
   kind: string // 'status' | 'fastest_lap' | 'pit' | 'info' | ...
   tag?: 'PIT' | 'FLAG' | 'FASTEST' | 'FINISH' | 'PASS' | 'INFO'
@@ -295,6 +298,13 @@ export type DotdCandidate = {
 export type DotdResponse = {
   candidates: DotdCandidate[]
   computed_pick: string | null
+  official_result: {
+    driver: string
+    percentage: number
+    provider: 'Formula 1 fan vote'
+    source_url: string
+    fetched_at: string
+  } | null
 }
 
 // ── What-If counterfactual ────────────────────────────────────────────────────

@@ -409,27 +409,3 @@
     font-size: clamp(23px, 1.1vw, 27px);
   }
 }
-
-/* Desktop workspace customization remains docked and cannot break mobile tabs. */
-@media (min-width: 1025px) {
-  .wrap[data-show-timing="false"] .col-timing,
-  .wrap[data-show-insights="false"] .col-insights,
-  .wrap[data-show-feed="false"] .ctr-bottom {
-    display: none;
-  }
-  .wrap[data-show-timing="false"][data-show-insights="true"] {
-    grid-template-columns: minmax(0, 1fr) clamp(240px, 20vw, 370px);
-  }
-  .wrap[data-show-timing="true"][data-show-insights="false"] {
-    grid-template-columns: clamp(280px, 22vw, 380px) minmax(0, 1fr);
-  }
-  .wrap[data-show-timing="false"][data-show-insights="false"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .wrap[data-show-feed="false"] .battle-intelligence,
-  .wrap[data-show-feed="false"] .map {
-    flex: 1;
-    height: auto;
-    min-height: 0;
-  }
-}

@@ -234,14 +234,7 @@ def catalog_session(
     queue: Any,
 ) -> dict:
     expected_id = fixture_stem(session)
-    venue, suffix = expected_id.split(f"_{session.year}_", 1)
-    candidates = [expected_id]
-    if venue in _VENUE_ALIASES:
-        candidates.append(f"{_VENUE_ALIASES[venue]}_{session.year}_{suffix}")
-    replay_id = next(
-        (item for item in candidates if (fixtures_dir / f"{item}.jsonl").is_file()),
-        expected_id,
-    )
+    replay_id = local_replay_id(session, fixtures_dir) or expected_id
     if (fixtures_dir / f"{replay_id}.jsonl").is_file():
         status, job_id = "ready", None
     else:
@@ -267,6 +260,19 @@ def catalog_session(
         "replay_session_id": replay_id,
         "job_id": job_id,
     }
+
+
+def local_replay_id(session: ScheduledSession, fixtures_dir: Path) -> str | None:
+    """Return the existing local replay ID, including established venue aliases."""
+    expected_id = fixture_stem(session)
+    venue, suffix = expected_id.split(f"_{session.year}_", 1)
+    candidates = [expected_id]
+    if venue in _VENUE_ALIASES:
+        candidates.append(f"{_VENUE_ALIASES[venue]}_{session.year}_{suffix}")
+    return next(
+        (item for item in candidates if (fixtures_dir / f"{item}.jsonl").is_file()),
+        None,
+    )
 
 
 def build_catalog(

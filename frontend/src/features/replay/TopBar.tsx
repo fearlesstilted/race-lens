@@ -14,6 +14,7 @@ type Props = {
   level: Level
   mode: AppMode
   liveAvailable: boolean
+  liveNowAvailable: boolean
   projection: boolean
   voice: boolean
   onModeChange: (mode: AppMode) => void
@@ -25,11 +26,13 @@ type Props = {
   onCatalogOpen?: () => void
   sessionStatus?: string
   atMs?: number
+  anchoredHighlights?: boolean
+  anchoredDotd?: boolean
   /** Live-only session badge text, e.g. "SILVERSTONE · RACE". */
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, sessionName }: Props) {
+export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, liveNowAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, anchoredHighlights = true, anchoredDotd = true, sessionName }: Props) {
   const current = sessionId ? sessionMeta(sessionId) : null
   const sessionTriggerLabel = current?.year
     ? `${current.year} · ${current.event} · ${sessionTypeLabel(current.type)}`
@@ -71,7 +74,7 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
               type="button"
               className={`tog${mode === 'live' ? ' tog-on' : ''}`}
               onClick={() => onModeChange('live')}
-            >LIVE</button>
+            >{liveNowAvailable ? 'LIVE NOW' : 'LIVE'}</button>
           )}
         </div>
         {/* LAYERS popover — collects the optional view layers so the bar stays clean. */}
@@ -137,10 +140,10 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
       </div>
 
       {/* Replay review panels; the catalog owns session selection. */}
-      {mode === 'replay' && sessionId && onSeek && (
+      {mode === 'replay' && sessionId && onSeek && (anchoredHighlights || anchoredDotd) && (
         <div className="top-panels">
-          <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={onSeek} />
-          <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />
+          {anchoredHighlights && <HighlightsPanel sessionId={sessionId} lang={lang} untilMs={atMs} onSeek={onSeek} />}
+          {anchoredDotd && <DriverOfDayPanel sessionId={sessionId} lang={lang} sessionStatus={sessionStatus} lap={lap} totalLaps={totalLaps} atMs={atMs} />}
         </div>
       )}
 

@@ -23,6 +23,11 @@ from pathlib import Path
 
 MODEL_NAME = "medium"  # spike winner; large-v3-int8 was slower AND noisier
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
+TRANSCRIPT_METADATA = {
+    "model": MODEL_NAME,
+    "profile": "current-medium-int8",
+    "version": 1,
+}
 
 
 @lru_cache(maxsize=1)
@@ -100,6 +105,7 @@ def enrich_fixture(path: Path) -> int:
             text = transcribe(url)
             if text:
                 p["transcript"] = text
+                p["transcript_metadata"] = dict(TRANSCRIPT_METADATA)
                 e["event_id"] = make_event_id(
                     e["session_id"], e["type"], e["session_time_ms"],
                     e.get("driver_id"), p,

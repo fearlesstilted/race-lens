@@ -1,5 +1,6 @@
 import json
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -44,6 +45,16 @@ def test_stage_allows_only_archive_files_and_writes_manifest_last(tmp_path):
     assert manifest == {"session": "2026-13-r", "files": [fixture.name]}
     with pytest.raises(ValueError, match="outside archive"):
         recorder._stage(SESSION, [tmp_path / "foreign.jsonl"])
+
+
+def test_official_award_delay_never_fails_archive_publication(tmp_path, monkeypatch):
+    recorder = Recorder(replace(_config(tmp_path), git_publication=False))
+    monkeypatch.setattr(
+        "racelens.driver_of_day.sync_official_award",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("not posted")),
+    )
+
+    recorder._publish(SESSION, [], 1)
 
 
 def test_config_rejects_unknown_publish_session(tmp_path, monkeypatch):

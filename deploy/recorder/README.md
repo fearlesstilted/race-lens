@@ -69,10 +69,10 @@ RACELENS_S3_SECRET_ACCESS_KEY=...
 Keep the env file at mode `0600`. The bucket stays private and needs no browser
 CORS rule.
 
-Render needs `ListBucket` restricted to `requests/`, `status/`, and `sessions/`;
-`GetObject` on those prefixes; and `PutObject` only on `requests/`. The worker
+Render needs `ListBucket` restricted to `requests/`, `status/`, `sessions/`, and
+`awards/`; `GetObject` on those prefixes; and `PutObject` only on `requests/`. The worker
 needs list/read on `requests/` and `status/`, write on `status/`, multipart
-write/copy on `tmp/` and `sessions/`, and delete only on `tmp/`. It does not
+write/copy on `tmp/` and `sessions/`, read/write on `awards/`, and delete only on `tmp/`. It does not
 need bucket administration or public access.
 
 Tigris Standard is the preferred free-tier provider for this deployment. Use
@@ -100,6 +100,7 @@ sessions/{replay_session_id}/manifest.json
 sessions/{replay_session_id}/events.jsonl
 sessions/{replay_session_id}/track.json
 sessions/{replay_session_id}/positions.json
+awards/driver-of-the-day/{replay_session_id}.json
 ```
 
 The worker uploads to `tmp/`, reads each object back, copies verified files to

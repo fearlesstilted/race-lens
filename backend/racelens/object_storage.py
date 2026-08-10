@@ -3,15 +3,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Iterator
 
 from racelens.preparations import QueueFullError, SESSION_ID
 
@@ -27,6 +29,8 @@ MAX_OBJECT_BYTES = 64 * 1024 * 1024
 MAX_SESSION_BYTES = 128 * 1024 * 1024
 MAX_RECORD_BYTES = 16 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024
+MAX_LIVE_SNAPSHOT_BYTES = 256 * 1024
+LIVE_SNAPSHOT_TTL_S = 20
 _STATUS_TTL_S = 3
 _BACKOFF = (timedelta(minutes=5), timedelta(minutes=15))
 
@@ -37,6 +41,10 @@ class StorageError(RuntimeError):
 
 class ManifestError(ValueError):
     """A remote archive manifest is unsafe or inconsistent."""
+
+
+class LiveRecordError(ValueError):
+    """A public Live pointer or snapshot is unsafe or inconsistent."""
 
 
 def _now() -> str:
@@ -194,7 +202,8 @@ class S3Store:
 
     def put_json(self, key: str, value: dict) -> None:
         payload = json.dumps(value, separators=(",", ":"), sort_keys=True).encode() + b"\n"
-        if len(payload) > MAX_MANIFEST_BYTES:
+        limit = MAX_LIVE_SNAPSHOT_BYTES if key.startswith("live/") else MAX_MANIFEST_BYTES
+        if len(payload) > limit:
             raise ValueError("JSON object is too large")
         self.put_bytes(key, payload, content_type="application/json")
 
@@ -423,6 +432,529 @@ def manifest_objects_match(store: Any, manifest: dict) -> bool:
         store.matches(row["key"], size=row["size"], sha256=row["sha256"])
         for row in manifest["files"].values()
     )
+
+
+_LIVE_STATUSES = {"live", "finishing", "replay_ready", "failed"}
+_LIVE_FAILURES = {"Archive preparation failed"}
+_LIVE_TRANSITIONS = {
+    "live": {"finishing", "failed"},
+    "finishing": {"replay_ready", "failed"},
+    "failed": {"replay_ready"},
+    "replay_ready": set(),
+}
+_LIVE_POINTER_FIELDS = {
+    "schema_version", "canonical_session_id", "replay_session_id", "status",
+    "snapshot_key", "created_at", "updated_at", "failure",
+}
+_LIVE_SNAPSHOT_FIELDS = {
+    "schema_version", "canonical_session_id", "replay_session_id", "sequence",
+    "generated_at", "expires_at", "race_state", "battles", "active_insights",
+    "recent_passes", "feed", "commentary", "radio", "capture_freshness",
+    "data_quality",
+}
+_RACE_STATE_FIELDS = {
+    "session_id", "at_ms", "lap", "session_status", "session_name",
+    "status_since_ms", "total_laps", "classification", "drivers",
+    "data_quality", "frame_source", "viewbox",
+}
+_DRIVER_FIELDS = {
+    "position", "rank", "grid_position", "laps_completed", "last_lap_ms",
+    "best_lap_ms", "gap_s", "interval_s", "tyre_compound", "tyre_age_laps",
+    "pit_count", "in_pit", "recent_laps_ms", "retired", "x", "y", "progress",
+}
+_INSIGHT_FIELDS = {
+    "insight_id", "type", "severity", "confidence", "created_at_ms", "lap",
+    "driver_ids", "evidence",
+}
+_INSIGHT_TYPES = {
+    "TRAFFIC_RISK_MEDIUM", "TRAFFIC_RISK_HIGH", "DRS_TRAIN_ACTIVE",
+    "PIT_WINDOW_OPEN", "SC_PIT_WINDOW", "UNDERCUT_RISK_MEDIUM",
+    "UNDERCUT_RISK_HIGH", "DEGRADATION_TREND_DETECTED",
+    "CLEAN_AIR_PACE_LEADER", "BATTLE_DETECTED",
+}
+_FEED_KINDS = {
+    "SessionStarted", "SessionStatusChanged", "LapCompleted", "PitIn", "PitOut",
+    "RaceControlMessage", "RetirementDetected", "ON_TRACK", "UNDERCUT",
+}
+_EVIDENCE_FIELDS = {
+    "interval_s", "pace_delta_ms", "behind_last_lap_ms", "ahead_last_lap_ms",
+    "cars", "head", "intervals_s", "pit_loss_s", "margin_s",
+    "gap_to_next_behind_s", "tyre_age_laps", "position",
+    "attacker_tyre_age_laps", "defender_tyre_age_laps", "laps_ms", "drift_ms",
+    "avg_lap_ms", "vs_race_leader_ms", "drivers_in_clean_air", "positions",
+}
+_DRIVER_ID = re.compile(r"^[A-Z0-9]{1,4}$")
+_UNSAFE_PUBLIC_TEXT = (
+    "://", "aws_", "racelens_s3_", "/home/", "/var/", "/tmp/", "/opt/",
+    "/etc/", "\\users\\", "secret_access", "access_key",
+    "amazonaws.com", "botocore", "boto3",
+)
+
+
+def _choice(value: object, allowed: set[str]) -> bool:
+    return isinstance(value, str) and value in allowed
+
+
+def _integer(value: object, minimum: int = 0, maximum: int = 2**63 - 1) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and minimum <= value <= maximum
+
+
+def _number(value: object, *, nullable: bool = False) -> bool:
+    if value is None:
+        return nullable
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return -(2**63) <= value <= 2**63 - 1
+    return isinstance(value, float) and math.isfinite(value)
+
+
+def _public_text(
+    value: object,
+    *,
+    maximum: int = 500,
+    empty: bool = False,
+    multiline: bool = False,
+) -> bool:
+    if not isinstance(value, str) or len(value) > maximum or (not empty and not value):
+        return False
+    lowered = value.lower()
+    lines = value.splitlines() if multiline else [value]
+    return (
+        not any(
+            ord(char) < 32 and char not in ("\t\n" if multiline else "\t")
+            for char in value
+        )
+        and "\r" not in value
+        and (multiline or "\n" not in value)
+        and all(
+            not line.startswith(("/", "\\"))
+            and not re.match(r"^[a-zA-Z]:[\\/]", line)
+            for line in lines
+        )
+        and not any(token in lowered for token in _UNSAFE_PUBLIC_TEXT)
+    )
+
+
+def _driver_id(value: object) -> bool:
+    return isinstance(value, str) and bool(_DRIVER_ID.fullmatch(value))
+
+
+def live_snapshot_key(canonical_session_id: str) -> str:
+    if not isinstance(canonical_session_id, str) or not SESSION_ID.fullmatch(canonical_session_id):
+        raise ValueError("invalid canonical session ID")
+    return f"live/{canonical_session_id}/snapshot.json"
+
+
+def validate_live_pointer(value: object) -> dict:
+    if not isinstance(value, dict) or set(value) != _LIVE_POINTER_FIELDS:
+        raise LiveRecordError("live pointer fields are invalid")
+    canonical = value["canonical_session_id"]
+    replay = value["replay_session_id"]
+    status = value["status"]
+    failure = value["failure"]
+    if (
+        value["schema_version"] != SCHEMA_VERSION
+        or not isinstance(canonical, str)
+        or not SESSION_ID.fullmatch(canonical)
+        or not isinstance(replay, str)
+        or not REPLAY_ID.fullmatch(replay)
+        or not _choice(status, _LIVE_STATUSES)
+        or value["snapshot_key"] != live_snapshot_key(canonical)
+        or (failure is not None and not _choice(failure, _LIVE_FAILURES))
+        or (status == "failed") != (failure is not None)
+    ):
+        raise LiveRecordError("live pointer metadata is invalid")
+    try:
+        created = _parsed_time(value["created_at"])
+        updated = _parsed_time(value["updated_at"])
+    except (TypeError, ValueError) as exc:
+        raise LiveRecordError("live pointer timestamps are invalid") from exc
+    if updated < created:
+        raise LiveRecordError("live pointer timestamps are invalid")
+    return value
+
+
+def _bounded_rows(value: object, name: str, limit: int) -> list:
+    if not isinstance(value, list) or len(value) > limit or any(not isinstance(row, dict) for row in value):
+        raise LiveRecordError(f"live snapshot {name} is invalid")
+    return value
+
+
+def _validate_race_state(value: object, replay_session_id: str) -> None:
+    if not isinstance(value, dict) or set(value) != _RACE_STATE_FIELDS:
+        raise LiveRecordError("live snapshot race state is invalid")
+    if value["session_id"] != replay_session_id:
+        raise LiveRecordError("live snapshot inner identity differs")
+    if (
+        not _integer(value["at_ms"])
+        or not _integer(value["lap"], maximum=500)
+        or not _choice(
+            value["session_status"],
+            {"unknown", "started", "red_flag", "safety_car", "vsc", "finished"},
+        )
+        or (
+            value["session_name"] is not None
+            and not _public_text(value["session_name"], maximum=120)
+        )
+        or not _integer(value["status_since_ms"])
+        or (
+            value["total_laps"] is not None
+            and not _integer(value["total_laps"], maximum=500)
+        )
+        or value["frame_source"] != "live"
+        or value["viewbox"] is not None
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+    drivers = value["drivers"]
+    if not isinstance(drivers, dict) or len(drivers) > 30 or not all(
+        _driver_id(driver) for driver in drivers
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+    for driver in drivers.values():
+        if not isinstance(driver, dict) or set(driver) != _DRIVER_FIELDS:
+            raise LiveRecordError("live snapshot driver state is invalid")
+        if (
+            any(
+                driver[field] is not None
+                and not _integer(driver[field], minimum=1, maximum=30)
+                for field in ("position", "rank", "grid_position")
+            )
+            or not _integer(driver["laps_completed"], maximum=500)
+            or any(
+                driver[field] is not None and not _integer(driver[field])
+                for field in ("last_lap_ms", "best_lap_ms")
+            )
+            or not _number(driver["gap_s"], nullable=True)
+            or not _number(driver["interval_s"], nullable=True)
+            or (
+                driver["tyre_compound"] is not None
+                and not _choice(
+                    driver["tyre_compound"],
+                    {
+                        "Soft", "Medium", "Hard", "Intermediate", "Wet", "Unknown",
+                        "S", "M", "H", "I", "W",
+                    },
+                )
+            )
+            or (
+                driver["tyre_age_laps"] is not None
+                and not _integer(driver["tyre_age_laps"], maximum=500)
+            )
+            or not _integer(driver["pit_count"], maximum=100)
+            or not isinstance(driver["in_pit"], bool)
+            or not isinstance(driver["retired"], bool)
+            or not isinstance(driver["recent_laps_ms"], list)
+            or len(driver["recent_laps_ms"]) > 3
+            or not all(_integer(lap_ms) for lap_ms in driver["recent_laps_ms"])
+            or any(driver[field] is not None for field in ("x", "y", "progress"))
+        ):
+            raise LiveRecordError("live snapshot driver state is invalid")
+    classification = value["classification"]
+    if (
+        not isinstance(classification, list)
+        or len(classification) > 30
+        or not all(_driver_id(driver) and driver in drivers for driver in classification)
+        or len(classification) != len(set(classification))
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+    quality = value["data_quality"]
+    if (
+        not isinstance(quality, dict)
+        or set(quality) != {
+            "status", "last_event_ms", "events_applied", "duplicates_dropped",
+        }
+        or not _choice(quality["status"], {"unknown", "good", "stale"})
+        or (quality["last_event_ms"] is not None and not _integer(quality["last_event_ms"]))
+        or not _integer(quality["events_applied"])
+        or not _integer(quality["duplicates_dropped"])
+    ):
+        raise LiveRecordError("live snapshot race state is invalid")
+
+
+def _validate_insights(value: object, name: str, limit: int) -> None:
+    for insight in _bounded_rows(value, name, limit):
+        if set(insight) != _INSIGHT_FIELDS:
+            raise LiveRecordError(f"live snapshot {name} is invalid")
+        driver_ids = insight["driver_ids"]
+        evidence = insight["evidence"]
+        if (
+            not _public_text(insight["insight_id"], maximum=160)
+            or not _choice(insight["type"], _INSIGHT_TYPES)
+            or not _choice(insight["severity"], {"info", "low", "medium", "high"})
+            or not _choice(insight["confidence"], {"low", "medium", "high"})
+            or not _integer(insight["created_at_ms"])
+            or not _integer(insight["lap"], maximum=500)
+            or not isinstance(driver_ids, list)
+            or len(driver_ids) > 20
+            or not all(_driver_id(driver) for driver in driver_ids)
+            or not isinstance(evidence, dict)
+            or not set(evidence) <= _EVIDENCE_FIELDS
+        ):
+            raise LiveRecordError(f"live snapshot {name} is invalid")
+        for key, item in evidence.items():
+            if key == "head":
+                valid = _driver_id(item)
+            elif isinstance(item, list):
+                valid = len(item) <= 30 and all(_number(number) for number in item)
+            else:
+                valid = _number(
+                    item,
+                    nullable=key in {
+                        "vs_race_leader_ms", "defender_tyre_age_laps",
+                    },
+                )
+            if not valid:
+                raise LiveRecordError(f"live snapshot {name} is invalid")
+
+
+def _validate_passes(value: object) -> None:
+    for row in _bounded_rows(value, "passes", 100):
+        if (
+            set(row) != {"ahead", "behind", "kind", "at_ms"}
+            or not _driver_id(row["ahead"])
+            or not _driver_id(row["behind"])
+            or not _choice(row["kind"], {"ON_TRACK", "UNDERCUT"})
+            or not _integer(row["at_ms"])
+        ):
+            raise LiveRecordError("live snapshot passes are invalid")
+
+
+def _validate_feed(value: object) -> None:
+    for row in _bounded_rows(value, "feed", 100):
+        required = {"id", "at_ms", "lap", "kind", "tag", "text", "driver_id"}
+        optional = {"audio_url", "transcript"}
+        if not required <= set(row) or not set(row) <= required | optional:
+            raise LiveRecordError("live snapshot feed is invalid")
+        if (
+            not _public_text(row["id"], maximum=200)
+            or not _integer(row["at_ms"])
+            or (row["lap"] is not None and not _integer(row["lap"], maximum=500))
+            or not _choice(row["kind"], _FEED_KINDS)
+            or not _choice(row["tag"], {"PIT", "FLAG", "FINISH", "FASTEST", "INFO", "PASS"})
+            or not _public_text(row["text"], maximum=1000)
+            or (row["driver_id"] is not None and not _driver_id(row["driver_id"]))
+            or (
+                "audio_url" in row
+                and (
+                    not isinstance(row["audio_url"], str)
+                    or not row["audio_url"].startswith(
+                        "https://livetiming.formula1.com/static/"
+                    )
+                    or len(row["audio_url"]) > 2048
+                )
+            )
+            or (
+                "transcript" in row
+                and not _public_text(
+                    row["transcript"], maximum=2000, multiline=True,
+                )
+            )
+        ):
+            raise LiveRecordError("live snapshot feed is invalid")
+
+
+def _validate_commentary(value: object) -> None:
+    for row in _bounded_rows(value, "commentary", 100):
+        if (
+            set(row) != {"insight_id", "severity", "lap", "text"}
+            or not _public_text(row["insight_id"], maximum=160)
+            or not _choice(row["severity"], {"info", "low", "medium", "high"})
+            or not _integer(row["lap"], maximum=500)
+            or not _public_text(row["text"], maximum=2000)
+        ):
+            raise LiveRecordError("live snapshot commentary is invalid")
+
+
+def validate_live_snapshot(
+    value: object,
+    *,
+    pointer: dict,
+    now: datetime | None = None,
+) -> dict:
+    pointer = validate_live_pointer(pointer)
+    if not isinstance(value, dict) or set(value) != _LIVE_SNAPSHOT_FIELDS:
+        raise LiveRecordError("live snapshot fields are invalid")
+    try:
+        encoded = json.dumps(value, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+    except (TypeError, ValueError) as exc:
+        raise LiveRecordError("live snapshot JSON is invalid") from exc
+    if len(encoded) > MAX_LIVE_SNAPSHOT_BYTES:
+        raise LiveRecordError("live snapshot exceeds the size limit")
+    if (
+        value["schema_version"] != SCHEMA_VERSION
+        or value["canonical_session_id"] != pointer["canonical_session_id"]
+        or value["replay_session_id"] != pointer["replay_session_id"]
+    ):
+        raise LiveRecordError("live pointer and snapshot identity differ")
+    sequence = value["sequence"]
+    if (
+        not isinstance(sequence, int)
+        or isinstance(sequence, bool)
+        or not 1 <= sequence <= 2**63 - 1
+    ):
+        raise LiveRecordError("live snapshot sequence is invalid")
+    try:
+        generated = _parsed_time(value["generated_at"])
+        expires = _parsed_time(value["expires_at"])
+    except (TypeError, ValueError) as exc:
+        raise LiveRecordError("live snapshot timestamps are invalid") from exc
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    if generated > current + timedelta(seconds=5) or expires <= generated:
+        raise LiveRecordError("live snapshot timestamps are invalid")
+    if expires - generated > timedelta(seconds=LIVE_SNAPSHOT_TTL_S) or current > expires:
+        raise LiveRecordError("live snapshot is stale")
+
+    _validate_race_state(value["race_state"], pointer["replay_session_id"])
+    _validate_insights(value["battles"], "battles", 50)
+    _validate_insights(value["active_insights"], "insights", 100)
+    _validate_passes(value["recent_passes"])
+    feed = value["feed"]
+    if not isinstance(feed, dict) or set(feed) != {"en", "ru"}:
+        raise LiveRecordError("live snapshot feed is invalid")
+    for language in ("en", "ru"):
+        _validate_feed(feed[language])
+    commentary = value["commentary"]
+    if not isinstance(commentary, dict) or set(commentary) != {"en", "ru"}:
+        raise LiveRecordError("live snapshot commentary is invalid")
+    for language in ("en", "ru"):
+        levels = commentary[language]
+        if not isinstance(levels, dict) or set(levels) != {"beginner", "pro"}:
+            raise LiveRecordError("live snapshot commentary is invalid")
+        for level in ("beginner", "pro"):
+            _validate_commentary(levels[level])
+    radio = _bounded_rows(value["radio"], "radio", 20)
+    for row in radio:
+        if (
+            set(row) != {"audio_url", "transcript", "driver_id", "at_ms"}
+            or not isinstance(row["audio_url"], str)
+            or not row["audio_url"].startswith(
+                "https://livetiming.formula1.com/static/"
+            )
+            or len(row["audio_url"]) > 2048
+            or (
+                row["transcript"] is not None
+                and not _public_text(
+                    row["transcript"], maximum=2000, multiline=True,
+                )
+            )
+            or (row["driver_id"] is not None and not _driver_id(row["driver_id"]))
+            or not _integer(row["at_ms"])
+        ):
+            raise LiveRecordError("live snapshot radio is invalid")
+    freshness = value["capture_freshness"]
+    if (
+        not isinstance(freshness, dict)
+        or set(freshness) != {
+            "raw_size", "raw_updated_at", "seconds_since_growth", "transport_growing",
+        }
+        or not isinstance(freshness["raw_size"], int)
+        or isinstance(freshness["raw_size"], bool)
+        or not 0 <= freshness["raw_size"] <= MAX_SESSION_BYTES
+        or not _number(freshness["seconds_since_growth"])
+        or freshness["seconds_since_growth"] < 0
+        or not isinstance(freshness["transport_growing"], bool)
+        or not _choice(value["data_quality"], {"good", "degraded", "stalled"})
+    ):
+        raise LiveRecordError("live snapshot freshness is invalid")
+    try:
+        raw_updated = _parsed_time(freshness["raw_updated_at"])
+    except (TypeError, ValueError) as exc:
+        raise LiveRecordError("live snapshot freshness is invalid") from exc
+    if raw_updated > current + timedelta(seconds=5):
+        raise LiveRecordError("live snapshot freshness is invalid")
+    return value
+
+
+def write_live_snapshot(
+    store: Any,
+    pointer: dict,
+    snapshot: dict,
+    *,
+    now: datetime | None = None,
+) -> None:
+    pointer = validate_live_pointer(pointer)
+    if pointer["status"] != "live":
+        raise LiveRecordError("live snapshot pointer must have live status")
+    snapshot = validate_live_snapshot(snapshot, pointer=pointer, now=now)
+    current = store.get_json("live/current.json", limit=MAX_RECORD_BYTES)
+    if (
+        isinstance(current, dict)
+        and current.get("canonical_session_id") == pointer["canonical_session_id"]
+        and current.get("replay_session_id") == pointer["replay_session_id"]
+    ):
+        existing = validate_live_pointer(current)
+        if existing["status"] != "live":
+            raise LiveRecordError("live snapshot lifecycle is no longer active")
+        pointer = validate_live_pointer({**pointer, "created_at": existing["created_at"]})
+    store.put_json(pointer["snapshot_key"], snapshot)
+    store.put_json("live/current.json", pointer)
+
+
+def load_live(store: Any, *, now: datetime | None = None) -> dict | None:
+    pointer_value = store.get_json("live/current.json", limit=MAX_RECORD_BYTES)
+    if pointer_value is None:
+        return None
+    pointer = validate_live_pointer(pointer_value)
+    snapshot_value = store.get_json(
+        pointer["snapshot_key"], limit=MAX_LIVE_SNAPSHOT_BYTES,
+    )
+    if snapshot_value is None:
+        raise LiveRecordError("live snapshot is missing")
+    try:
+        snapshot = validate_live_snapshot(snapshot_value, pointer=pointer, now=now)
+    except LiveRecordError as exc:
+        # Terminal lifecycle remains discoverable after the last 20-second
+        # race snapshot expires; the stale payload itself is never returned.
+        if pointer["status"] in {"finishing", "replay_ready", "failed"} and str(exc) == "live snapshot is stale":
+            snapshot = None
+        else:
+            raise
+    return {"pointer": pointer, "snapshot": snapshot}
+
+
+def write_live_status(
+    store: Any,
+    canonical_session_id: str,
+    replay_session_id: str,
+    status: str,
+    *,
+    failure: str | None = None,
+    now: datetime | None = None,
+) -> dict:
+    current = store.get_json("live/current.json", limit=MAX_RECORD_BYTES)
+    if current is None:
+        raise LiveRecordError("live pointer is missing")
+    pointer = validate_live_pointer(current)
+    if (
+        pointer["canonical_session_id"] != canonical_session_id
+        or pointer["replay_session_id"] != replay_session_id
+    ):
+        raise LiveRecordError("live pointer identity differs")
+    if not _choice(status, _LIVE_STATUSES):
+        raise LiveRecordError("live status is invalid")
+    current_status = pointer["status"]
+    if status != current_status and status not in _LIVE_TRANSITIONS[current_status]:
+        raise LiveRecordError(f"live status transition {current_status} -> {status} is invalid")
+    if status == "replay_ready":
+        try:
+            manifest = load_manifest(
+                store, replay_session_id, canonical_session_id=canonical_session_id,
+            )
+            if not manifest_objects_match(store, manifest):
+                raise ManifestError("archive objects differ from manifest")
+        except (ManifestError, StorageError) as exc:
+            raise LiveRecordError("verified archive manifest is not ready") from exc
+    stamp = (now or datetime.now(UTC)).astimezone(UTC).isoformat().replace("+00:00", "Z")
+    updated = {
+        **pointer,
+        "status": status,
+        "updated_at": stamp,
+        "failure": failure,
+    }
+    validate_live_pointer(updated)
+    store.put_json("live/current.json", updated)
+    return updated
 
 
 def publish_session(
@@ -856,63 +1388,93 @@ class RemoteSessionCache:
         self.store = store
         self.directory = Path(directory)
         self.max_bytes = max(MAX_SESSION_BYTES, max_bytes)
+        self._active: dict[str, int] = {}
+        self._stats = {"materializations": 0, "hits": 0, "evictions": 0, "bytes": 0}
 
     @staticmethod
     def _size(path: Path) -> int:
         return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
-    def _evict(self, keep: Path) -> None:
+    def _evict(self) -> None:
         entries = [
             path for path in self.directory.iterdir()
-            if path.is_dir() and path != keep and REPLAY_ID.fullmatch(path.name)
+            if path.is_dir() and REPLAY_ID.fullmatch(path.name)
         ]
-        total = sum(self._size(path) for path in entries) + self._size(keep)
+        total = sum(self._size(path) for path in entries)
         for path in sorted(entries, key=lambda item: item.stat().st_mtime):
             if total <= self.max_bytes:
                 break
+            if self._active.get(path.name, 0):
+                continue
             size = self._size(path)
             shutil.rmtree(path)
             total -= size
+            self._stats["evictions"] += 1
 
-    def materialize(self, replay_session_id: str) -> Path:
+    def _materialize(self, replay_session_id: str) -> Path:
         if not REPLAY_ID.fullmatch(replay_session_id):
             raise ValueError("invalid replay session ID")
         manifest = load_manifest(self.store, replay_session_id)
         marker = hashlib.sha256(
             json.dumps(manifest, separators=(",", ":"), sort_keys=True).encode()
         ).hexdigest()
+        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target = self.directory / replay_session_id
+        ready = target / ".manifest-sha256"
+        complete = all(
+            (path := target / f"{replay_session_id}{ARCHIVE_FILES[name]}").is_file()
+            and path.stat().st_size == row["size"]
+            for name, row in manifest["files"].items()
+        )
+        if (
+            complete
+            and ready.is_file()
+            and ready.read_text(encoding="ascii").strip() == marker
+        ):
+            os.utime(target)
+            self._stats["hits"] += 1
+            return target
+        temporary = Path(tempfile.mkdtemp(prefix=".session-", dir=self.directory))
+        try:
+            for name, suffix in ARCHIVE_FILES.items():
+                row = manifest["files"][name]
+                self.store.download_verified(
+                    row["key"],
+                    temporary / f"{replay_session_id}{suffix}",
+                    size=row["size"],
+                    sha256=row["sha256"],
+                )
+            (temporary / ".manifest-sha256").write_text(marker + "\n", encoding="ascii")
+            if target.exists():
+                shutil.rmtree(target)
+            os.replace(temporary, target)
+            self._stats["materializations"] += 1
+            self._stats["bytes"] += sum(row["size"] for row in manifest["files"].values())
+            return target
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+
+    @contextmanager
+    def lease(self, replay_session_id: str) -> Iterator[Path]:
+        """Keep a materialized session alive until its caller finishes reading."""
         with self._lock:
-            self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-            target = self.directory / replay_session_id
-            ready = target / ".manifest-sha256"
-            complete = all(
-                (path := target / f"{replay_session_id}{ARCHIVE_FILES[name]}").is_file()
-                and path.stat().st_size == row["size"]
-                for name, row in manifest["files"].items()
-            )
-            if (
-                complete
-                and ready.is_file()
-                and ready.read_text(encoding="ascii").strip() == marker
-            ):
-                os.utime(target)
-                return target
-            temporary = Path(tempfile.mkdtemp(prefix=".session-", dir=self.directory))
-            try:
-                for name, suffix in ARCHIVE_FILES.items():
-                    row = manifest["files"][name]
-                    self.store.download_verified(
-                        row["key"],
-                        temporary / f"{replay_session_id}{suffix}",
-                        size=row["size"],
-                        sha256=row["sha256"],
-                    )
-                (temporary / ".manifest-sha256").write_text(marker + "\n", encoding="ascii")
-                if target.exists():
-                    shutil.rmtree(target)
-                os.replace(temporary, target)
-                self._evict(target)
-                return target
-            finally:
-                if temporary.exists():
-                    shutil.rmtree(temporary)
+            target = self._materialize(replay_session_id)
+            self._active[replay_session_id] = self._active.get(replay_session_id, 0) + 1
+            self._evict()
+        try:
+            yield target
+        finally:
+            with self._lock:
+                remaining = self._active[replay_session_id] - 1
+                if remaining:
+                    self._active[replay_session_id] = remaining
+                else:
+                    del self._active[replay_session_id]
+                # ponytail: retry globally; per-session eviction queues only matter at scale.
+                self._evict()
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            disk_bytes = self._size(self.directory) if self.directory.is_dir() else 0
+            return {**self._stats, "disk_bytes": disk_bytes, "max_bytes": self.max_bytes}

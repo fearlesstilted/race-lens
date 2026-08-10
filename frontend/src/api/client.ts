@@ -1,4 +1,5 @@
 import type { BattlesResponse, Capabilities, CatalogResponse, CommentaryResponse, DotdResponse, FeedItem, FeedResponse, Forecast, HighlightsResponse, InsightsResponse, MarkersResponse, Overtake, PitSim, Preparation, RaceState, SessionSummary, Timeline, StintsResponse, WhatIf, WinProb, WinProbSeriesPoint } from './types'
+import { apiUrl } from './url'
 
 const responseError = async (response: Response, path: string) => {
   const body = await response.json().catch(() => null) as { detail?: unknown } | null
@@ -7,7 +8,7 @@ const responseError = async (response: Response, path: string) => {
 }
 
 const json = async <T>(path: string, retry = true): Promise<T> => {
-  const response = await fetch(path)
+  const response = await fetch(apiUrl(path))
   if (retry && [502, 503, 504].includes(response.status)) {
     await new Promise((resolve) => setTimeout(resolve, 1500))
     return json<T>(path, false)
@@ -44,7 +45,7 @@ export const getInsights = (sessionId: string, atMs: number) =>
   json<InsightsResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/insights?at_ms=${atMs}`)
 
 export const streamUrl = (sessionId: string, speed: number, fromMs: number, tickMs = 1000) =>
-  `/api/sessions/${encodeURIComponent(sessionId)}/stream?speed=${speed}&from_ms=${fromMs}&tick_ms=${tickMs}`
+  apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/stream?speed=${speed}&from_ms=${fromMs}&tick_ms=${tickMs}`)
 
 /** The backend returns a bare list; normalise to {items} for the rest of the app. */
 export const getFeed = async (sessionId: string, untilMs: number, limit = 30, lang = 'en'): Promise<FeedResponse> => {
@@ -124,6 +125,12 @@ export const getDriverOfDay = (sessionId: string, atMs?: number) =>
 // ── Live endpoints ────────────────────────────────────────────────────────────
 
 export type LiveStartResult = { session_key: number; poll_interval_s: number; status: string }
+export type LiveCaptureFreshness = {
+  raw_size: number
+  raw_updated_at: string
+  seconds_since_growth: number
+  transport_growing: boolean
+}
 export type LiveStatusResult = {
   is_running: boolean
   poll_count: number
@@ -134,10 +141,18 @@ export type LiveStatusResult = {
   last_error: string | null
   capture_alive?: boolean
   data_quality: 'good' | 'degraded' | 'stalled'
+  source?: string
+  status?: 'live' | 'finishing' | 'replay_ready' | 'failed'
+  canonical_session_id?: string
+  replay_session_id?: string
+  generated_at?: string
+  expires_at?: string | null
+  capture_freshness?: LiveCaptureFreshness | null
+  failure?: string | null
 }
 
 const post = async <T>(path: string): Promise<T> => {
-  const response = await fetch(path, { method: 'POST' })
+  const response = await fetch(apiUrl(path), { method: 'POST' })
   if (!response.ok) throw await responseError(response, path)
   return (await response.json()) as T
 }
@@ -160,7 +175,7 @@ export const liveStatus = () => json<LiveStatusResult>('/api/live/status')
 export const liveStop = () => post<LiveStatusResult>('/api/live/stop')
 
 export const liveStreamUrl = (lang: string, level: string, tickS = 2) =>
-  `/api/live/stream?tick_s=${tickS}&lang=${lang}&level=${level}`
+  apiUrl(`/api/live/stream?tick_s=${tickS}&lang=${lang}&level=${level}`)
 
 /** The backend returns a bare list; normalise to {items} for the rest of the app. */
 export const getLiveFeed = async (limit = 30, lang = 'en'): Promise<FeedResponse> => {

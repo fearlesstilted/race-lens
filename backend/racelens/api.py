@@ -11,14 +11,16 @@ import importlib.util
 import json
 import os
 import re
-from contextlib import asynccontextmanager
+import time
+from contextlib import AbstractContextManager, asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
@@ -39,7 +41,11 @@ from racelens.catalog import (
 )
 from racelens.events_significant import significant_events
 from racelens.commentary.renderer import render_all
-from racelens.driver_of_day import driver_of_day as _driver_of_day
+from racelens.driver_of_day import (
+    award_key,
+    driver_of_day as _driver_of_day,
+    load_official_award,
+)
 from racelens.events.models import load_jsonl
 from racelens.highlights import highlights as _highlights
 from racelens.forecast.overtake import overtake_probability
@@ -53,6 +59,7 @@ from racelens.insights.registry import detect_all
 from racelens.live.runner import LiveRunner
 from racelens.live.signalr import SignalRCapture, make_signalr_fetch
 from racelens.object_storage import (
+    LiveRecordError,
     ManifestError,
     ObjectPreparationQueue,
     REPLAY_ID,
@@ -60,6 +67,7 @@ from racelens.object_storage import (
     S3Store,
     StorageConfig,
     StorageError,
+    load_live,
 )
 from racelens.preparations import PreparationQueue, QueueFullError, SESSION_ID
 from racelens.replay.engine import ReplayEngine
@@ -117,6 +125,10 @@ _capture: Optional[SignalRCapture] = None
 # track params. None for source=openf1 sessions or when no live session runs.
 _live_session_id: Optional[str] = None
 
+# Two-second process cache: remote Live is one current pointer plus one bounded
+# snapshot, so there is no reason to hit object storage on every GET/SSE tick.
+_remote_live_cache: tuple[float, dict | None] | None = None
+
 # Lock to prevent concurrent start requests.
 _start_lock: asyncio.Lock = asyncio.Lock()
 
@@ -150,6 +162,29 @@ app = FastAPI(
     redoc_url=None if READONLY else "/redoc",
     openapi_url=None if READONLY else "/openapi.json",
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://race-lens.onrender.com",
+        "http://tauri.localhost",
+        "tauri://localhost",
+        "http://localhost:5173",
+    ],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Accept", "Content-Type"],
+)
+
+
+class _LeasedFileResponse(FileResponse):
+    def __init__(self, *args, lease: AbstractContextManager[Path], **kwargs) -> None:
+        self._lease = lease
+        super().__init__(*args, **kwargs)
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._lease.__exit__(None, None, None)
 
 
 @app.middleware("http")
@@ -176,6 +211,70 @@ def _safe_slug(value: str) -> str:
 @lru_cache(maxsize=1)
 def _object_store() -> S3Store | None:
     return S3Store(STORAGE_CONFIG) if STORAGE_CONFIG is not None else None
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _remote_live() -> dict | None:
+    global _remote_live_cache
+    now = time.monotonic()
+    if _remote_live_cache is not None and now - _remote_live_cache[0] < 2:
+        return _remote_live_cache[1]
+    store = _object_store()
+    if store is None:
+        value = None
+    else:
+        try:
+            value = load_live(store, now=_utcnow())
+        except LiveRecordError as exc:
+            raise HTTPException(404, "No current live snapshot") from exc
+        except StorageError as exc:
+            raise HTTPException(503, "Live storage is temporarily unavailable") from exc
+    _remote_live_cache = (now, value)
+    return value
+
+
+def _remote_live_required(*, snapshot: bool = True) -> dict:
+    value = _remote_live()
+    if value is None or snapshot and value["snapshot"] is None:
+        raise HTTPException(404, "No live session active")
+    return value
+
+
+def _remote_live_status(value: dict) -> dict[str, Any]:
+    pointer = value["pointer"]
+    snapshot = value["snapshot"]
+    sequence = snapshot["sequence"] if snapshot is not None else 0
+    state = snapshot["race_state"] if snapshot is not None else {}
+    freshness = snapshot["capture_freshness"] if snapshot is not None else None
+    quality = snapshot["data_quality"] if snapshot is not None else "stalled"
+    generated = snapshot["generated_at"] if snapshot is not None else pointer["updated_at"]
+    return {
+        "polls": sequence,
+        "events_total": state.get("data_quality", {}).get("events_applied", 0),
+        "new_last_poll": 0,
+        "consecutive_failures": 0,
+        "last_poll_unix": datetime.fromisoformat(generated.replace("Z", "+00:00")).timestamp(),
+        "last_new_event_unix": (
+            datetime.fromisoformat(freshness["raw_updated_at"].replace("Z", "+00:00")).timestamp()
+            if freshness else None
+        ),
+        "last_error": pointer["failure"],
+        "data_quality": quality,
+        "last_poll_ok": quality != "stalled",
+        "is_running": pointer["status"] == "live",
+        "poll_count": sequence,
+        "source": "remote",
+        "status": pointer["status"],
+        "canonical_session_id": pointer["canonical_session_id"],
+        "replay_session_id": pointer["replay_session_id"],
+        "generated_at": generated,
+        "expires_at": snapshot["expires_at"] if snapshot is not None else None,
+        "capture_freshness": freshness,
+        "failure": pointer["failure"],
+    }
 
 
 @lru_cache(maxsize=1)
@@ -227,29 +326,36 @@ def _remote_cache() -> RemoteSessionCache | None:
     )
 
 
-@lru_cache(maxsize=1)
-def _remote_fixture_root(session_id: str) -> Path:
+@contextmanager
+def _fixture_lease(session_id: str, suffix: str = ".jsonl") -> Iterator[Path]:
+    """Yield a local root or hold a remote root until the current read finishes."""
+    if (FIXTURES_DIR / f"{session_id}.jsonl").is_file():
+        yield FIXTURES_DIR
+        return
+    local_component = (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
     cache = _remote_cache()
     if cache is None or not REPLAY_ID.fullmatch(session_id):
+        if local_component:
+            yield FIXTURES_DIR
+            return
         raise HTTPException(404, f"session '{session_id}' not found")
+    lease = cache.lease(session_id)
     try:
-        return cache.materialize(session_id)
+        root = lease.__enter__()
     except ManifestError as exc:
+        if local_component:
+            yield FIXTURES_DIR
+            return
         raise HTTPException(404, f"session '{session_id}' is not ready") from exc
     except StorageError as exc:
-        raise HTTPException(503, "Replay storage is temporarily unavailable") from exc
-
-
-def _fixture_root(session_id: str, suffix: str = ".jsonl") -> Path:
-    if (FIXTURES_DIR / f"{session_id}.jsonl").is_file():
-        return FIXTURES_DIR
-    local_component = (FIXTURES_DIR / f"{session_id}{suffix}").is_file()
-    try:
-        return _remote_fixture_root(session_id)
-    except HTTPException:
         if local_component:
-            return FIXTURES_DIR
-        raise
+            yield FIXTURES_DIR
+            return
+        raise HTTPException(503, "Replay storage is temporarily unavailable") from exc
+    try:
+        yield root
+    finally:
+        lease.__exit__(None, None, None)
 
 
 # Formation-lap lead. Race events are shifted forward by this so the formation
@@ -282,14 +388,14 @@ def _engine(session_id: str) -> ReplayEngine:
     Keeps monkeypatched FIXTURES_DIR (tests) from colliding with real cache
     entries, and picks up regenerated fixture files without a restart.
     """
-    fixtures_dir = _fixture_root(session_id)
-    path = fixtures_dir / f"{session_id}.jsonl"
-    mtime = path.stat().st_mtime if path.is_file() else 0.0
-    with _engine_load_lock:
-        return _engine_cached(session_id, str(fixtures_dir), mtime)
+    with _fixture_lease(session_id) as fixtures_dir:
+        path = fixtures_dir / f"{session_id}.jsonl"
+        mtime = path.stat().st_mtime if path.is_file() else 0.0
+        with _engine_load_lock:
+            return _engine_cached(session_id, str(fixtures_dir), mtime)
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=1)  # One parsed payload keeps Render's 512 MB instance bounded.
 def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> dict | None:
     path = Path(fixtures_dir) / f"{session_id}.positions.json"
     if not path.is_file():
@@ -299,11 +405,11 @@ def _positions_data_cached(session_id: str, fixtures_dir: str, mtime: float) -> 
 
 def _positions_data(session_id: str) -> dict | None:
     """Thin wrapper so the cache key includes FIXTURES_DIR (see _engine)."""
-    fixtures_dir = _fixture_root(session_id, ".positions.json")
-    path = fixtures_dir / f"{session_id}.positions.json"
-    mtime = path.stat().st_mtime if path.is_file() else 0.0
-    with _engine_load_lock:
-        return _positions_data_cached(session_id, str(fixtures_dir), mtime)
+    with _fixture_lease(session_id, ".positions.json") as fixtures_dir:
+        path = fixtures_dir / f"{session_id}.positions.json"
+        mtime = path.stat().st_mtime if path.is_file() else 0.0
+        with _engine_load_lock:
+            return _positions_data_cached(session_id, str(fixtures_dir), mtime)
 
 
 def _positions_window(pos: dict, at_ms: int) -> dict:
@@ -413,9 +519,57 @@ def _clamp_at_ms(at_ms: int) -> int:
     return max(0, at_ms)
 
 
+def _revision() -> str:
+    value = os.environ.get("RACELENS_REVISION") or os.environ.get("RENDER_GIT_COMMIT", "")
+    return value if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value) else "unknown"
+
+
+def _cache_stats(cache) -> dict[str, int]:
+    info = cache.cache_info()
+    return {
+        "hits": info.hits,
+        "misses": info.misses,
+        "size": info.currsize,
+        "max_size": info.maxsize,
+    }
+
+
 @app.get("/api/ping")
 def ping():
     return {"status": "ok"}
+
+
+@app.get("/api/diagnostics")
+def diagnostics() -> dict:
+    cache = _remote_cache()
+    remote = cache.stats() if cache is not None else {
+        "materializations": 0,
+        "hits": 0,
+        "evictions": 0,
+        "bytes": 0,
+        "disk_bytes": 0,
+        "max_bytes": REMOTE_CACHE_MAX,
+    }
+    if _live is None:
+        live = {"source": "none", "freshness": "inactive"}
+    else:
+        quality = _live_health_status().get("data_quality")
+        freshness = {"good": "fresh", "degraded": "degraded", "stalled": "stale"}.get(
+            quality, "unknown",
+        )
+        live = {
+            "source": "signalr" if _live_session_id is not None else "openf1",
+            "freshness": freshness,
+        }
+    return {
+        "revision": _revision(),
+        "parsed_cache": {
+            "engine": _cache_stats(_engine_cached),
+            "positions": _cache_stats(_positions_data_cached),
+        },
+        "remote_cache": remote,
+        "live": live,
+    }
 
 
 @app.get("/api/capabilities")
@@ -706,22 +860,30 @@ def _reap_capture_if_stopped() -> None:
         _capture = None
 
 
-@app.get("/api/live/status")
-async def live_status() -> dict:
-    if _live is None:
-        raise HTTPException(404, "No live session active")
+def _live_health_status() -> dict[str, Any]:
+    """Apply source-specific liveness once for public status and diagnostics."""
+    assert _live is not None
     _reap_capture_if_stopped()
     status = _live.status()
-    # Fields the frontend contract expects (LiveStatusResult).
-    status["is_running"] = _live.is_running
-    status["poll_count"] = status["polls"]
     status["last_poll_ok"] = status["consecutive_failures"] == 0
-    if _capture is not None:
+    if _live_session_id is not None and _capture is not None:
         status["capture_alive"] = _capture.alive
         if not _capture.alive:
             status["data_quality"] = "stalled"
             status["last_poll_ok"] = False
     return status
+
+
+@app.get("/api/live/status")
+async def live_status() -> dict:
+    if _live is not None:
+        status = _live_health_status()
+        # Fields the frontend contract expects (LiveStatusResult).
+        status["is_running"] = _live.is_running
+        status["poll_count"] = status["polls"]
+        return status
+    remote = await asyncio.to_thread(_remote_live_required, snapshot=False)
+    return _remote_live_status(remote)
 
 
 @app.get("/api/live/stream")
@@ -732,7 +894,7 @@ async def live_stream(
 ) -> StreamingResponse:
     """SSE stream: emits state_now() every *tick_s* seconds."""
     if _live is None:
-        raise HTTPException(404, "No live session active")
+        await asyncio.to_thread(_remote_live_required, snapshot=False)
 
     async def gen():
         # Passes cache: recomputed only when the live engine's event count grows
@@ -740,6 +902,34 @@ async def live_stream(
         # be wasted work — most ticks see no new events between polls).
         passes_cache: dict[str, Any] = {"count": -1, "passes": []}
         while True:
+            if _live is None:
+                try:
+                    current = await asyncio.to_thread(
+                        _remote_live_required, snapshot=False,
+                    )
+                except HTTPException:
+                    # A storage/staleness failure is not a race lifecycle event.
+                    # Close quietly so EventSource reconnects.
+                    return
+                pointer = current["pointer"]
+                snapshot = current["snapshot"]
+                if pointer["status"] in {"finishing", "replay_ready", "failed"}:
+                    yield "event: end\ndata: {}\n\n"
+                    return
+                if snapshot is None:
+                    yield "data: {}\n\n"
+                else:
+                    state = dict(snapshot["race_state"])
+                    state["active_insights"] = snapshot["active_insights"]
+                    state["commentary"] = snapshot["commentary"].get(
+                        lang, snapshot["commentary"]["en"]
+                    ).get(level, snapshot["commentary"]["en"]["pro"])
+                    state["recent_passes"] = snapshot["recent_passes"]
+                    state["battles"] = snapshot["battles"]
+                    state["live_status"] = _remote_live_status(current)
+                    yield f"data: {json.dumps(state)}\n\n"
+                await asyncio.sleep(tick_s)
+                continue
             if _live is None or not _live.is_running:
                 # Runner stopped (explicitly or via auto-stop) — reap the capture
                 # subprocess if it's still around, signal end, close the stream.
@@ -771,7 +961,10 @@ async def live_feed(
     limit: int = Query(default=30, ge=1, le=100),
 ) -> list:
     """Event feed for the frontend during live mode (no session_id to scope by)."""
-    if _live is None or _live.engine is None:
+    if _live is None:
+        snapshot = (await asyncio.to_thread(_remote_live_required))["snapshot"]
+        return snapshot["feed"].get(lang, snapshot["feed"]["en"])[:limit]
+    if _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
     until_ms = _live.engine.events[-1].session_time_ms
     items = render_feed(_live.engine.events, until_ms, lang=lang, limit=limit)
@@ -812,23 +1005,35 @@ async def live_stop() -> dict:
 
 @app.get("/api/live/forecast")
 async def live_forecast(laps: int = Query(default=10, ge=1, le=50)) -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        state = (await asyncio.to_thread(_remote_live_required))["snapshot"]["race_state"]
+    elif _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    state = _live.state_now()
+    else:
+        state = _live.state_now()
     return project_order(state, laps_ahead=laps)
 
 
 @app.get("/api/live/win-prob")
 async def live_win_prob() -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        remote = await asyncio.to_thread(_remote_live_required)
+        state = remote["snapshot"]["race_state"]
+        session_id = remote["pointer"]["replay_session_id"]
+    elif _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    state = _live.state_now()
-    return win_probability(state, _live_session_id or "")
+    else:
+        state = _live.state_now()
+        session_id = _live_session_id or ""
+    return win_probability(state, session_id)
 
 
 @app.get("/api/live/battles")
 async def live_battles() -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        snapshot = (await asyncio.to_thread(_remote_live_required))["snapshot"]
+        return {"at_ms": snapshot["race_state"]["at_ms"], "battles": snapshot["battles"]}
+    if _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
     state = _live.state_now()
     return {"at_ms": state["at_ms"], "battles": detect_battles(state)}
@@ -836,10 +1041,16 @@ async def live_battles() -> dict:
 
 @app.get("/api/live/simulate-pit")
 async def live_simulate_pit(driver: str = Query(...)) -> dict:
-    if _live is None or _live.engine is None:
+    if _live is None:
+        remote = await asyncio.to_thread(_remote_live_required)
+        state = remote["snapshot"]["race_state"]
+        session_id = remote["pointer"]["replay_session_id"]
+    elif _live.engine is None:
         raise HTTPException(404, "No live session active or no data yet")
-    state = _live.state_now()
-    return simulate_pit(state, driver, _live_session_id or "")
+    else:
+        state = _live.state_now()
+        session_id = _live_session_id or ""
+    return simulate_pit(state, driver, session_id)
 
 
 # ── Static frontend (single-container deploys: HF Spaces, VPS) ────────────────
@@ -973,10 +1184,11 @@ def overtake_endpoint(
 @app.get("/api/sessions/{session_id}/track")
 def track(session_id: str) -> dict:
     """Return pre-computed track outline as {session_id, viewbox, points}."""
-    path = _fixture_root(session_id, ".track.json") / f"{session_id}.track.json"
-    if not path.is_file():
-        raise HTTPException(404, f"track data for '{session_id}' not found")
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _fixture_lease(session_id, ".track.json") as root:
+        path = root / f"{session_id}.track.json"
+        if not path.is_file():
+            raise HTTPException(404, f"track data for '{session_id}' not found")
+        return json.loads(path.read_text(encoding="utf-8"))
 
 
 @app.get("/api/sessions/{session_id}/positions")
@@ -989,15 +1201,25 @@ def positions(
     Format: {session_id, start_ms, tick_ms, viewbox, drivers: {DRV: [[x,y]|null, ...]}}
     404 if positions.json has not been generated yet.
     """
-    path = _fixture_root(session_id, ".positions.json") / f"{session_id}.positions.json"
-    if not path.is_file():
-        raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
     if at_ms is not None:
-        pos = _positions_data(session_id)
-        if pos is None:
-            raise HTTPException(404, f"positions data for '{session_id}' not found")
-        return _positions_window(pos, at_ms)
-    return FileResponse(path, media_type="application/json")
+        with _fixture_lease(session_id, ".positions.json") as root:
+            path = root / f"{session_id}.positions.json"
+            if not path.is_file():
+                raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
+            pos = _positions_data(session_id)
+            if pos is None:
+                raise HTTPException(404, f"positions data for '{session_id}' not found")
+            return _positions_window(pos, at_ms)
+    lease = _fixture_lease(session_id, ".positions.json")
+    root = lease.__enter__()
+    try:
+        path = root / f"{session_id}.positions.json"
+        if not path.is_file():
+            raise HTTPException(404, f"positions data for '{session_id}' not found — run the pipeline")
+        return _LeasedFileResponse(path, lease=lease, media_type="application/json")
+    except Exception:
+        lease.__exit__(None, None, None)
+        raise
 
 
 @app.get("/api/sessions/{session_id}/feed")
@@ -1044,46 +1266,62 @@ def get_highlights(
 
 @app.get("/api/sessions/{session_id}/driver-of-day")
 def get_driver_of_day(session_id: str, at_ms: Optional[int] = Query(default=None)) -> dict:
-    """Algorithmic Driver of the Day: top candidates ranked by performance score.
+    """Official fan result plus Race Lens' distinct algorithmic candidates.
 
     Pass at_ms for a spoiler-free provisional pick from the race so far (used when
     the panel unlocks in the final laps). Omit for the full-race result.
     """
     eng = _engine(session_id)
-    return _driver_of_day(eng.events, eng, at_ms=None if at_ms is None else _clamp_at_ms(at_ms))
+    cutoff = None if at_ms is None else _clamp_at_ms(at_ms)
+    result = _driver_of_day(eng.events, eng, at_ms=cutoff)
+    state = eng.state_at(cutoff if cutoff is not None else _race_end_ms(eng))
+    official = None
+    if state["session_status"] == "finished":
+        drivers = {event.driver_id for event in eng.events if event.driver_id is not None}
+        local_award = FIXTURES_DIR / award_key(session_id)
+        record = load_official_award(
+            FIXTURES_DIR, None if local_award.exists() else _object_store(), session_id, drivers,
+        )
+        if record is not None:
+            official = {
+                key: record[key]
+                for key in ("driver", "percentage", "provider", "source_url", "fetched_at")
+            }
+    return {**result, "official_result": official}
 
 
 @app.get("/api/sessions/{session_id}/timeline")
 def timeline(session_id: str) -> dict:
     """Replay bounds + lap markers for the scrubber. No future-revealing
     detail beyond what a replay slider inherently needs."""
-    eng = _engine(session_id)
-    lap_marks = {}
-    for e in eng.events:
-        if e.type == "LapCompleted" and e.lap and e.lap not in lap_marks:
-            lap_marks[e.lap] = e.session_time_ms
-    start_ms = eng.events[0].session_time_ms if eng.events else 0
-    # The formation lap lives only in telemetry. When a positions.json exists the
-    # events are lead-shifted (see _engine), so lights-out = LIGHTS_OUT_MS and the
-    # scrubber starts at the formation origin from positions.json. Without it there
-    # is no formation: lights-out stays at 0.
-    pos_path = _fixture_root(session_id) / f"{session_id}.positions.json"
-    lights_out_ms = 0
-    if pos_path.is_file():
-        lights_out_ms = LIGHTS_OUT_MS
-        try:
-            pos_start = int(json.loads(pos_path.read_text(encoding="utf-8")).get("start_ms", 0))
-            start_ms = min(start_ms, pos_start)
-        except (ValueError, KeyError, TypeError):
-            pass
-    return {
-        "session_id": session_id,
-        "start_ms": start_ms,
-        "end_ms": _race_end_ms(eng),
-        "lights_out_ms": lights_out_ms,
-        "events_total": len(eng.events),
-        "lap_marks": lap_marks,
-    }
+    with _fixture_lease(session_id) as root:
+        eng = _engine(session_id)
+        lap_marks = {}
+        for e in eng.events:
+            if e.type == "LapCompleted" and e.lap and e.lap not in lap_marks:
+                lap_marks[e.lap] = e.session_time_ms
+        start_ms = eng.events[0].session_time_ms if eng.events else 0
+        # The formation lap lives only in telemetry. When a positions.json exists the
+        # events are lead-shifted (see _engine), so lights-out = LIGHTS_OUT_MS and the
+        # scrubber starts at the formation origin from positions.json. Without it there
+        # is no formation: lights-out stays at 0.
+        pos_path = root / f"{session_id}.positions.json"
+        lights_out_ms = 0
+        if pos_path.is_file():
+            lights_out_ms = LIGHTS_OUT_MS
+            try:
+                pos_start = int(json.loads(pos_path.read_text(encoding="utf-8")).get("start_ms", 0))
+                start_ms = min(start_ms, pos_start)
+            except (ValueError, KeyError, TypeError):
+                pass
+        return {
+            "session_id": session_id,
+            "start_ms": start_ms,
+            "end_ms": _race_end_ms(eng),
+            "lights_out_ms": lights_out_ms,
+            "events_total": len(eng.events),
+            "lap_marks": lap_marks,
+        }
 
 
 @app.get("/api/sessions/{session_id}/stints")

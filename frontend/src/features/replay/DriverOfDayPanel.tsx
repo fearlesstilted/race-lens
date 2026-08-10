@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getDriverOfDay } from '../../api/client'
 import type { DotdCandidate, DotdResponse } from '../../api/types'
+import { dotdResultOrder } from '../../lib/driverOfDay'
 import { teamColor } from './teamColors'
 import { useAsync } from './useAsync'
 
@@ -32,13 +33,14 @@ function loadUserPick(sessionId: string): string | null {
 export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, totalLaps, atMs }: Props) {
   const [open, setOpen] = useState(false)
   const [userPick, setUserPick] = useState<string | null>(null)
+  const isFinished = sessionStatus === 'finished'
 
   // Snapshot the pick at the moment the panel opens — spoiler-free (race so
-  // far). Not live-refreshed so it doesn't churn while reading. atMs/sessionStatus
-  // are deliberately excluded from deps for the same reason.
+  // far). Ordinary atMs changes stay excluded so it doesn't churn while reading;
+  // the finish phase is included so the official result is fetched exactly once.
   const { data, loading } = useAsync<DotdResponse>(
-    () => getDriverOfDay(sessionId, sessionStatus === 'finished' ? undefined : atMs),
-    [sessionId],
+    () => getDriverOfDay(sessionId, isFinished ? undefined : atMs),
+    [sessionId, isFinished],
     open,
   )
 
@@ -63,14 +65,13 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, t
   }
 
   const maxScore = data?.candidates[0]?.score ?? 1
-  const isFinished = sessionStatus === 'finished'
   const lapsToGo = totalLaps != null && lap != null ? totalLaps - lap : null
   const available = isFinished || (lapsToGo != null && lapsToGo <= UNLOCK_LAPS_TO_GO)
   const dotdLabel = lang === 'ru'
     ? `открывается за ${UNLOCK_LAPS_TO_GO} кругов до финиша`
     : `unlocks in the final ${UNLOCK_LAPS_TO_GO} laps`
   const dotdTitle = isFinished
-    ? (lang === 'ru' ? 'Гонщик дня — алгоритмический выбор' : 'Driver of the Day — algorithmic pick')
+    ? (lang === 'ru' ? 'Официальное голосование и отдельные выборы' : 'Official fan vote and distinct picks')
     : (lang === 'ru' ? 'Предварительный выбор — по гонке пока' : 'Provisional pick — race so far')
 
   return (
@@ -94,7 +95,7 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, t
         <div className="dotd-panel">
           <div className="dotd-header">
             <span className="dotd-title">DRIVER OF THE DAY</span>
-            <span className="dotd-sub">model pick · tap to vote</span>
+            <span className="dotd-sub">official fan vote · your pick · Race Lens</span>
           </div>
           <div className="dotd-footer" style={{ borderTop: 0, paddingTop: 0 }}>
             {lang === 'ru'
@@ -114,24 +115,45 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, t
 
           {data && (
             <>
-              {/* Computed pick hero */}
-              {data.computed_pick && (
-                <div className="dotd-hero" style={{ borderColor: teamColor(data.computed_pick) }}>
-                  <span className="dotd-hero-code" style={{ color: teamColor(data.computed_pick) }}>
-                    {data.computed_pick}
-                  </span>
-                  <span className="dotd-hero-label">MODEL PICK</span>
-                  {(() => {
-                    const c = data.candidates.find((x) => x.driver === data.computed_pick)
-                    if (!c) return null
+              <div className="dotd-results">
+                {dotdResultOrder(isFinished, data.official_result, userPick, data.computed_pick).map((kind) => {
+                  if (kind === 'official-pending') {
                     return (
-                      <span className="dotd-hero-note">
-                        {lang === 'ru' ? c.note_ru : c.note_en}
-                      </span>
+                      <div className="dotd-result dotd-result-pending" key={kind}>
+                        <span className="dotd-hero-label">OFFICIAL FAN VOTE</span>
+                        <span className="dotd-hero-note">Official result pending</span>
+                      </div>
                     )
-                  })()}
-                </div>
-              )}
+                  }
+                  const driver = kind === 'official'
+                    ? data.official_result?.driver
+                    : kind === 'user' ? userPick : data.computed_pick
+                  if (!driver) return null
+                  const candidate = data.candidates.find((item) => item.driver === driver)
+                  return (
+                    <div className="dotd-result" style={{ borderColor: teamColor(driver) }} key={kind}>
+                      <span className="dotd-hero-code" style={{ color: teamColor(driver) }}>{driver}</span>
+                      <span className="dotd-hero-label">
+                        {kind === 'official'
+                          ? 'OFFICIAL FAN VOTE'
+                          : kind === 'user'
+                            ? 'YOUR PICK'
+                            : isFinished ? 'RACE LENS PICK' : 'PROVISIONAL RACE LENS PICK'}
+                      </span>
+                      {kind === 'official' && data.official_result && (
+                        <a href={data.official_result.source_url} target="_blank" rel="noreferrer" className="dotd-hero-note">
+                          {data.official_result.percentage.toFixed(0)}% · {data.official_result.provider}
+                        </a>
+                      )}
+                      {kind === 'race-lens' && candidate && (
+                        <span className="dotd-hero-note">
+                          {lang === 'ru' ? candidate.note_ru : candidate.note_en}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
 
               {/* Top-5 list */}
               <div className="dotd-list">
@@ -152,14 +174,14 @@ export function DriverOfDayPanel({ sessionId, lang = 'en', sessionStatus, lap, t
                         <div className="dotd-bar" style={{ width: `${barPct}%`, background: color }} />
                       </div>
                       <span className="dotd-score">{c.score.toFixed(1)}</span>
-                      {isUserVote && <span className="dotd-check">✓ your pick</span>}
+                      {isUserVote && <span className="dotd-check">✓ YOUR PICK</span>}
                     </button>
                   )
                 })}
               </div>
 
               <div className="dotd-footer">
-                your vote is saved locally · model pick is algorithmic
+                your pick is saved locally · Race Lens pick is algorithmic
               </div>
             </>
           )}
