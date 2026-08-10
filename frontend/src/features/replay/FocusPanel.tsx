@@ -11,6 +11,7 @@ type Props = {
   /** Live mode: PIT NOW uses /api/live/simulate-pit instead (WHAT IF has no live mirror). */
   live?: boolean
   atMs: number
+  onStrategyRequest?: () => void
 }
 
 function fmtLap(ms: number | null | undefined): string {
@@ -97,7 +98,7 @@ function WhatIfCard({ result, lang }: { result: WhatIf; lang?: string }) {
 }
 
 /** Single-driver card (non-H2H mode) */
-function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: string; driver: DriverState; sessionId: string | null; live?: boolean; atMs: number }) {
+function DriverCard({ driverId, driver, sessionId, live, atMs, onStrategyRequest }: { driverId: string; driver: DriverState; sessionId: string | null; live?: boolean; atMs: number; onStrategyRequest?: () => void }) {
   const color = teamColor(driverId)
   const laps = recentLaps(driver)
   const compound = driver.tyre_compound?.charAt(0).toUpperCase() ?? '?'
@@ -134,6 +135,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
     if ((!sessionId && !live) || pitInFlight.current) return
     pitInFlight.current = true
     const seq = ++pitRequestSeq.current
+    onStrategyRequest?.()
     setPitSim(null)
     setPitError(null)
     setPitBusy(true)
@@ -150,12 +152,13 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
         pitInFlight.current = false
         setPitBusy(false)
       })
-  }, [sessionId, live, atMs, driverId])
+  }, [sessionId, live, atMs, driverId, onStrategyRequest])
 
   const handleWhatIf = useCallback((scenario: string) => {
     if (!sessionId || whatIfInFlight.current) return
     whatIfInFlight.current = true
     const seq = ++whatIfRequestSeq.current
+    onStrategyRequest?.()
     setWhatIf(null)
     setWhatIfError(null)
     setWhatIfBusy(true)
@@ -172,7 +175,7 @@ function DriverCard({ driverId, driver, sessionId, live, atMs }: { driverId: str
         whatIfInFlight.current = false
         setWhatIfBusy(false)
       })
-  }, [sessionId, atMs, driverId])
+  }, [sessionId, atMs, driverId, onStrategyRequest])
 
   return (
     <div className="focus-card">
@@ -346,7 +349,7 @@ function H2HDeltas({
   )
 }
 
-export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs }: Props) {
+export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs, onStrategyRequest }: Props) {
   if (selectedIds.length === 0) return null
 
   const [idA, idB] = selectedIds
@@ -374,7 +377,7 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers,
   return (
     <div className="focus-panel">
       <div className="focus-cards">
-        <DriverCard key={idA} driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} />
+        <DriverCard key={idA} driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} onStrategyRequest={onStrategyRequest} />
       </div>
     </div>
   )

@@ -548,6 +548,7 @@ function App() {
                   sessionId={mode === 'replay' ? sessionId : null}
                   live={mode === 'live' && isLiveActive}
                   atMs={replay.atMs}
+                  onStrategyRequest={mode === 'replay' ? replay.pause : undefined}
                 />
               </div>
             ) : (
