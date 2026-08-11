@@ -2,12 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-.agents/
-.codex/
-.planning/
-CLAUDE.md
-GEMINI.md
-*.md
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
