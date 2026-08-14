@@ -10,6 +10,16 @@ export type BroadcastCandidate = {
   title: string
 }
 
+export const BROADCAST_DISPLAY_MS = 4_500
+export const BROADCAST_EXIT_MS = 300
+
+export function canPresentBroadcastCandidate(
+  candidateId: string | null,
+  dismissedId: string | null,
+): boolean {
+  return candidateId !== null && candidateId !== dismissedId
+}
+
 type Args = {
   atMs: number
   playing: boolean

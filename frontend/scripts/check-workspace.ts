@@ -6,15 +6,24 @@ import {
   defaultWorkspace,
   isDirectActivation,
   moveWorkspaceItem,
+  readDeskPreferences,
   readMobileCenter,
   readWorkspaces,
   resetWorkspace,
   selectDensity,
+  toggleDriverFocus,
   updateWorkspaceWidget,
   workspaceAction,
+  writeDeskPreference,
   writeMobileCenter,
   writeWorkspace,
 } from '../src/features/replay/workspace.ts'
+
+assert.equal(typeof toggleDriverFocus, 'function', 'shared timing selection transition exists')
+assert.deepEqual(toggleDriverFocus([], 'NOR'), ['NOR'], 'one click selects a driver')
+assert.deepEqual(toggleDriverFocus(['NOR'], 'VER'), ['NOR', 'VER'], 'a second driver creates Head-to-Head')
+assert.deepEqual(toggleDriverFocus(['NOR', 'VER'], 'NOR'), ['VER'], 'clicking a selected driver removes it')
+assert.deepEqual(toggleDriverFocus(['NOR', 'VER'], 'LEC'), ['VER', 'LEC'], 'a third driver replaces the oldest')
 
 class MemoryStorage {
   readonly values = new Map<string, string>()
@@ -23,6 +32,19 @@ class MemoryStorage {
   setItem(key: string, value: string) { this.values.set(key, value) }
   removeItem(key: string) { this.values.delete(key) }
 }
+
+assert.equal(typeof readDeskPreferences, 'function', 'desk preferences have a separate reader')
+assert.equal(typeof writeDeskPreference, 'function', 'desk preferences have a separate writer')
+const deskStorage = new MemoryStorage()
+assert.deepEqual(readDeskPreferences(deskStorage), { replay: 'classic', live: 'classic' },
+  'new and migrated installations default both modes to Classic')
+writeDeskPreference('replay', 'custom', deskStorage)
+assert.deepEqual(readDeskPreferences(deskStorage), { replay: 'custom', live: 'classic' },
+  'Replay desk choice does not change Live')
+writeDeskPreference('live', 'custom', deskStorage)
+assert.deepEqual(readDeskPreferences(deskStorage), { replay: 'custom', live: 'custom' },
+  'Live desk choice persists independently')
+assert.equal(deskStorage.getItem(WORKSPACE_KEY), null, 'desk preferences do not write workspace schema v2')
 
 const migratedStorage = new MemoryStorage()
 migratedStorage.setItem('racelens_dashboard_layout', JSON.stringify({
@@ -43,6 +65,12 @@ assert.equal(migratedStorage.getItem('racelens_dashboard_layout'), null, 'legacy
 assert.equal(readMobileCenter(migratedStorage), 'track', 'legacy center survives schema-v2 migration')
 
 const storage = new MemoryStorage()
+const classicDerived = defaultWorkspace('replay')
+assert.deepEqual(
+  { x: classicDerived.widgets.insights.x, y: classicDerived.widgets.insights.y, w: classicDerived.widgets.insights.w, h: classicDerived.widgets.insights.h },
+  { x: 8, y: 0, w: 4, h: 14 },
+  'Custom reset keeps Insights readable in the Classic right column',
+)
 const replay = updateWorkspaceWidget(defaultWorkspace('replay'), 'replay', 'track', { visible: false })
 writeWorkspace('replay', replay, storage)
 const live = updateWorkspaceWidget(defaultWorkspace('live'), 'live', 'feed', { visible: false })
@@ -50,7 +78,7 @@ writeWorkspace('live', live, storage)
 assert.equal(readWorkspaces(storage).replay.widgets.track.visible, false)
 assert.equal(readWorkspaces(storage).live.widgets.feed.visible, false)
 resetWorkspace('replay', storage)
-assert.equal(readWorkspaces(storage).replay.widgets.track.visible, true, 'reset restores Replay default')
+assert.equal(readWorkspaces(storage).replay.widgets.track.visible, false, 'Custom reset mirrors Classic Battles-first layout')
 assert.equal(readWorkspaces(storage).live.widgets.feed.visible, false, 'Replay reset leaves Live untouched')
 
 writeMobileCenter('track', storage)
@@ -88,7 +116,6 @@ const radioButton = {}
 assert.equal(isDirectActivation(rowAction, rowAction), true, 'the row action handles its own activation')
 assert.equal(isDirectActivation(rowAction, radioButton), false, 'a radio-button activation cannot trigger the row action')
 
-assert.deepEqual(workspaceAction('replay', 'timing', ['NOR']), { focusIds: ['NOR'], seekMs: null })
 assert.deepEqual(workspaceAction('replay', 'battle', ['NOR', 'VER', 'LEC']), { focusIds: ['NOR', 'VER'], seekMs: null })
 assert.deepEqual(workspaceAction('replay', 'strategy', ['PIA']), { focusIds: ['PIA'], seekMs: null })
 assert.deepEqual(workspaceAction('replay', 'feed', ['HAM'], 42_500), { focusIds: ['HAM'], seekMs: 42_500 })

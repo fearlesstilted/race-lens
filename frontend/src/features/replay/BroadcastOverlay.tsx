@@ -1,6 +1,12 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FeedItem, RaceMarker } from '../../api/types'
-import { selectBroadcastCandidate } from '../../lib/broadcastOverlay'
+import {
+  BROADCAST_DISPLAY_MS,
+  BROADCAST_EXIT_MS,
+  canPresentBroadcastCandidate,
+  selectBroadcastCandidate,
+} from '../../lib/broadcastOverlay'
+import type { BroadcastCandidate } from '../../lib/broadcastOverlay'
 
 type Props = {
   atMs: number
@@ -16,22 +22,78 @@ export function BroadcastOverlay({ atMs, playing, speed, lang, markers, feed }: 
     () => selectBroadcastCandidate({ atMs, playing, speed, lang, markers, feed }),
     [atMs, feed, lang, markers, playing, speed],
   )
+  const [displayed, setDisplayed] = useState<BroadcastCandidate | null>(null)
+  const [dismissedId, setDismissedId] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState(false)
+  const displayedId = displayed?.id ?? null
 
-  if (!current) return null
+  useEffect(() => {
+    if (!current) {
+      if (dismissedId !== null) setDismissedId(null)
+      return
+    }
+    if (!canPresentBroadcastCandidate(current.id, dismissedId)) return
+    setDismissedId(null)
+    setLeaving(false)
+    setDisplayed(current)
+  }, [current, dismissedId])
+
+  const dismiss = useCallback(() => {
+    if (!displayedId) return
+    setDismissedId(displayedId)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayed(null)
+      setLeaving(false)
+    } else {
+      setLeaving(true)
+    }
+  }, [displayedId])
+
+  useEffect(() => {
+    if (!displayedId || leaving) return
+    const timer = window.setTimeout(dismiss, BROADCAST_DISPLAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [dismiss, displayedId, leaving])
+
+  useEffect(() => {
+    if (!leaving || !displayedId) return
+    const timer = window.setTimeout(() => {
+      setDisplayed((value) => value?.id === displayedId ? null : value)
+      setLeaving(false)
+    }, BROADCAST_EXIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [displayedId, leaving])
+
+  useEffect(() => {
+    if (!displayedId) return
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss()
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [dismiss, displayedId])
+
+  if (!displayed) return null
   return (
     <aside
-      key={current.id}
-      className={`broadcast-overlay broadcast-overlay--${current.tone}`}
+      key={displayed.id}
+      className={`broadcast-overlay broadcast-overlay--${displayed.tone}${leaving ? ' is-leaving' : ''}`}
       role="status"
       aria-atomic="true"
     >
       <span className="broadcast-overlay__kicker">
         <i aria-hidden="true" />
-        {current.kicker}
+        {displayed.kicker}
       </span>
+      <button
+        type="button"
+        className="broadcast-overlay__close"
+        onClick={dismiss}
+        aria-label="Dismiss race update"
+      >×</button>
       <div className="broadcast-overlay__body">
-        <strong>{current.title}</strong>
-        <small>{current.lap ? `LAP ${current.lap}` : 'RACE UPDATE'} · REPLAY EVENT</small>
+        <strong>{displayed.title}</strong>
+        <small>{displayed.lap ? `LAP ${displayed.lap}` : 'RACE UPDATE'} · REPLAY EVENT</small>
       </div>
     </aside>
   )

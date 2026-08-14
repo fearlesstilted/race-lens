@@ -3,6 +3,7 @@ import { sessionMeta, sessionTypeLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
+import type { DeskMode } from './workspace'
 
 type AppMode = 'replay' | 'live'
 
@@ -17,10 +18,14 @@ type Props = {
   liveNowAvailable: boolean
   projection: boolean
   voice: boolean
+  desk: DeskMode
+  customEditing: boolean
   onModeChange: (mode: AppMode) => void
   onLevel: (level: Level) => void
   onProjection: (on: boolean) => void
   onVoice: (on: boolean) => void
+  onDeskChange: (desk: DeskMode) => void
+  onEditCustom: () => void
   onSeek?: (ms: number) => void
   onSettingsOpen?: () => void
   onCatalogOpen?: () => void
@@ -32,14 +37,14 @@ type Props = {
   sessionName?: string | null
 }
 
-export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, liveNowAvailable, projection, voice, onModeChange, onLevel, onProjection, onVoice, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, anchoredHighlights = true, anchoredDotd = true, sessionName }: Props) {
+export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, liveNowAvailable, projection, voice, desk, customEditing, onModeChange, onLevel, onProjection, onVoice, onDeskChange, onEditCustom, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, anchoredHighlights = true, anchoredDotd = true, sessionName }: Props) {
   const current = sessionId ? sessionMeta(sessionId) : null
   const sessionTriggerLabel = current?.year
     ? `${current.year} · ${current.event} · ${sessionTypeLabel(current.type)}`
     : 'YEAR · EVENT · SESSION'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
-  const anyLayer = projection || voice || level === 'beginner'
+  const anyLayer = projection || voice || level === 'beginner' || desk === 'custom'
   return (
     <div className="top">
       <div className="ident">
@@ -104,6 +109,22 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
                     >PRO</button>
                   </div>
                 </div>
+                <div className="layer-row">
+                  <span className="layer-name">DESK</span>
+                  <div className="tog-group">
+                    {(['classic', 'custom'] as const).map((value) => (
+                      <button
+                        type="button"
+                        className={`tog${desk === value ? ' tog-on' : ''}`}
+                        key={value}
+                        onClick={() => {
+                          onDeskChange(value)
+                          setLayersOpen(false)
+                        }}
+                      >{value.toUpperCase()}</button>
+                    ))}
+                  </div>
+                </div>
                 <button
                   type="button"
                   className={`layer-row layer-toggle${projection ? ' on' : ''}`}
@@ -120,19 +141,17 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
                   <span className="layer-name">VOICE</span>
                   <span className="layer-state">{voice ? 'ON' : 'OFF'}</span>
                 </button>
-                {onSettingsOpen && (
-                  <button
-                    type="button"
-                    className="layer-row layer-toggle"
-                    onClick={() => {
-                      setLayersOpen(false)
-                      onSettingsOpen()
-                    }}
-                  >
-                    <span className="layer-name">CUSTOMIZE DESK</span>
-                    <span className="layer-state">→</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`layer-row layer-toggle${customEditing ? ' on' : ''}`}
+                  onClick={() => {
+                    setLayersOpen(false)
+                    onEditCustom()
+                  }}
+                >
+                  <span className="layer-name">EDIT CUSTOM</span>
+                  <span className="layer-state">{customEditing ? 'EDITING' : '→'}</span>
+                </button>
               </div>
             </>
           )}

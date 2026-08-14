@@ -2,6 +2,8 @@ import { moveElement } from 'react-grid-layout'
 import type { Layout, LayoutItem } from 'react-grid-layout'
 
 export type WorkspaceMode = 'replay' | 'live'
+export type DeskMode = 'classic' | 'custom'
+export type DeskPreferences = Record<WorkspaceMode, DeskMode>
 export type MobileCenter = 'battles' | 'track'
 export type WidgetId = typeof WIDGET_IDS[number]
 export type WidgetDensity = 'auto' | 'full' | 'compact' | 'summary'
@@ -51,11 +53,11 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
   },
   track: {
     label: 'Track', minW: 4, minH: 6, densities: ['auto', 'full'], modes: BOTH_MODES,
-    initial: { x: 8, y: 0, w: 4, h: 7 }, visible: true,
+    initial: { x: 8, y: 0, w: 4, h: 7 }, visible: false,
   },
   insights: {
     label: 'Insights', minW: 3, minH: 6, densities: ALL_DENSITIES, modes: BOTH_MODES,
-    initial: { x: 8, y: 7, w: 4, h: 7 }, visible: true,
+    initial: { x: 8, y: 0, w: 4, h: 14 }, visible: true,
   },
   feed: {
     label: 'Race feed', minW: 4, minH: 6, densities: ALL_DENSITIES, modes: BOTH_MODES,
@@ -80,6 +82,7 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
 }
 
 export const WORKSPACE_KEY = 'racelens_workspace_layout_v2'
+export const DESK_KEY = 'racelens_desk_mode'
 export const MOBILE_CENTER_KEY = 'racelens_mobile_center'
 const LEGACY_DASHBOARD_KEY = 'racelens_dashboard_layout'
 
@@ -209,6 +212,29 @@ export function writeMobileCenter(center: MobileCenter, storage?: WorkspaceStora
   return center
 }
 
+export function readDeskPreferences(storage?: WorkspaceStorage): DeskPreferences {
+  try {
+    const stored = JSON.parse(storageOrBrowser(storage).getItem(DESK_KEY) ?? '{}') as Partial<DeskPreferences>
+    return {
+      replay: stored.replay === 'custom' ? 'custom' : 'classic',
+      live: stored.live === 'custom' ? 'custom' : 'classic',
+    }
+  } catch {
+    return { replay: 'classic', live: 'classic' }
+  }
+}
+
+export function writeDeskPreference(
+  mode: WorkspaceMode,
+  desk: DeskMode,
+  storage?: WorkspaceStorage,
+): DeskPreferences {
+  const target = storageOrBrowser(storage)
+  const next = { ...readDeskPreferences(target), [mode]: desk }
+  try { target.setItem(DESK_KEY, JSON.stringify(next)) } catch { /* noop */ }
+  return next
+}
+
 export function updateWorkspaceWidget(
   workspace: WorkspaceLayout,
   mode: WorkspaceMode,
@@ -273,7 +299,13 @@ export function selectDensity(
   return supported.includes('compact') ? 'compact' : 'summary'
 }
 
-type WorkspaceActionSource = 'timing' | 'battle' | 'strategy' | 'feed'
+export function toggleDriverFocus(selectedIds: string[], id: string): string[] {
+  if (selectedIds.includes(id)) return selectedIds.filter((selected) => selected !== id)
+  if (selectedIds.length >= 2) return [selectedIds[selectedIds.length - 1], id]
+  return [...selectedIds, id]
+}
+
+type WorkspaceActionSource = 'battle' | 'strategy' | 'feed'
 
 export function workspaceAction(
   mode: WorkspaceMode,
