@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getCatalog, getPreparation, prepareSession } from '../../api/client'
 import type { CatalogResponse, CatalogSession, CatalogSessionType } from '../../api/types'
+import { sessionLabel } from '../../lib/format'
+import { recommendedReplay } from '../../lib/recommendedReplay'
 
 type Props = {
   open: boolean
   landing?: boolean
   initialSeason?: number
+  readyReplayIds?: string[]
   onClose: () => void
   onOpenReplay: (sessionId: string) => void
 }
@@ -22,7 +25,14 @@ const SESSION_TYPES: Array<'ALL' | CatalogSessionType> = [
   'ALL', 'FP1', 'FP2', 'FP3', 'SQ', 'Sprint', 'Q', 'R',
 ]
 
-export function SessionCatalog({ open, landing = false, initialSeason, onClose, onOpenReplay }: Props) {
+export function SessionCatalog({
+  open,
+  landing = false,
+  initialSeason,
+  readyReplayIds = [],
+  onClose,
+  onOpenReplay,
+}: Props) {
   const [season, setSeason] = useState(initialSeason ?? new Date().getUTCFullYear())
   const [sessionType, setSessionType] = useState<'ALL' | CatalogSessionType>('ALL')
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
@@ -84,6 +94,7 @@ export function SessionCatalog({ open, landing = false, initialSeason, onClose, 
     }) ?? [],
     [catalog, sessionType],
   )
+  const recommended = useMemo(() => recommendedReplay(readyReplayIds), [readyReplayIds])
 
   useEffect(() => {
     const active = sessions.filter(
@@ -164,9 +175,34 @@ export function SessionCatalog({ open, landing = false, initialSeason, onClose, 
         aria-modal={landing ? undefined : true}
         aria-label="Race archive"
       >
+        {landing && (
+          <div className="catalog-intro">
+            <span className="catalog-intro-kicker">F1 REPLAY · EXPLAINED</span>
+            <h1>Pause the chaos. See why the race moved.</h1>
+            <p>Replay any moment and understand timing, battles, strategy, radio, and incidents.</p>
+            {recommended ? (
+              <button
+                type="button"
+                className="catalog-recommended"
+                onClick={() => onOpenReplay(recommended)}
+              >
+                <small>RECOMMENDED REPLAY</small>
+                <strong>{sessionLabel(recommended)}</strong>
+                <span>OPEN RACE →</span>
+              </button>
+            ) : (
+              <span className="catalog-recommended-loading">Finding the best ready race…</span>
+            )}
+            <div className="catalog-proof" aria-label="Race Lens proof points">
+              <span>DETERMINISTIC REPLAY</span>
+              <span>REAL RECORDER + LIVE PIPELINE</span>
+              <span>REACT + FASTAPI + RUST</span>
+            </div>
+          </div>
+        )}
         <header className="settings-drawer-hdr catalog-header">
           <div>
-            <h2>{landing ? 'Choose a session to begin' : 'Choose any completed session'}</h2>
+            <h2>{landing ? 'Or choose from the race archive' : 'Choose any completed session'}</h2>
           </div>
           {!landing && (
             <button autoFocus type="button" className="settings-close" onClick={onClose} aria-label="Close">×</button>

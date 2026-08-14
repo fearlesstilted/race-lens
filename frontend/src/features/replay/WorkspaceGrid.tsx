@@ -12,6 +12,7 @@ import {
 } from './workspace'
 import type {
   WidgetId,
+  WidgetDensity,
   WorkspaceLayout,
   WorkspaceMode,
   WorkspaceWidget,
@@ -20,8 +21,11 @@ import type {
 type Props = {
   mode: WorkspaceMode
   workspace: WorkspaceLayout
+  editing: boolean
   widgets: Partial<Record<WidgetId, ReactNode>>
   onChange: (workspace: WorkspaceLayout) => void
+  onDone: () => void
+  onReset: () => void
 }
 
 const sameGridItem = (a: WorkspaceWidget, b: LayoutItem) => (
@@ -41,13 +45,17 @@ const gridItem = (item: WorkspaceWidget): LayoutItem => ({
 function WorkspaceFrame({
   id,
   item,
+  editing,
   onHide,
+  onDensity,
   onKeyDown,
   children,
 }: {
   id: WidgetId
   item: WorkspaceWidget
+  editing: boolean
   onHide: () => void
+  onDensity: (density: WidgetDensity) => void
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
   children: ReactNode
 }) {
@@ -67,30 +75,39 @@ function WorkspaceFrame({
   const density = selectDensity(size.width, size.height, definition.densities, item.density)
 
   return (
-    <section ref={frame} className="workspace-widget" data-density={density} aria-label={`${definition.label} widget`}>
-      <header
-        className="workspace-widget-header workspace-drag-handle"
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        aria-label={`${definition.label}. Arrow keys move; Shift plus arrow keys resize.`}
-      >
-        <span className="workspace-grip" aria-hidden="true">⠿</span>
-        <strong>{definition.label}</strong>
-        <small>{density}</small>
-        <button
-          type="button"
-          className="workspace-widget-hide workspace-control"
-          onClick={onHide}
-          aria-label={`Hide ${definition.label}`}
-          title={`Hide ${definition.label}`}
-        >×</button>
-      </header>
+    <section ref={frame} className={`workspace-widget workspace-widget--${id}`} data-density={density} aria-label={`${definition.label} widget`}>
+      {editing && (
+        <header
+          className="workspace-widget-header workspace-drag-handle"
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          aria-label={`${definition.label}. Arrow keys move; Shift plus arrow keys resize.`}
+        >
+          <span className="workspace-grip" aria-hidden="true">⠿</span>
+          <strong>{definition.label}</strong>
+          <label className="workspace-density workspace-control">
+            <span className="sr-only">{definition.label} density</span>
+            <select value={item.density} onChange={(event) => onDensity(event.target.value as WidgetDensity)}>
+              {definition.densities.map((value) => (
+                <option value={value} key={value}>{value.toUpperCase()}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="workspace-widget-hide workspace-control"
+            onClick={onHide}
+            aria-label={`Hide ${definition.label}`}
+            title={`Hide ${definition.label}`}
+          >×</button>
+        </header>
+      )}
       <div className="workspace-widget-content">{children}</div>
     </section>
   )
 }
 
-export function WorkspaceGrid({ mode, workspace, widgets, onChange }: Props) {
+export function WorkspaceGrid({ mode, workspace, editing, widgets, onChange, onDone, onReset }: Props) {
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1600 })
   const visibleIds = useMemo(() => WIDGET_IDS.filter((id) => (
     workspace.widgets[id].visible
@@ -101,6 +118,11 @@ export function WorkspaceGrid({ mode, workspace, widgets, onChange }: Props) {
     () => visibleIds.map((id) => gridItem(workspace.widgets[id])),
     [visibleIds, workspace.widgets],
   )
+  const hiddenIds = useMemo(() => WIDGET_IDS.filter((id) => (
+    !workspace.widgets[id].visible
+    && WIDGET_REGISTRY[id].modes.includes(mode)
+    && widgets[id] !== undefined
+  )), [mode, widgets, workspace.widgets])
 
   const applyLayout = useCallback((nextLayout: Layout) => {
     if (nextLayout.every((next) => sameGridItem(workspace.widgets[next.i as WidgetId], next))) return
@@ -134,23 +156,42 @@ export function WorkspaceGrid({ mode, workspace, widgets, onChange }: Props) {
   }, [applyLayout, layout, workspace.widgets])
 
   return (
-    <div ref={containerRef} className="workspace-grid-wrap">
+    <div ref={containerRef} className={`workspace-grid-wrap${editing ? ' is-editing' : ' is-locked'}`}>
+      {editing && (
+        <div className="workspace-editbar" role="toolbar" aria-label="Custom desk editor">
+          <strong>EDIT CUSTOM</strong>
+          {hiddenIds.length > 0 && <span>RESTORE</span>}
+          {hiddenIds.map((id) => (
+            <button
+              type="button"
+              className="b"
+              key={id}
+              onClick={() => onChange(updateWorkspaceWidget(workspace, mode, id, { visible: true }))}
+            >{WIDGET_REGISTRY[id].label.toUpperCase()}</button>
+          ))}
+          <button type="button" className="b workspace-edit-reset" onClick={onReset}>RESET</button>
+          <button type="button" className="b primary" onClick={onDone}>DONE</button>
+        </div>
+      )}
       {mounted && (
         <ReactGridLayout
+          className="workspace-grid-canvas"
           width={width}
           layout={layout}
           gridConfig={{ cols: 12, rowHeight: 36, margin: [8, 8], containerPadding: [12, 8] }}
-          dragConfig={{ handle: '.workspace-drag-handle', cancel: '.workspace-control', bounded: true }}
-          resizeConfig={{ handles: ['se'] }}
+          dragConfig={{ enabled: editing, handle: '.workspace-drag-handle', cancel: '.workspace-control', bounded: true }}
+          resizeConfig={{ enabled: editing, handles: ['se'] }}
           compactor={verticalCompactor}
-          onLayoutChange={applyLayout}
+          onLayoutChange={editing ? applyLayout : undefined}
         >
           {visibleIds.map((id) => (
             <div key={id}>
               <WorkspaceFrame
                 id={id}
                 item={workspace.widgets[id]}
+                editing={editing}
                 onHide={() => onChange(updateWorkspaceWidget(workspace, mode, id, { visible: false }))}
+                onDensity={(density) => onChange(updateWorkspaceWidget(workspace, mode, id, { density }))}
                 onKeyDown={(event) => handleKeyboard(id, event)}
               >
                 {widgets[id]}

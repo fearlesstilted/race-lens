@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
 import { HighlightsPanel } from './HighlightsPanel'
-import { WIDGET_IDS, WIDGET_REGISTRY, updateWorkspaceWidget } from './workspace'
-import type { WorkspaceLayout, WidgetDensity } from './workspace'
 import type { Lang, Level } from './replayTypes'
 
 type Props = {
@@ -13,12 +11,9 @@ type Props = {
   mode: 'replay' | 'live'
   liveAvailable: boolean
   liveNowAvailable: boolean
-  workspace: WorkspaceLayout
   onLang: (lang: Lang) => void
   onLevel: (level: Level) => void
   onModeChange: (mode: 'replay' | 'live') => void
-  onWorkspace: (value: WorkspaceLayout) => void
-  onWorkspaceReset: () => void
   sessionId?: string | null
   onSeek?: (ms: number) => void
   sessionStatus?: string
@@ -29,8 +24,7 @@ type Props = {
 
 export function SettingsDrawer({
   open, onClose, lang, level, mode, liveAvailable, liveNowAvailable,
-  workspace, onLang, onLevel, onModeChange,
-  onWorkspace, onWorkspaceReset,
+  onLang, onLevel, onModeChange,
   sessionId, onSeek, sessionStatus, lap, totalLaps, atMs,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -96,59 +90,6 @@ export function SettingsDrawer({
             <button type="button" className={`tog${level === 'beginner' ? ' tog-on' : ''}`} onClick={() => onLevel('beginner')}>ROOKIE</button>
             <button type="button" className={`tog${level === 'pro' ? ' tog-on' : ''}`} onClick={() => onLevel('pro')}>PRO</button>
           </div>
-        </div>
-
-        <div className="settings-group">
-          <div className="settings-group-label">DESKTOP WORKSPACE</div>
-          <div className="layout-options">
-            {WIDGET_IDS.map((id) => {
-              const definition = WIDGET_REGISTRY[id]
-              const item = workspace.widgets[id]
-              const available = definition.modes.includes(mode)
-              const state = !available
-                ? 'UNAVAILABLE'
-                : item.visible
-                  ? definition.anchored ? 'PINNED' : 'ON'
-                  : definition.anchored ? 'ANCHORED' : 'OFF'
-              return (
-                <div className={`workspace-setting${available ? '' : ' disabled'}`} key={id}>
-                  <button
-                    type="button"
-                    className={`layer-row layer-toggle${item.visible && available ? ' on' : ''}`}
-                    disabled={!available}
-                    onClick={() => onWorkspace(updateWorkspaceWidget(
-                      workspace,
-                      mode,
-                      id,
-                      { visible: !item.visible },
-                    ))}
-                  >
-                    <span className="layer-name">{definition.label.toUpperCase()}</span>
-                    <span className="layer-state">{state}</span>
-                  </button>
-                  <label>
-                    <span className="sr-only">{definition.label} density</span>
-                    <select
-                      value={item.density}
-                      disabled={!available || !item.visible}
-                      onChange={(event) => onWorkspace(updateWorkspaceWidget(
-                        workspace,
-                        mode,
-                        id,
-                        { density: event.target.value as WidgetDensity },
-                      ))}
-                    >
-                      {definition.densities.map((density) => (
-                        <option value={density} key={density}>{density.toUpperCase()}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )
-            })}
-          </div>
-          <button type="button" className="b workspace-reset" onClick={onWorkspaceReset}>RESET DEFAULT</button>
-          <small className="layout-help">Drag widget headers. Arrow keys move; Shift + arrows resize. Mobile keeps its tab layout.</small>
         </div>
 
         {mode === 'replay' && sessionId && onSeek && (

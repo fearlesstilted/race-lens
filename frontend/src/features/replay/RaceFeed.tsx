@@ -162,27 +162,29 @@ export function RaceFeed({
   return (
     <div className="ev-scroll">
       <div className="label">RACE FEED</div>
-      {items.map((item) => {
-        const k = itemKey(item)
-        return (
-          <FeedRow
-            key={k}
-            item={item}
-            flash={flashKeys.has(k)}
-            playingUrl={playingUrl}
-            onToggleRadio={handleToggleRadio}
-            onActivate={onActivate && (isActionable?.(item) ?? true) ? onActivate : undefined}
-            clockOriginMs={clockOriginMs}
-          />
-        )
-      })}
-      {items.length === 0 && (
-        <div className="ev">
-          <span className="ev-lap" />
-          <span className="t">—</span>
-          <span className="x">{loading ? 'Loading events…' : 'No events yet'}</span>
-        </div>
-      )}
+      <div className="ev-list">
+        {items.map((item) => {
+          const k = itemKey(item)
+          return (
+            <FeedRow
+              key={k}
+              item={item}
+              flash={flashKeys.has(k)}
+              playingUrl={playingUrl}
+              onToggleRadio={handleToggleRadio}
+              onActivate={onActivate && (isActionable?.(item) ?? true) ? onActivate : undefined}
+              clockOriginMs={clockOriginMs}
+            />
+          )
+        })}
+        {items.length === 0 && (
+          <div className="ev">
+            <span className="ev-lap" />
+            <span className="t">—</span>
+            <span className="x">{loading ? 'Loading events…' : 'No events yet'}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

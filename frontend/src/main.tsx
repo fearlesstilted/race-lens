@@ -23,15 +23,18 @@ import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
 import { HighlightsPanel } from './features/replay/HighlightsPanel'
 import { WorkspaceGrid } from './features/replay/WorkspaceGrid'
 import {
+  defaultWorkspace,
+  readDeskPreferences,
   readMobileCenter,
   readWorkspaces,
-  resetWorkspace,
+  toggleDriverFocus,
   updateWorkspaceWidget,
   workspaceAction,
+  writeDeskPreference,
   writeMobileCenter,
   writeWorkspace,
 } from './features/replay/workspace'
-import type { MobileCenter } from './features/replay/workspace'
+import type { DeskMode, MobileCenter, WorkspaceLayout } from './features/replay/workspace'
 import { useReplay } from './features/replay/useReplay'
 import { lapAtTime, sessionLabel } from './lib/format'
 import { focusDriverIds } from './lib/insightFocus'
@@ -117,10 +120,13 @@ function App() {
   const [mode, setMode] = useState<AppMode>('replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [workspaces, setWorkspaces] = useState(readWorkspaces)
+  const [deskPreferences, setDeskPreferences] = useState(readDeskPreferences)
+  const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceLayout | null>(null)
   const [mobileCenter, setMobileCenter] = useState<MobileCenter>(() => readMobileCenter())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
+  const [readyReplayIds, setReadyReplayIds] = useState<string[]>([])
   const [replayPinned, setReplayPinned] = useState(Boolean(initialSessionId))
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
@@ -136,12 +142,27 @@ function App() {
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
   const desktopWorkspace = useDesktopWorkspace()
   const workspace = workspaces[mode]
+  const desk = deskPreferences[mode]
+  const customEditing = workspaceDraft !== null
+  const customWorkspace = workspaceDraft ?? workspace
   const handleWorkspace = useCallback((layout: typeof workspace) => {
     setWorkspaces(writeWorkspace(mode, layout))
   }, [mode])
-  const handleWorkspaceReset = useCallback(() => {
-    setWorkspaces(resetWorkspace(mode))
-  }, [mode])
+  const handleDeskChange = useCallback((next: DeskMode) => {
+    if (next === desk) return
+    setWorkspaceDraft(null)
+    setDeskPreferences(writeDeskPreference(mode, next))
+  }, [desk, mode])
+  const handleEditCustom = useCallback(() => {
+    if (workspaceDraft) return
+    setDeskPreferences(writeDeskPreference(mode, 'custom'))
+    setWorkspaceDraft(workspace)
+  }, [mode, workspace, workspaceDraft])
+  const handleCustomDone = useCallback(() => {
+    if (!workspaceDraft) return
+    setWorkspaces(writeWorkspace(mode, workspaceDraft))
+    setWorkspaceDraft(null)
+  }, [mode, workspaceDraft])
   const handleMobileCenter = useCallback((center: MobileCenter) => {
     setMobileCenter(writeMobileCenter(center))
   }, [])
@@ -186,6 +207,7 @@ function App() {
     setIsLiveActive(false)
     setReplayPinned(true)
     setSelectedIds([])
+    setWorkspaceDraft(null)
     setCenterTab('FEED')
     setSessionNotice(null)
     setSessionId(id)
@@ -205,6 +227,7 @@ function App() {
     setLiveError(null)
     setCenterTab('FEED')
     setSelectedIds([])
+    setWorkspaceDraft(null)
   }, [replay.pause])
 
   const loadSessions = useCallback(() => {
@@ -219,6 +242,7 @@ function App() {
       .then((items) => {
         if (cancelled) return
         window.clearTimeout(wakeTimer)
+        setReadyReplayIds(items.map((item) => item.session_id))
         const requested = new URLSearchParams(window.location.search).get('session')
         if (requested !== requestedAtStart) {
           setBackendPhase('ready')
@@ -325,7 +349,7 @@ function App() {
   }, [])
 
   const handleWidgetAction = useCallback((
-    source: 'timing' | 'battle' | 'strategy' | 'feed',
+    source: 'battle' | 'strategy' | 'feed',
     ids: string[],
     atMs?: number,
   ) => {
@@ -336,6 +360,11 @@ function App() {
     }
     if (action.seekMs !== null) replay.scrub(action.seekMs)
   }, [mode, replay.scrub])
+
+  const handleSelectDriver = useCallback((id: string) => {
+    setMobTab('INSIGHTS')
+    setSelectedIds((current) => toggleDriverFocus(current, id))
+  }, [])
 
   const handleFocusDrivers = useCallback((ids: string[]) => {
     const focused = focusDriverIds(ids)
@@ -352,6 +381,7 @@ function App() {
       return
     }
     replay.pause()
+    setWorkspaceDraft(null)
     setMode(next)
     setIsLiveActive(false)
     setReplayPinned(next === 'replay')
@@ -421,11 +451,15 @@ function App() {
   const liveSessionName = state?.session_name ?? (
     liveStatusData?.replay_session_id ? sessionLabel(liveStatusData.replay_session_id) : null
   )
-  const projectionOn = desktopWorkspace ? workspace.widgets.pace.visible : projection
+  const projectionOn = desktopWorkspace && desk === 'custom'
+    ? customWorkspace.widgets.pace.visible
+    : projection
   const handleProjection = (value: boolean) => {
     setProjection(value)
-    if (desktopWorkspace) {
-      handleWorkspace(updateWorkspaceWidget(workspace, mode, 'pace', { visible: value }))
+    if (desktopWorkspace && desk === 'custom') {
+      const next = updateWorkspaceWidget(customWorkspace, mode, 'pace', { visible: value })
+      if (customEditing) setWorkspaceDraft(next)
+      else handleWorkspace(next)
     }
   }
 
@@ -435,7 +469,7 @@ function App() {
         rows={rows}
         battles={replay.battles}
         selectedIds={selectedIds}
-        onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+        onSelectDriver={handleSelectDriver}
       />
     ),
     battles: (
@@ -455,7 +489,7 @@ function App() {
           battles={replay.battles}
           currentLap={currentLap}
           totalLaps={state?.total_laps ?? null}
-          onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+          onSelectDriver={handleSelectDriver}
           onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
         />
       </>
@@ -545,6 +579,7 @@ function App() {
         open={catalogOpen}
         landing={mode === 'replay' && !sessionId}
         initialSeason={initialCatalogSeason}
+        readyReplayIds={readyReplayIds}
         onClose={closeCatalog}
         onOpenReplay={handleSessionChange}
       />
@@ -556,12 +591,9 @@ function App() {
         mode={mode}
         liveAvailable={liveAvailable}
         liveNowAvailable={liveDecision.showLiveNow}
-        workspace={workspace}
         onLang={replay.setLang}
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
-        onWorkspace={handleWorkspace}
-        onWorkspaceReset={handleWorkspaceReset}
         sessionId={mode === 'replay' ? sessionId : null}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         sessionStatus={sessionStatus}
@@ -580,17 +612,21 @@ function App() {
         liveNowAvailable={liveDecision.showLiveNow}
         projection={projectionOn}
         voice={voice}
+        desk={desk}
+        customEditing={customEditing}
         onModeChange={handleModeSwitch}
         onLevel={replay.setLevel}
         onVoice={setVoice}
+        onDeskChange={handleDeskChange}
+        onEditCustom={handleEditCustom}
         onProjection={handleProjection}
         onSeek={mode === 'replay' ? replay.scrub : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
-        anchoredHighlights={!desktopWorkspace || !workspace.widgets.highlights.visible}
-        anchoredDotd={!desktopWorkspace || !workspace.widgets.dotd.visible}
+        anchoredHighlights={!desktopWorkspace || desk === 'classic' || !customWorkspace.widgets.highlights.visible}
+        anchoredDotd={!desktopWorkspace || desk === 'classic' || !customWorkspace.widgets.dotd.visible}
         sessionName={mode === 'live' ? liveSessionName : null}
       />
 
@@ -675,12 +711,15 @@ function App() {
             </div>
           </div>
 
-          {desktopWorkspace ? (
+          {desktopWorkspace && desk === 'custom' ? (
             <WorkspaceGrid
               mode={mode}
-              workspace={workspace}
+              workspace={customWorkspace}
+              editing={customEditing}
               widgets={workspaceWidgets}
-              onChange={handleWorkspace}
+              onChange={setWorkspaceDraft}
+              onDone={handleCustomDone}
+              onReset={() => setWorkspaceDraft(defaultWorkspace(mode))}
             />
           ) : (
           <div className="wrap" data-mob-tab={mobTab}>
@@ -688,7 +727,7 @@ function App() {
               rows={rows}
               battles={replay.battles}
               selectedIds={selectedIds}
-              onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+              onSelectDriver={handleSelectDriver}
             />
 
             <div className="col col-center">
@@ -724,7 +763,7 @@ function App() {
                   battles={replay.battles}
                   currentLap={currentLap}
                   totalLaps={state?.total_laps ?? null}
-                  onSelectDriver={(id) => handleWidgetAction('timing', [id])}
+                  onSelectDriver={handleSelectDriver}
                   onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
                 />
               ) : (

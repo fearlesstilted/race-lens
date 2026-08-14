@@ -1,9 +1,26 @@
 import assert from 'node:assert/strict'
 
-import { selectBroadcastCandidate } from '../src/lib/broadcastOverlay.ts'
+import {
+  BROADCAST_DISPLAY_MS,
+  BROADCAST_EXIT_MS,
+  canPresentBroadcastCandidate,
+  selectBroadcastCandidate,
+} from '../src/lib/broadcastOverlay.ts'
 import { battleGap, battlePair } from '../src/lib/battles.ts'
 import { lapAtTime } from '../src/lib/format.ts'
 import { livePresentation } from '../src/lib/liveStatus.ts'
+
+assert.ok(BROADCAST_DISPLAY_MS && BROADCAST_DISPLAY_MS >= 4_000 && BROADCAST_DISPLAY_MS <= 5_000,
+  'overlay lifetime is four to five wall-clock seconds')
+assert.ok(BROADCAST_EXIT_MS && BROADCAST_EXIT_MS >= 250 && BROADCAST_EXIT_MS <= 350,
+  'overlay exit takes roughly 300 ms')
+assert.equal(typeof canPresentBroadcastCandidate, 'function', 'candidate dismissal guard exists')
+assert.equal(canPresentBroadcastCandidate('incident-1', 'incident-1'), false,
+  'a dismissed event stays hidden while it remains the candidate')
+assert.equal(canPresentBroadcastCandidate('incident-2', 'incident-1'), true,
+  'a changed candidate may appear')
+assert.equal(canPresentBroadcastCandidate(null, 'incident-1'), false,
+  'an absent candidate cannot appear')
 
 const incident = {
   kind: 'CRASH' as const,

@@ -135,6 +135,15 @@
   .catalog-panel {
     width: 100%;
   }
+  .catalog-intro {
+    padding: calc(22px + env(safe-area-inset-top)) 16px 20px;
+  }
+  .catalog-intro h1 { font-size: clamp(31px, 10vw, 46px); }
+  .catalog-intro > p { margin-top: 10px; font-size: 15px; }
+  .catalog-recommended { margin-top: 16px; gap: 3px 10px; padding: 11px 12px; }
+  .catalog-recommended strong { font-size: 18px; }
+  .catalog-recommended span { font-size: 11px; letter-spacing: .1em; }
+  .catalog-proof { gap: 7px 14px; margin-top: 15px; font-size: 11px; }
   .catalog-header {
     padding: calc(10px + env(safe-area-inset-top))
       calc(12px + env(safe-area-inset-right)) 10px

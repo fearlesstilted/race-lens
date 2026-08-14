@@ -15,6 +15,7 @@
     "check:track": "node scripts/check-track-interpolation.ts",
     "check:workspace": "node scripts/check-workspace.ts",
     "check:desktop": "node scripts/check-desktop.ts",
+    "check:demo": "node scripts/check-demo-entry.ts",
     "lint": "eslint src",
     "preview": "vite preview",
     "tauri": "tauri"
