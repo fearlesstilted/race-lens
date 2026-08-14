@@ -89,6 +89,8 @@ try:
 except ValueError:
     PREPARATION_DAILY_MAX = 4
 REMOTE_CACHE_DIR = Path(os.environ.get("RACELENS_REMOTE_CACHE", "/tmp/race-lens-sessions"))
+_CGROUP_MEMORY_CURRENT = Path("/sys/fs/cgroup/memory.current")
+_CGROUP_MEMORY_MAX = Path("/sys/fs/cgroup/memory.max")
 try:
     REMOTE_CACHE_MAX = int(
         os.environ.get("RACELENS_REMOTE_CACHE_MAX_BYTES", str(160 * 1024 * 1024))
@@ -97,7 +99,8 @@ except ValueError:
     REMOTE_CACHE_MAX = 160 * 1024 * 1024
 STORAGE_CONFIG = StorageConfig.from_env()
 
-# One parsed replay plus its positions stays below Render Free's 512 MB limit.
+# maxsize=1 bounds parsed memory. Cached values are path-free, while every
+# filesystem read reacquires a lease, so directory eviction cannot stale them.
 SESSION_CACHE_SIZE = 1
 
 SECURITY_HEADERS = {
@@ -135,6 +138,12 @@ _start_lock: asyncio.Lock = asyncio.Lock()
 # lru_cache may compute the same missing key concurrently. Fixture parsing is
 # memory-heavy, so serialize cold loads and let later callers hit the cache.
 _engine_load_lock = Lock()
+_ping_lock = Lock()
+_ping_stats: dict[str, Any] = {
+    "requests": 0,
+    "last_seen": None,
+    "previous_interval_seconds": None,
+}
 
 
 @lru_cache(maxsize=SESSION_CACHE_SIZE)
@@ -534,8 +543,58 @@ def _cache_stats(cache) -> dict[str, int]:
     }
 
 
+def _record_ping() -> None:
+    now = _utcnow()
+    with _ping_lock:
+        previous = _ping_stats["last_seen"]
+        _ping_stats["requests"] += 1
+        _ping_stats["last_seen"] = now
+        if isinstance(previous, datetime):
+            _ping_stats["previous_interval_seconds"] = round(
+                max(0.0, (now - previous).total_seconds()), 3,
+            )
+
+
+def _keepalive_stats() -> dict[str, Any]:
+    now = _utcnow()
+    with _ping_lock:
+        last_seen = _ping_stats["last_seen"]
+        return {
+            "requests": _ping_stats["requests"],
+            "last_seen": last_seen.isoformat().replace("+00:00", "Z")
+            if isinstance(last_seen, datetime) else None,
+            "previous_interval_seconds": _ping_stats["previous_interval_seconds"],
+            "age_seconds": round(max(0.0, (now - last_seen).total_seconds()), 3)
+            if isinstance(last_seen, datetime) else None,
+        }
+
+
+def _memory_stats() -> dict[str, int | float | None]:
+    def read(path: Path) -> int | None:
+        try:
+            raw = path.read_text(encoding="ascii").strip()
+            return None if raw == "max" else max(0, int(raw))
+        except (OSError, UnicodeError, ValueError):
+            return None
+
+    current = read(_CGROUP_MEMORY_CURRENT)
+    limit = read(_CGROUP_MEMORY_MAX)
+    pressure = round(current * 100 / limit, 1) if current is not None and limit else None
+    return {
+        "current_bytes": current,
+        "limit_bytes": limit,
+        "pressure_percent": pressure,
+    }
+
+
 @app.get("/api/ping")
 def ping():
+    _record_ping()
+    return {"status": "ok"}
+
+
+@app.get("/api/health")
+def health():
     return {"status": "ok"}
 
 
@@ -545,6 +604,8 @@ def diagnostics() -> dict:
     remote = cache.stats() if cache is not None else {
         "materializations": 0,
         "hits": 0,
+        "misses": 0,
+        "leases": 0,
         "evictions": 0,
         "bytes": 0,
         "disk_bytes": 0,
@@ -568,6 +629,8 @@ def diagnostics() -> dict:
             "positions": _cache_stats(_positions_data_cached),
         },
         "remote_cache": remote,
+        "memory": _memory_stats(),
+        "keepalive": _keepalive_stats(),
         "live": live,
     }
 

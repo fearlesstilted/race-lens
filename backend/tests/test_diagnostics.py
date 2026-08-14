@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -19,10 +20,13 @@ def test_remote_api_reads_survive_forced_eviction(tmp_path, monkeypatch):
     store = MemoryStore()
     sizes = []
     for replay_id in ("alpha_2024_race", "beta_2024_race"):
+        events = mini_race()
+        for item in events:
+            item.session_id = replay_id
         fixture = tmp_path / f"{replay_id}.jsonl"
         track = tmp_path / f"{replay_id}.track.json"
         positions = tmp_path / f"{replay_id}.positions.json"
-        fixture.write_text(dump_jsonl(mini_race()), encoding="utf-8")
+        fixture.write_text(dump_jsonl(events), encoding="utf-8")
         track.write_text(json.dumps({"session_id": replay_id, "points": [[0, 0]]}))
         positions.write_text(json.dumps({
             "session_id": replay_id,
@@ -32,7 +36,7 @@ def test_remote_api_reads_survive_forced_eviction(tmp_path, monkeypatch):
         }))
         publish_session(
             store, "2024-08-r", replay_id, fixture, track, positions,
-            event_count=len(mini_race()),
+            event_count=len(events),
         )
         sizes.append(sum(path.stat().st_size for path in (fixture, track, positions)))
 
@@ -47,18 +51,24 @@ def test_remote_api_reads_survive_forced_eviction(tmp_path, monkeypatch):
 
     def read(replay_id):
         client = TestClient(api.app)
-        return [
-            client.get(f"/api/sessions/{replay_id}/state", params={"at_ms": 0}).status_code,
-            client.get(f"/api/sessions/{replay_id}/track").status_code,
-            client.get(f"/api/sessions/{replay_id}/positions").status_code,
-            client.get(f"/api/sessions/{replay_id}/timeline").status_code,
+        responses = [
+            client.get(f"/api/sessions/{replay_id}/state", params={"at_ms": 0}),
+            client.get(f"/api/sessions/{replay_id}/track"),
+            client.get(f"/api/sessions/{replay_id}/positions"),
+            client.get(f"/api/sessions/{replay_id}/timeline"),
         ]
+        assert [response.status_code for response in responses] == [200] * 4
+        return [response.json()["session_id"] for response in responses]
 
-    assert read("alpha_2024_race") == [200] * 4
-    assert read("beta_2024_race") == [200] * 4
+    assert read("alpha_2024_race") == ["alpha_2024_race"] * 4
+    assert {path.name for path in cache.directory.iterdir()} == {"alpha_2024_race"}
+    assert read("beta_2024_race") == ["beta_2024_race"] * 4
+    assert {path.name for path in cache.directory.iterdir()} == {"beta_2024_race"}
+    assert read("alpha_2024_race") == ["alpha_2024_race"] * 4
+    assert {path.name for path in cache.directory.iterdir()} == {"alpha_2024_race"}
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(read, ("alpha_2024_race", "beta_2024_race")))
-    assert results == [[200] * 4, [200] * 4]
+    assert results == [["alpha_2024_race"] * 4, ["beta_2024_race"] * 4]
 
 
 def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
@@ -69,6 +79,8 @@ def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
             return {
                 "materializations": 2,
                 "hits": 3,
+                "misses": 2,
+                "leases": 1,
                 "evictions": 1,
                 "bytes": 456,
                 "disk_bytes": 123,
@@ -108,6 +120,8 @@ def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
     assert body["remote_cache"] == {
         "materializations": 2,
         "hits": 3,
+        "misses": 2,
+        "leases": 1,
         "evictions": 1,
         "bytes": 456,
         "disk_bytes": 123,
@@ -118,6 +132,43 @@ def test_diagnostics_are_operational_and_sanitized(tmp_path, monkeypatch):
     assert "SECRET_ACCESS_KEY" not in encoded
     assert "private-bucket" not in encoded
     assert str(tmp_path) not in encoded
+
+
+def test_diagnostics_measure_keepalive_interval_and_memory_pressure(tmp_path, monkeypatch):
+    import racelens.api as api
+
+    current = tmp_path / "memory.current"
+    maximum = tmp_path / "memory.max"
+    current.write_text("200\n", encoding="ascii")
+    maximum.write_text("800\n", encoding="ascii")
+    started = datetime(2026, 8, 14, 12, tzinfo=UTC)
+    clock = iter((started, started + timedelta(minutes=5), started + timedelta(minutes=6)))
+    monkeypatch.setattr(api, "_CGROUP_MEMORY_CURRENT", current)
+    monkeypatch.setattr(api, "_CGROUP_MEMORY_MAX", maximum)
+    monkeypatch.setattr(api, "_ping_stats", {
+        "requests": 0, "last_seen": None, "previous_interval_seconds": None,
+    })
+    monkeypatch.setattr(api, "_utcnow", lambda: next(clock))
+    monkeypatch.setattr(api, "_remote_cache", lambda: None)
+    monkeypatch.setattr(api, "_live", None)
+    client = TestClient(api.app)
+
+    assert client.get("/api/health").status_code == 200
+    assert client.get("/api/ping").status_code == 200
+    assert client.get("/api/ping").status_code == 200
+    body = client.get("/api/diagnostics").json()
+
+    assert body["keepalive"] == {
+        "requests": 2,
+        "last_seen": "2026-08-14T12:05:00Z",
+        "previous_interval_seconds": 300.0,
+        "age_seconds": 60.0,
+    }
+    assert body["memory"] == {
+        "current_bytes": 200,
+        "limit_bytes": 800,
+        "pressure_percent": 25.0,
+    }
 
 
 def test_diagnostics_preserve_signalr_source_after_capture_reap(monkeypatch):

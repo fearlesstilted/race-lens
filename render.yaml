@@ -6,7 +6,7 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /api/ping
+    healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
       - key: PORT

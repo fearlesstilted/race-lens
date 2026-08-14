@@ -1389,7 +1389,9 @@ class RemoteSessionCache:
         self.directory = Path(directory)
         self.max_bytes = max(MAX_SESSION_BYTES, max_bytes)
         self._active: dict[str, int] = {}
-        self._stats = {"materializations": 0, "hits": 0, "evictions": 0, "bytes": 0}
+        self._stats = {
+            "materializations": 0, "hits": 0, "misses": 0, "evictions": 0, "bytes": 0,
+        }
 
     @staticmethod
     def _size(path: Path) -> int:
@@ -1434,6 +1436,7 @@ class RemoteSessionCache:
             os.utime(target)
             self._stats["hits"] += 1
             return target
+        self._stats["misses"] += 1
         temporary = Path(tempfile.mkdtemp(prefix=".session-", dir=self.directory))
         try:
             for name, suffix in ARCHIVE_FILES.items():
@@ -1477,4 +1480,9 @@ class RemoteSessionCache:
     def stats(self) -> dict[str, int]:
         with self._lock:
             disk_bytes = self._size(self.directory) if self.directory.is_dir() else 0
-            return {**self._stats, "disk_bytes": disk_bytes, "max_bytes": self.max_bytes}
+            return {
+                **self._stats,
+                "leases": sum(self._active.values()),
+                "disk_bytes": disk_bytes,
+                "max_bytes": self.max_bytes,
+            }

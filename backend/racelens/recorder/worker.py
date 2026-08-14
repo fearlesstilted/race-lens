@@ -712,20 +712,32 @@ class Recorder:
         }
         session = select_due_session(sessions, now, unavailable)
         if session is None:
-            next_capture = min(
+            next_session = min(
                 (
-                    item.capture_from
+                    item
                     for item in sessions
                     if item.capture_from > now
                     and item.session_id not in unavailable
                 ),
+                key=lambda item: item.capture_from,
                 default=None,
             )
-            if next_capture is not None and next_capture <= now + REMOTE_CAPTURE_GUARD:
-                return "idle: scheduled capture is approaching"
+            if (
+                next_session is not None
+                and next_session.capture_from <= now + REMOTE_CAPTURE_GUARD
+            ):
+                return (
+                    f"idle: next capture {next_session.session_id} at "
+                    f"{next_session.capture_from.isoformat()} (approaching)"
+                )
             remote = self._run_remote_once()
             if remote == "idle":
                 self._sync_completed_awards(sessions)
+                if next_session is not None:
+                    return (
+                        f"idle: next capture {next_session.session_id} at "
+                        f"{next_session.capture_from.isoformat()}"
+                    )
             return remote
         self.store.transition(session.session_id, Phase.RECORDING, now)
         try:
