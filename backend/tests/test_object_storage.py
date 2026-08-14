@@ -138,6 +138,7 @@ def test_remote_cache_leases_block_eviction_and_cold_load_once(tmp_path):
     with cache.lease("alpha_2024_race") as alpha:
         with cache.lease("beta_2024_race") as beta:
             assert alpha.is_dir() and beta.is_dir()
+            assert cache.stats()["leases"] == 2
         assert alpha.is_dir()
         assert not beta.exists()
 
@@ -154,7 +155,9 @@ def test_remote_cache_leases_block_eviction_and_cold_load_once(tmp_path):
     assert payloads == [fixture.read_bytes()] * 4
     assert store.downloads - before == 3
     assert cold.stats()["materializations"] == 1
+    assert cold.stats()["misses"] == 1
     assert cold.stats()["hits"] == 3
+    assert cold.stats()["leases"] == 0
 
 
 def test_manifest_rejects_oversized_or_unexpected_objects(tmp_path):

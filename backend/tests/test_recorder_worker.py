@@ -157,6 +157,21 @@ def test_restart_finalizes_recording_after_schedule_deadline(tmp_path, monkeypat
     assert captures == [session.session_id]
 
 
+def test_idle_worker_reports_the_next_capture_window(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 14, 12, tzinfo=UTC)
+    session = ScheduledSession(
+        2026, 12, "Dutch Grand Prix", "FP1", datetime(2026, 8, 21, 10, 30, tzinfo=UTC),
+    )
+    recorder = Recorder(_config(tmp_path), now=lambda: now)
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule", lambda year: [session]
+    )
+
+    assert recorder.run_once() == (
+        "idle: next capture 2026-12-fp1 at 2026-08-21T10:20:00+00:00"
+    )
+
+
 def test_idle_worker_processes_one_durable_historical_request(tmp_path, monkeypatch):
     now = datetime(2026, 1, 10, tzinfo=UTC)
     historical = ScheduledSession(
