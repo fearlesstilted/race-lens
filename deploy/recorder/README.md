@@ -69,9 +69,9 @@ RACELENS_S3_SECRET_ACCESS_KEY=...
 Keep the env file at mode `0600`. The bucket stays private and needs no browser
 CORS rule.
 
-Render needs `ListBucket` restricted to `requests/`, `status/`, `sessions/`, and
-`awards/`; `GetObject` on those prefixes; and `PutObject` only on `requests/`. The worker
-needs list/read on `requests/` and `status/`, write on `status/`, multipart
+Render needs `ListBucket` restricted to `requests/`, `status/`, `sessions/`, `awards/`, and
+`live/`; `GetObject` on those prefixes; and `PutObject` only on `requests/`. The worker
+needs list/read on `requests/` and `status/`, write on `status/`, list/read/write on `live/`, multipart
 write/copy on `tmp/` and `sessions/`, read/write on `awards/`, and delete only on `tmp/`. It does not
 need bucket administration or public access.
 
@@ -101,7 +101,13 @@ sessions/{replay_session_id}/events.jsonl
 sessions/{replay_session_id}/track.json
 sessions/{replay_session_id}/positions.json
 awards/driver-of-the-day/{replay_session_id}.json
+live/current.json
+live/{canonical_session_id}/snapshot.json
 ```
+
+Live keys are transient: the snapshot expires every 20 seconds and is
+rewritten while `live/current.json` tracks the session lifecycle until the
+archive publishes.
 
 The worker uploads to `tmp/`, reads each object back, copies verified files to
 `sessions/`, reads them back again, and writes the final manifest last. A

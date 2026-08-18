@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+from racelens.object_storage import StorageError
 from racelens.recorder.schedule import ScheduledSession, load_fastf1_schedule
 from racelens.recorder.worker import fixture_stem
 
@@ -238,7 +239,14 @@ def catalog_session(
     if (fixtures_dir / f"{replay_id}.jsonl").is_file():
         status, job_id = "ready", None
     else:
-        record = queue.get(session.session_id)
+        try:
+            record = queue.get(session.session_id)
+        except StorageError:
+            # A storage outage must not hide local ready sessions or turn a
+            # whole multi-session catalog into a 503. Report queue state as
+            # unknown ("prepare") so the endpoint stays honest without
+            # claiming readiness it cannot prove.
+            record = None
         status = (
             "processing" if record and record.get("status") in {"processing", "running"}
             else "queued" if record and record.get("status") == "queued"

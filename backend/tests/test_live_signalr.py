@@ -181,7 +181,9 @@ def test_live_start_signalr_wires_runner_and_capture(tmp_path, monkeypatch):
         stop = c.post("/api/live/stop")
     assert stop.status_code == 200
     assert started["stopped"] == 1
-    assert c.get("/api/live/status").status_code == 404
+    idle = c.get("/api/live/status")
+    assert idle.status_code == 200
+    assert idle.json()["status"] == "idle"
 
 
 def test_live_feed_returns_items_once_engine_ready(tmp_path, monkeypatch):

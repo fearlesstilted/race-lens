@@ -635,3 +635,58 @@ def test_active_remote_sse_closes_without_terminal_end_on_transient_or_stale(
         NOW - timedelta(seconds=1)
     ).isoformat().replace("+00:00", "Z")
     assert asyncio.run(collect_after(healthy, stale)) == []
+
+
+def test_live_status_reports_idle_when_no_live_pointer(monkeypatch):
+    import racelens.api as api
+
+    monkeypatch.setattr(api, "_object_store", lambda: MemoryStore())
+    monkeypatch.setattr(api, "_live", None)
+    monkeypatch.setattr(api, "_remote_live_cache", None)
+    client = TestClient(api.app)
+
+    body = client.get("/api/live/status").json()
+    assert body["status"] == "idle"
+    assert body["source"] == "none"
+    assert body["is_running"] is False
+    assert body["last_error"] is None
+
+    diagnostics = client.get("/api/diagnostics").json()
+    assert diagnostics["live"] == {"source": "none", "freshness": "idle"}
+
+
+def test_live_status_does_not_hide_invalid_pointer_as_idle(monkeypatch):
+    import racelens.api as api
+
+    store = MemoryStore()
+    store.put_json("live/current.json", {"invalid": True})
+    monkeypatch.setattr(api, "STORAGE_CONFIG", object())
+    monkeypatch.setattr(api, "_object_store", lambda: store)
+    monkeypatch.setattr(api, "_live", None)
+    monkeypatch.setattr(api, "_remote_live_cache", None)
+    client = TestClient(api.app)
+
+    response = client.get("/api/live/status")
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Current live data is invalid"
+    assert client.get("/api/diagnostics").json()["live"] == {
+        "source": "remote",
+        "freshness": "record-invalid",
+    }
+
+
+def test_diagnostics_reports_terminal_remote_lifecycle(monkeypatch):
+    import racelens.api as api
+
+    monkeypatch.setattr(api, "STORAGE_CONFIG", object())
+    monkeypatch.setattr(api, "_remote_cache", lambda: None)
+    monkeypatch.setattr(api, "_live", None)
+    monkeypatch.setattr(api, "_remote_live", lambda: {
+        "pointer": {"status": "replay_ready"},
+        "snapshot": None,
+    })
+
+    assert api.diagnostics()["live"] == {
+        "source": "remote",
+        "freshness": "replay-ready",
+    }

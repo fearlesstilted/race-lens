@@ -58,6 +58,9 @@ export function livePresentation(
   streamError: string | null,
   now = Date.now(),
 ): LivePresentation {
+  if (status?.status === 'idle') {
+    return { phase: 'connecting', badge: 'LIVE OFF', detail: 'NO LIVE SESSION' }
+  }
   if (status?.status === 'failed') {
     return {
       phase: 'failed',

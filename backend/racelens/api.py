@@ -238,7 +238,7 @@ def _remote_live() -> dict | None:
         try:
             value = load_live(store, now=_utcnow())
         except LiveRecordError as exc:
-            raise HTTPException(404, "No current live snapshot") from exc
+            raise HTTPException(502, "Current live data is invalid") from exc
         except StorageError as exc:
             raise HTTPException(503, "Live storage is temporarily unavailable") from exc
     _remote_live_cache = (now, value)
@@ -286,6 +286,30 @@ def _remote_live_status(value: dict) -> dict[str, Any]:
     }
 
 
+def _idle_live_status() -> dict[str, Any]:
+    """Honest 'no live session' body for /api/live/status.
+
+    Reaching this means storage is readable and simply holds no live pointer,
+    which must stay distinct from a storage failure (503).
+    """
+    return {
+        "status": "idle",
+        "source": "remote" if STORAGE_CONFIG is not None else "none",
+        "is_running": False,
+        "poll_count": 0,
+        "events_total": 0,
+        "last_poll_ok": False,
+        "last_poll_unix": None,
+        "last_new_event_unix": None,
+        "last_error": None,
+        "data_quality": "stalled",
+        "generated_at": None,
+        "expires_at": None,
+        "capture_freshness": None,
+        "failure": None,
+    }
+
+
 @lru_cache(maxsize=1)
 def _object_queue() -> ObjectPreparationQueue | None:
     store = _object_store()
@@ -308,6 +332,32 @@ def _preparation_queue() -> PreparationQueue | ObjectPreparationQueue:
 
 def _preparation_enabled() -> bool:
     return STORAGE_CONFIG is not None or not READONLY
+
+
+def _local_ready(session_id: str, record: dict) -> dict | None:
+    """Return the ready job when the record's replay already exists on disk.
+
+    A completed file beats stale queue state: the worker can crash after
+    writing the archive but before marking the record ready.
+    """
+    seen: set[str] = set()
+    for replay_id in (record.get("replay_session_id"), record.get("fixture_stem")):
+        if not replay_id or replay_id in seen:
+            continue
+        seen.add(replay_id)
+        path = FIXTURES_DIR / f"{replay_id}.jsonl"
+        if path.is_file():
+            return ready_job(session_id, replay_id, path)
+    return None
+
+
+def _preparation_response(session_id: str, record: dict) -> JSONResponse:
+    """Envelope shared by fresh enqueues and existing active/ready records."""
+    status_code = 202 if record["status"] in {"queued", "processing", "running"} else 200
+    headers = {"Location": f"/api/preparations/{session_id}"}
+    if status_code == 202:
+        headers["Retry-After"] = "3"
+    return JSONResponse(public_job(record), status_code=status_code, headers=headers)
 
 
 def _catalog(season: int) -> dict:
@@ -612,7 +662,25 @@ def diagnostics() -> dict:
         "max_bytes": REMOTE_CACHE_MAX,
     }
     if _live is None:
-        live = {"source": "none", "freshness": "inactive"}
+        try:
+            value = _remote_live()
+        except HTTPException as exc:
+            live = {
+                "source": "remote",
+                "freshness": (
+                    "storage-unavailable" if exc.status_code == 503 else "record-invalid"
+                ),
+            }
+        else:
+            status = value["pointer"]["status"] if value is not None else None
+            live = {
+                "source": "remote" if STORAGE_CONFIG is not None else "none",
+                "freshness": (
+                    "idle" if status is None
+                    else "active" if status == "live"
+                    else status.replace("_", "-")
+                ),
+            }
     else:
         quality = _live_health_status().get("data_quality")
         freshness = {"good": "fresh", "degraded": "degraded", "stalled": "stale"}.get(
@@ -705,6 +773,34 @@ def prepare_replay(session_id: str):
     season = int(session_id[:4])
     if season < FIRST_SEASON or season > datetime.now(UTC).year:
         raise HTTPException(404, "Session is not in the supported catalog")
+    if STORAGE_CONFIG is None:
+        # Preparation writes queue state, including failed retries, so a
+        # read-only deployment rejects every POST regardless of existing records.
+        _require_writable()
+    queue = _preparation_queue()
+    try:
+        current = queue.get(session_id)
+    except StorageError:
+        # Storage outage: the catalog can still establish a ready local replay.
+        current = None
+    if current is not None:
+        if current["status"] == "failed":
+            # Retry through the queue's own failed -> queued semantics; the
+            # queue is authoritative for the fixture stem of its own records.
+            try:
+                record, _created = queue.enqueue(session_id, current["fixture_stem"])
+            except QueueFullError as exc:
+                raise HTTPException(429, str(exc), headers={"Retry-After": "60"}) from exc
+            except StorageError as exc:
+                raise HTTPException(
+                    503, "Archive preparation storage is temporarily unavailable",
+                ) from exc
+            return _preparation_response(session_id, record)
+        ready = _local_ready(session_id, current)
+        if ready is not None:
+            return ready
+        return _preparation_response(session_id, current)
+
     catalog_data = _catalog(season)
     if not catalog_data["catalog_available"]:
         raise HTTPException(503, "Session catalog is temporarily unavailable")
@@ -716,17 +812,6 @@ def prepare_replay(session_id: str):
     replay_path = FIXTURES_DIR / f"{replay_id}.jsonl"
     if replay_path.is_file():
         return ready_job(session_id, replay_id, replay_path)
-    queue = _preparation_queue()
-    try:
-        current = queue.get(session_id)
-    except StorageError as exc:
-        raise HTTPException(
-            503, "Archive preparation storage is temporarily unavailable",
-        ) from exc
-    if current is not None and current.get("status") == "ready":
-        return public_job(current)
-    if STORAGE_CONFIG is None:
-        _require_writable()
     try:
         record, _created = queue.enqueue(session_id, replay_id)
     except QueueFullError as exc:
@@ -735,11 +820,7 @@ def prepare_replay(session_id: str):
         raise HTTPException(
             503, "Archive preparation storage is temporarily unavailable",
         ) from exc
-    status_code = 202 if record["status"] in {"queued", "processing", "running"} else 200
-    headers = {"Location": f"/api/preparations/{session_id}"}
-    if status_code == 202:
-        headers["Retry-After"] = "3"
-    return JSONResponse(public_job(record), status_code=status_code, headers=headers)
+    return _preparation_response(session_id, record)
 
 
 @app.get("/api/preparations/{session_id}")
@@ -749,6 +830,19 @@ def preparation_status(session_id: str) -> dict:
     season = int(session_id[:4])
     if season < FIRST_SEASON or season > datetime.now(UTC).year:
         raise HTTPException(404, "Preparation not found")
+    queue = _preparation_queue()
+    try:
+        record = queue.get(session_id)
+    except StorageError:
+        # Storage outage: the catalog can still establish a ready local replay.
+        record = None
+    if record is not None:
+        if record["status"] != "failed":
+            ready = _local_ready(session_id, record)
+            if ready is not None:
+                return ready
+        return public_job(record)
+
     catalog_data = _catalog(season)
     if not catalog_data["catalog_available"]:
         raise HTTPException(503, "Session catalog is temporarily unavailable")
@@ -760,15 +854,7 @@ def preparation_status(session_id: str) -> dict:
     replay_path = FIXTURES_DIR / f"{replay_id}.jsonl"
     if replay_path.is_file():
         return ready_job(session_id, replay_id, replay_path)
-    try:
-        record = _preparation_queue().get(session_id)
-    except StorageError as exc:
-        raise HTTPException(
-            503, "Archive preparation storage is temporarily unavailable",
-        ) from exc
-    if record is None:
-        raise HTTPException(404, "Preparation not found")
-    return public_job(record)
+    raise HTTPException(404, "Preparation not found")
 
 
 @app.get("/api/sessions/{session_id}/state")
@@ -945,8 +1031,18 @@ async def live_status() -> dict:
         status["is_running"] = _live.is_running
         status["poll_count"] = status["polls"]
         return status
-    remote = await asyncio.to_thread(_remote_live_required, snapshot=False)
-    return _remote_live_status(remote)
+
+    def remote_or_idle() -> dict:
+        try:
+            remote = _remote_live_required(snapshot=False)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            # 404 here means no live session (idle), not storage failure.
+            return _idle_live_status()
+        return _remote_live_status(remote)
+
+    return await asyncio.to_thread(remote_or_idle)
 
 
 @app.get("/api/live/stream")

@@ -142,7 +142,7 @@ export type LiveStatusResult = {
   capture_alive?: boolean
   data_quality: 'good' | 'degraded' | 'stalled'
   source?: string
-  status?: 'live' | 'finishing' | 'replay_ready' | 'failed'
+  status?: 'live' | 'finishing' | 'replay_ready' | 'failed' | 'idle'
   canonical_session_id?: string
   replay_session_id?: string
   generated_at?: string
