@@ -430,10 +430,10 @@ def test_live_stop_twice_does_not_crash():
         r1 = client.post("/api/live/stop")
         assert r1.status_code == 200
 
-        # First stop cleared _live entirely — status must report not-running.
+        # First stop cleared _live entirely — status must report not-running idle.
         r_status = client.get("/api/live/status")
-        assert r_status.status_code == 404
-        assert "no live session" in r_status.json()["detail"].lower()
+        assert r_status.status_code == 200
+        assert r_status.json()["status"] == "idle"
 
         # Second stop: nothing to stop, must not crash — just 404, same as first extra call.
         r2 = client.post("/api/live/stop")

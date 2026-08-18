@@ -231,6 +231,211 @@ def test_catalog_prepare_is_explicitly_disabled_in_readonly_mode(tmp_path, monke
     assert client.get("/api/capabilities").json()["preparation_enabled"] is False
 
 
+def test_preparation_endpoints_report_active_jobs_without_catalog(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    called = {"catalog": 0}
+
+    class StubQueue:
+        def __init__(self, record: dict):
+            self._record = record
+
+        def get(self, session_id: str) -> dict | None:
+            return self._record if session_id == "2024-08-r" else None
+
+    queue_record = {
+        "job_id": "2024-08-r",
+        "session_id": "2024-08-r",
+        "fixture_stem": "monaco_2024_race",
+        "status": "processing",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+        "replay_session_id": None,
+        "error": None,
+    }
+
+    def blocked_catalog(*_):
+        called["catalog"] += 1
+        raise catalog.CatalogUnavailable()
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path / "fixtures")
+    monkeypatch.setattr(api, "READONLY", False)
+    monkeypatch.setattr(api, "_catalog", blocked_catalog)
+    monkeypatch.setattr(api, "_preparation_queue", lambda: StubQueue(queue_record))
+
+    client = TestClient(api.app)
+    status = client.get("/api/preparations/2024-08-r")
+    assert status.status_code == 200
+    assert status.json()["status"] == "processing"
+    assert called["catalog"] == 0
+
+    response = client.post("/api/catalog/2024-08-r/prepare")
+    assert response.status_code == 202
+    assert response.headers["location"] == "/api/preparations/2024-08-r"
+    assert response.headers["retry-after"] == "3"
+    assert response.json()["status"] == "processing"
+    assert response.json()["session_id"] == "2024-08-r"
+    assert called["catalog"] == 0
+
+
+def test_preparation_failed_record_is_retried_on_post(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    queue = PreparationQueue(tmp_path / "queue")
+    queue.enqueue("2024-08-r", "monaco_2024_race")
+    queue.finish("2024-08-r", error="worker failure")
+    assert queue.get("2024-08-r")["status"] == "failed"
+
+    def blocked_catalog(*_):
+        raise catalog.CatalogUnavailable()
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path / "fixtures")
+    monkeypatch.setattr(api, "PREPARATION_QUEUE_DIR", tmp_path / "queue")
+    monkeypatch.setattr(api, "READONLY", False)
+    monkeypatch.setattr(api, "_catalog", blocked_catalog)
+    client = TestClient(api.app)
+
+    response = client.post("/api/catalog/2024-08-r/prepare")
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["error"] is None
+    assert queue.get("2024-08-r")["status"] == "queued"
+    assert client.get("/api/preparations/2024-08-r").json()["status"] == "queued"
+
+
+def test_preparation_failed_object_record_retry_bumps_generation(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    store = MemoryStore()
+    queue = ObjectPreparationQueue(store, max_attempts=1)
+    queue.enqueue("2024-08-r", "monaco_2024_race")
+    queue.claim_next()
+    queue.finish("2024-08-r", error="worker failure")
+    assert queue.get("2024-08-r")["status"] == "failed"
+    assert queue.get("2024-08-r")["generation"] == 1
+
+    def blocked_catalog(*_):
+        raise catalog.CatalogUnavailable()
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path / "fixtures")
+    monkeypatch.setattr(api, "STORAGE_CONFIG", object())
+    monkeypatch.setattr(api, "_object_queue", lambda: queue)
+    monkeypatch.setattr(api, "_catalog", blocked_catalog)
+    client = TestClient(api.app)
+
+    response = client.post("/api/catalog/2024-08-r/prepare")
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    record = queue.get("2024-08-r")
+    assert record["status"] == "queued"
+    assert record["generation"] == 2
+
+
+def test_local_ready_replay_beats_stale_active_queue_record(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "monaco_2024_race.jsonl").write_text(
+        dump_jsonl(mini_race()), encoding="utf-8",
+    )
+
+    class StubQueue:
+        def get(self, session_id: str) -> dict:
+            return {
+                "job_id": "2024-08-r",
+                "session_id": "2024-08-r",
+                "fixture_stem": "monaco_2024_race",
+                "status": "running",
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "replay_session_id": None,
+                "error": None,
+            }
+
+    def blocked_catalog(*_):
+        raise catalog.CatalogUnavailable()
+
+    monkeypatch.setattr(api, "FIXTURES_DIR", fixtures)
+    monkeypatch.setattr(api, "READONLY", False)
+    monkeypatch.setattr(api, "_catalog", blocked_catalog)
+    monkeypatch.setattr(api, "_preparation_queue", lambda: StubQueue())
+    client = TestClient(api.app)
+
+    assert client.get("/api/preparations/2024-08-r").json()["status"] == "ready"
+    response = client.post("/api/catalog/2024-08-r/prepare")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["replay_session_id"] == "monaco_2024_race"
+
+
+def test_local_ready_replay_survives_queue_storage_error(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "monaco_2024_race.jsonl").write_text(
+        dump_jsonl(mini_race()), encoding="utf-8",
+    )
+    session = ScheduledSession(
+        2024, 8, "Monaco Grand Prix", "R", datetime(2024, 5, 26, 13, tzinfo=UTC),
+    )
+
+    class BrokenQueue:
+        def get(self, session_id: str):
+            raise StorageError("SECRET_ACCESS_KEY=do-not-return")
+
+    monkeypatch.setattr(catalog, "load_schedule", lambda year, cache_dir: [session])
+    monkeypatch.setattr(api, "FIXTURES_DIR", fixtures)
+    monkeypatch.setattr(api, "CATALOG_CACHE_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(api, "READONLY", False)
+    monkeypatch.setattr(api, "_preparation_queue", lambda: BrokenQueue())
+    client = TestClient(api.app)
+
+    response = client.post("/api/catalog/2024-08-r/prepare")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["replay_session_id"] == "monaco_2024_race"
+    status = client.get("/api/preparations/2024-08-r")
+    assert status.status_code == 200
+    assert status.json()["status"] == "ready"
+    assert "SECRET_ACCESS_KEY" not in status.text
+
+
+def test_readonly_post_is_rejected_even_with_existing_queue_record(tmp_path, monkeypatch):
+    import racelens.api as api
+
+    queue_dir = tmp_path / "queue"
+    PreparationQueue(queue_dir).enqueue("2024-08-r", "monaco_2024_race")
+    monkeypatch.setattr(api, "FIXTURES_DIR", tmp_path / "fixtures")
+    monkeypatch.setattr(api, "PREPARATION_QUEUE_DIR", queue_dir)
+    monkeypatch.setattr(api, "READONLY", True)
+    client = TestClient(api.app)
+
+    response = client.post("/api/catalog/2024-08-r/prepare")
+    assert response.status_code == 403
+    assert "read-only" in response.json()["detail"]
+    status = client.get("/api/preparations/2024-08-r")
+    assert status.status_code == 200
+    assert status.json()["status"] == "queued"
+    assert client.get("/api/capabilities").json()["preparation_enabled"] is False
+
+
+def test_preparation_rejects_non_canonical_session_ids():
+    import racelens.api as api
+
+    client = TestClient(api.app)
+    assert client.post("/api/catalog/not-a-session/prepare").status_code == 404
+    assert client.get("/api/preparations/not-a-session").status_code == 404
+
+
 def test_readonly_api_queues_and_replays_a_verified_remote_session(tmp_path, monkeypatch):
     import racelens.api as api
     import racelens.catalog as catalog
@@ -326,5 +531,51 @@ def test_storage_errors_are_publicly_sanitized(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "_object_queue", lambda: BrokenQueue())
     response = TestClient(api.app).get("/api/catalog", params={"season": 2024})
 
-    assert response.status_code == 503
+    # Queue outage is rendered as "prepare" (unknown), not a 503, and never leaks
+    # provider error text; the endpoint cannot claim a state it cannot prove.
+    assert response.status_code == 200
     assert "SECRET_ACCESS_KEY" not in response.text
+    assert response.json()["events"][0]["sessions"][0]["status"] == "prepare"
+
+
+def test_catalog_tolerates_queue_storage_error_across_multiple_sessions(tmp_path, monkeypatch):
+    import racelens.api as api
+    import racelens.catalog as catalog
+
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "monaco_2024_race.jsonl").write_text(
+        dump_jsonl(mini_race()), encoding="utf-8",
+    )
+    sessions = [
+        ScheduledSession(2024, 8, "Monaco Grand Prix", "R", datetime(2024, 5, 26, 13, tzinfo=UTC)),
+        ScheduledSession(2024, 10, "Spanish Grand Prix", "R", datetime(2024, 6, 23, 13, tzinfo=UTC)),
+    ]
+
+    class BrokenQueue:
+        def get(self, session_id: str):
+            raise StorageError("SECRET_ACCESS_KEY=do-not-return")
+
+    monkeypatch.setattr(catalog, "load_schedule", lambda year, cache_dir: sessions)
+    monkeypatch.setattr(api, "FIXTURES_DIR", fixtures)
+    monkeypatch.setattr(api, "CATALOG_CACHE_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(api, "READONLY", False)
+    monkeypatch.setattr(api, "_preparation_queue", lambda: BrokenQueue())
+    client = TestClient(api.app)
+
+    body = client.get("/api/catalog", params={"season": 2024})
+    assert body.status_code == 200
+    assert "SECRET_ACCESS_KEY" not in body.text
+    by_id = {
+        item["session_id"]: item
+        for event in body.json()["events"]
+        for item in event["sessions"]
+    }
+    assert by_id["2024-08-r"]["status"] == "ready"
+    assert by_id["2024-08-r"]["replay_session_id"] == "monaco_2024_race"
+    assert by_id["2024-10-r"]["status"] == "prepare"
+
+    ready = client.post("/api/catalog/2024-08-r/prepare")
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+    assert ready.json()["replay_session_id"] == "monaco_2024_race"

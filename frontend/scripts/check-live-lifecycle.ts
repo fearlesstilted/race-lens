@@ -51,6 +51,8 @@ const localLive: LiveStatusResult = {
   last_error: null,
   data_quality: 'good',
 }
+const idle = { ...localLive, is_running: false, status: 'idle' as const }
+assert.equal(livePresentation(idle, false, null).badge, 'LIVE OFF')
 assert.equal(liveLifecycle(localLive, {
   readonly: false,
   explicitReplay: false,
