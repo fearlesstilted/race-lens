@@ -302,10 +302,13 @@ def build_catalog(
 
     events: dict[tuple[int, str], list[dict]] = {}
     for session in sessions:
-        if session.capture_until > current:
+        if session.starts_at > current:
+            continue
+        item = catalog_session(session, fixtures_dir, queue)
+        if session.capture_until > current and item["status"] != "ready":
             continue
         key = (session.round_number, session.event_name)
-        events.setdefault(key, []).append(catalog_session(session, fixtures_dir, queue))
+        events.setdefault(key, []).append(item)
     return {
         "season": season,
         "seasons": supported_seasons(current),

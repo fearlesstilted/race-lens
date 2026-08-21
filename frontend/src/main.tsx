@@ -505,7 +505,7 @@ function App() {
         sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
         atMs={replay.atMs}
         playing={replay.playing}
-        playbackSpeed={replay.speed}
+        playbackSpeed={mode === 'live' ? 1 : replay.speed}
         drivers={state?.drivers ?? {}}
         classification={state?.classification ?? []}
         totalLaps={state?.total_laps}
@@ -777,7 +777,7 @@ function App() {
                   sessionId={mode === 'replay' ? sessionId : (state?.session_id ?? null)}
                   atMs={replay.atMs}
                   playing={replay.playing}
-                  playbackSpeed={replay.speed}
+                  playbackSpeed={mode === 'live' ? 1 : replay.speed}
                   drivers={state?.drivers ?? {}}
                   classification={state?.classification ?? []}
                   totalLaps={state?.total_laps}
