@@ -11,6 +11,7 @@ from racelens.object_storage import (
     ManifestError,
     ObjectPreparationQueue,
     RemoteSessionCache,
+    StorageError,
     load_manifest,
     publish_session,
     validate_manifest,
@@ -115,6 +116,27 @@ def test_manifest_is_final_and_remote_cache_rejects_corruption(tmp_path):
     with pytest.raises(ManifestError, match="checksum"):
         with cache.lease("monaco_2024_race"):
             pass
+
+
+def test_publish_session_reads_back_manifest(tmp_path):
+    class ReadbackStore(MemoryStore):
+        def get_json(self, key, *, limit):
+            if key == "sessions/monaco_2024_race/manifest.json":
+                return None
+            return super().get_json(key, limit=limit)
+
+    store = ReadbackStore()
+    fixture, track, positions = _archive(tmp_path)
+    with pytest.raises(StorageError, match="read-back"):
+        publish_session(
+            store,
+            "2024-08-r",
+            "monaco_2024_race",
+            fixture,
+            track,
+            positions,
+            event_count=1,
+        )
 
 
 def test_remote_cache_leases_block_eviction_and_cold_load_once(tmp_path):

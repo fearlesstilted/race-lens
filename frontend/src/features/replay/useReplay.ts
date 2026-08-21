@@ -151,7 +151,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     if (source.kind === 'live') {
       // Live: open stream immediately (backend already started by UI)
       openStream(speed, 0, lang, level)
-      return
+      return () => { closeStream() }
     }
 
     // Replay path: load timeline + first snapshot

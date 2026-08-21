@@ -9,6 +9,7 @@ without a cutoff, such as full-race highlights, are explicitly opt-in.
 import asyncio
 import importlib.util
 import json
+import logging
 import os
 import re
 import time
@@ -98,6 +99,8 @@ try:
 except ValueError:
     REMOTE_CACHE_MAX = 160 * 1024 * 1024
 STORAGE_CONFIG = StorageConfig.from_env()
+
+logger = logging.getLogger(__name__)
 
 # maxsize=1 bounds parsed memory. Cached values are path-free, while every
 # filesystem read reacquires a lease, so directory eviction cannot stale them.
@@ -231,16 +234,13 @@ def _remote_live() -> dict | None:
     now = time.monotonic()
     if _remote_live_cache is not None and now - _remote_live_cache[0] < 2:
         return _remote_live_cache[1]
-    store = _object_store()
-    if store is None:
-        value = None
-    else:
-        try:
-            value = load_live(store, now=_utcnow())
-        except LiveRecordError as exc:
-            raise HTTPException(502, "Current live data is invalid") from exc
-        except StorageError as exc:
-            raise HTTPException(503, "Live storage is temporarily unavailable") from exc
+    try:
+        store = _object_store()
+        value = load_live(store, now=_utcnow()) if store is not None else None
+    except LiveRecordError as exc:
+        raise HTTPException(502, "Current live data is invalid") from exc
+    except StorageError as exc:
+        raise HTTPException(503, "Live storage is temporarily unavailable") from exc
     _remote_live_cache = (now, value)
     return value
 
@@ -922,7 +922,11 @@ async def stream(
             t += tick_ms
         yield "event: end\ndata: {}\n\n"
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Near-live endpoints ───────────────────────────────────────────────────────
@@ -968,7 +972,8 @@ async def live_start(
                 _capture.start()
             except (OSError, RuntimeError) as exc:
                 _capture = None
-                raise HTTPException(503, f"Could not start SignalR capture: {exc}") from exc
+                logger.warning("SignalR capture failed to start: %s", type(exc).__name__)
+                raise HTTPException(503, "Could not start SignalR capture") from exc
             fetch = make_signalr_fetch(feed_path, year, country, session)
             _live = LiveRunner(fetch, poll_interval_s=max(poll_s, 5.0))
             # Same formula as make_signalr_fetch's internal session_id (signalr.py).
@@ -983,6 +988,10 @@ async def live_start(
             session_key = await asyncio.to_thread(find_session, year, country, session)
         except ValueError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(
+                503, "OpenF1 session lookup is temporarily unavailable",
+            ) from exc
 
         ingester = OpenF1IncrementalIngester(session_key)
         _live = LiveRunner(ingester.fetch, poll_interval_s=poll_s)
@@ -1066,9 +1075,10 @@ async def live_stream(
                     current = await asyncio.to_thread(
                         _remote_live_required, snapshot=False,
                     )
-                except HTTPException:
+                except HTTPException as exc:
                     # A storage/staleness failure is not a race lifecycle event.
-                    # Close quietly so EventSource reconnects.
+                    # Close so EventSource reconnects, but log the outage.
+                    logger.warning("live stream remote fetch failed: %s", exc.status_code)
                     return
                 pointer = current["pointer"]
                 snapshot = current["snapshot"]
@@ -1111,7 +1121,11 @@ async def live_stream(
                 yield f"data: {json.dumps(state)}\n\n"
             await asyncio.sleep(tick_s)
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/live/feed")

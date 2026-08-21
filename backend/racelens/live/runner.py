@@ -156,7 +156,7 @@ class LiveRunner:
             self._polls += 1
             self._last_poll_unix = time.time()
             self._new_last_poll = 0
-            self._last_error = f"{type(exc).__name__}: {exc}"
+            self._last_error = type(exc).__name__
             return
 
         new_count = 0

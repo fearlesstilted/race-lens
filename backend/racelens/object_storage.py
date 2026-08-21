@@ -128,20 +128,23 @@ class S3Store:
         except ImportError as exc:  # pragma: no cover - deployment packaging guard
             raise StorageError("object storage support is not installed") from exc
         self.bucket = config.bucket
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=config.endpoint,
-            region_name=config.region,
-            aws_access_key_id=config.access_key_id,
-            aws_secret_access_key=config.secret_access_key,
-            aws_session_token=config.session_token,
-            config=Config(
-                connect_timeout=5,
-                read_timeout=30,
-                retries={"mode": "standard", "max_attempts": 3},
-                max_pool_connections=4,
-            ),
-        )
+        try:
+            self.client = boto3.client(
+                "s3",
+                endpoint_url=config.endpoint,
+                region_name=config.region,
+                aws_access_key_id=config.access_key_id,
+                aws_secret_access_key=config.secret_access_key,
+                aws_session_token=config.session_token,
+                config=Config(
+                    connect_timeout=5,
+                    read_timeout=30,
+                    retries={"mode": "standard", "max_attempts": 3},
+                    max_pool_connections=4,
+                ),
+            )
+        except Exception as exc:
+            raise StorageError("object storage client failed to initialise") from exc
 
     @staticmethod
     def _missing(exc: Exception) -> bool:
@@ -904,9 +907,10 @@ def load_live(store: Any, *, now: datetime | None = None) -> dict | None:
     try:
         snapshot = validate_live_snapshot(snapshot_value, pointer=pointer, now=now)
     except LiveRecordError as exc:
-        # Terminal lifecycle remains discoverable after the last 20-second
-        # race snapshot expires; the stale payload itself is never returned.
-        if pointer["status"] in {"finishing", "replay_ready", "failed"} and str(exc) == "live snapshot is stale":
+        # A stale snapshot is never returned, whatever the lifecycle status:
+        # the pointer stays discoverable so /api/live/status can report an
+        # honest "live but stalled" state instead of a 502.
+        if str(exc) == "live snapshot is stale":
             snapshot = None
         else:
             raise
@@ -1021,7 +1025,11 @@ def publish_session(
             store.verify(temporary[name], size=row["size"], sha256=row["sha256"])
             store.copy(temporary[name], row["key"])
             store.verify(row["key"], size=row["size"], sha256=row["sha256"])
-        store.put_json(manifest_key(replay_session_id), manifest)
+        manifest_path = manifest_key(replay_session_id)
+        store.put_json(manifest_path, manifest)
+        stored = store.get_json(manifest_path, limit=MAX_MANIFEST_BYTES)
+        if stored != manifest:
+            raise StorageError("published manifest read-back mismatch")
         return manifest
     finally:
         for key in uploaded:

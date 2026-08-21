@@ -86,8 +86,12 @@ class SignalRCapture:
         ]
         if self._no_auth:
             cmd.append("--no-auth")
-        # stderr → our stderr so capture problems show in the API log.
-        self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL)
+        # stdout and stderr are discarded: the feed file is the contract, and
+        # SignalR auth details must not leak into the API log via the child's
+        # stderr. Capture problems surface as an empty/stale feed instead.
+        self._proc = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
 
     def stop(self) -> None:
         if self._proc is not None and self._proc.poll() is None:

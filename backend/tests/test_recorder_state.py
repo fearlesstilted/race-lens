@@ -84,6 +84,15 @@ def test_retry_metadata_and_attempt_count(tmp_path):
     assert item.retry_phase is None
 
 
+def test_capture_attempts_remain_retryable(tmp_path):
+    store = StateStore(tmp_path / "recorder.json")
+    for _ in range(5):
+        store.transition(SID, Phase.RECORDING, NOW)
+        store.transition(SID, Phase.FAILED, NOW, error="feed down", retry_at=NOW)
+    state = store.transition(SID, Phase.RECORDING, NOW)
+    assert state.sessions[SID].attempts == 6
+
+
 def test_processing_retry_does_not_repeat_capture(tmp_path):
     store = StateStore(tmp_path / "recorder.json")
     store.transition(SID, Phase.RECORDING, NOW)

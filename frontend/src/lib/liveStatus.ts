@@ -83,11 +83,11 @@ export function livePresentation(
     return {
       phase: 'stalled',
       badge: 'STALLED',
-      detail: 'SNAPSHOT STALE · RECONNECTING AUTOMATICALLY',
+      detail: 'SNAPSHOT STALE · BACKEND STALLED',
     }
   }
   if (status?.data_quality === 'stalled') {
-    return { phase: 'stalled', badge: 'STALLED', detail: 'NO NEW DATA · RECONNECTING AUTOMATICALLY' }
+    return { phase: 'stalled', badge: 'STALLED', detail: 'NO NEW DATA · BACKEND STALLED' }
   }
   if (streamError) {
     return {

@@ -54,19 +54,22 @@ def test_capture_supervises_subprocess(tmp_path):
 
 def test_capture_restart_appends_to_existing_recording(tmp_path, monkeypatch):
     command = []
+    kwargs_seen = {}
 
     class Process:
         def poll(self):
             return None
 
-    def popen(args, **_kwargs):
+    def popen(args, **kwargs):
         command.extend(args)
+        kwargs_seen.update(kwargs)
         return Process()
 
     monkeypatch.setattr(subprocess, "Popen", popen)
     SignalRCapture(tmp_path / "feed.txt").start()
 
     assert "--append" in command
+    assert kwargs_seen.get("stderr") is subprocess.DEVNULL
 
 
 def test_fetch_returns_empty_while_feed_missing(tmp_path):

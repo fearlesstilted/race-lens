@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -24,6 +25,7 @@ from racelens.insights.registry import detect_all
 from racelens.object_storage import (
     LIVE_SNAPSHOT_TTL_S,
     MAX_LIVE_SNAPSHOT_BYTES,
+    MAX_RECORD_BYTES,
     LiveRecordError,
     ObjectPreparationQueue,
     S3Store,
@@ -48,6 +50,8 @@ PROCESS_TIMEOUT = 60 * 60
 SCHEDULE_REFRESH = timedelta(hours=6)
 REMOTE_CAPTURE_GUARD = timedelta(hours=2)
 SESSION_LABEL = {"R": "race", "Q": "qualifying", "SQ": "sprint_qualifying"}
+
+logger = logging.getLogger(__name__)
 
 
 def _positive_int(name: str, default: int, minimum: int = 1) -> int:
@@ -336,16 +340,53 @@ class Recorder:
             self._set_live_status(
                 session, "failed", failure="Archive preparation failed",
             )
-        except (LiveRecordError, StorageError):
-            pass
+        except (LiveRecordError, StorageError) as exc:
+            logger.warning(
+                "failed to mark live archive failed for %s: %s",
+                session.session_id, type(exc).__name__,
+            )
+
+    def _finish_live(self, session: ScheduledSession) -> None:
+        """Move a live pointer to ``finishing`` once capture ends.
+
+        Idempotent: only acts when storage holds a pointer that still has
+        ``status == "live"`` and matches this session. The final snapshot
+        publish is best-effort, so finishing must not depend on it having
+        succeeded.
+        """
+        if self.object_store is None or session.kind != "R":
+            return
+        try:
+            current = self.object_store.get_json(
+                "live/current.json", limit=MAX_RECORD_BYTES,
+            )
+            if (
+                not isinstance(current, dict)
+                or current.get("canonical_session_id") != session.session_id
+                or current.get("replay_session_id") != fixture_stem(session)
+                or current.get("status") != "live"
+            ):
+                return
+            self._set_live_status(session, "finishing")
+        except (LiveRecordError, StorageError) as exc:
+            logger.warning(
+                "failed to finish live pointer for %s: %s",
+                session.session_id, type(exc).__name__,
+            )
 
     def capture(self, session: ScheduledSession) -> Path:
         paths = self._paths(session)
         raw, clean = paths["raw"], paths["clean"]
         prior = inspect_feed(raw, session)
         if prior.matched and (prior.finished or self.now() >= session.capture_until):
-            if self._publish_live_snapshot(session, raw):
-                self._set_live_status(session, "finishing")
+            try:
+                self._publish_live_snapshot(session, raw)
+            except (LiveRecordError, StorageError, ValueError) as exc:
+                logger.warning(
+                    "final live snapshot publish failed for %s: %s",
+                    session.session_id, type(exc).__name__,
+                )
+            self._finish_live(session)
             isolate_session(raw, clean, session)
             return clean
 
@@ -356,7 +397,6 @@ class Recorder:
         process = subprocess.Popen(command, start_new_session=True)
         finished_at: datetime | None = None
         inspection = prior
-        live_published = False
         last_live_snapshot_at: datetime | None = None
         try:
             while True:
@@ -373,9 +413,12 @@ class Recorder:
                     )
                 ):
                     try:
-                        live_published = self._publish_live_snapshot(session, raw) or live_published
-                    except (LiveRecordError, StorageError, ValueError):
-                        pass
+                        self._publish_live_snapshot(session, raw)
+                    except (LiveRecordError, StorageError, ValueError) as exc:
+                        logger.warning(
+                            "live snapshot publish failed for %s: %s",
+                            session.session_id, type(exc).__name__,
+                        )
                     last_live_snapshot_at = now
                 if inspection.finished and finished_at is None:
                     finished_at = now
@@ -398,8 +441,7 @@ class Recorder:
         if not inspection.matched:
             raise RuntimeError("live feed never matched the scheduled session")
         isolate_session(raw, clean, session)
-        if live_published:
-            self._set_live_status(session, "finishing")
+        self._finish_live(session)
         return clean
 
     def _run(self, argv: list[str], *, env: dict[str, str] | None = None) -> None:

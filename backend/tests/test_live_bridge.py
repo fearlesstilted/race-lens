@@ -585,8 +585,8 @@ def test_remote_live_api_fallback_cache_and_sanitized_storage_failure(monkeypatc
         store, SESSION.session_id, fixture_stem(SESSION), "finishing", now=NOW,
     )
     monkeypatch.setattr(api, "_remote_live_cache", None)
-    with client.stream("GET", "/api/live/stream", params={"tick_s": 0.5}) as response:
-        assert "event: end" in next(response.iter_text())
+    response = asyncio.run(api.live_stream(tick_s=0.5, lang="en", level="pro"))
+    assert "event: end" in asyncio.run(anext(response.body_iterator))
     monkeypatch.setattr(api, "READONLY", True)
     assert client.post(
         "/api/live/start", params={"year": 2026, "country": "Zandvoort"},
@@ -690,3 +690,115 @@ def test_diagnostics_reports_terminal_remote_lifecycle(monkeypatch):
         "source": "remote",
         "freshness": "replay-ready",
     }
+
+
+def _finished_segment_feed():
+    other = {
+        "Meeting": {
+            "Key": 16,
+            "Number": 16,
+            "Name": "Belgian Grand Prix",
+            "Location": "Spa",
+        },
+        "Key": 100,
+        "Name": "Race",
+        "StartDate": "2026-08-30T13:00:00Z",
+        "Path": "2026/Belgian/Race/",
+    }
+    return _feed_prefix() + [
+        _line("SessionStatus", {"Status": "Finished"}, "2026-08-23T13:05:00Z"),
+        _line("SessionInfo", json.dumps(other)),
+    ]
+
+
+def _finished_feed():
+    return _feed_prefix() + [
+        _line("SessionStatus", {"Status": "Finished"}, "2026-08-23T13:05:00Z"),
+    ]
+
+
+def test_remote_live_status_reports_stalled_live_not_502_when_snapshot_expired(monkeypatch):
+    import racelens.api as api
+
+    store = MemoryStore()
+    pointer, snapshot = _valid_records()
+    storage.write_live_snapshot(store, pointer, snapshot, now=NOW)
+    # Expire the snapshot while keeping the pointer status == "live".
+    snapshot = store.objects[pointer["snapshot_key"]]
+    snapshot["generated_at"] = (NOW - timedelta(seconds=30)).isoformat().replace("+00:00", "Z")
+    snapshot["expires_at"] = (NOW - timedelta(seconds=10)).isoformat().replace("+00:00", "Z")
+    monkeypatch.setattr(api, "_object_store", lambda: store)
+    monkeypatch.setattr(api, "_live", None)
+    monkeypatch.setattr(api, "_remote_live_cache", None)
+    monkeypatch.setattr(api, "_utcnow", lambda: NOW)
+    client = TestClient(api.app)
+
+    response = client.get("/api/live/status")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "live"
+    assert body["data_quality"] == "stalled"
+    assert body["is_running"] is True
+
+
+def test_capture_resume_finishes_live_pointer_when_final_publish_is_blocked(tmp_path):
+    store = MemoryStore()
+    recorder = Recorder(_config(tmp_path), now=lambda: NOW, object_store=store)
+    feed = recorder._paths(SESSION)["raw"]
+    _write_feed(feed, _feed_prefix())
+    assert recorder._publish_live_snapshot(SESSION, feed)
+    assert store.objects["live/current.json"]["status"] == "live"
+
+    # A following foreign SessionInfo blocks the final snapshot publish.
+    _write_feed(feed, _finished_segment_feed())
+    clean = recorder.capture(SESSION)
+    assert clean.exists()
+    assert store.objects["live/current.json"]["status"] == "finishing"
+
+
+def test_capture_resume_tolerates_pointer_already_finishing(tmp_path):
+    store = MemoryStore()
+    recorder = Recorder(_config(tmp_path), now=lambda: NOW, object_store=store)
+    feed = recorder._paths(SESSION)["raw"]
+    _write_feed(feed, _feed_prefix())
+    assert recorder._publish_live_snapshot(SESSION, feed)
+    recorder._set_live_status(SESSION, "finishing")
+    assert store.objects["live/current.json"]["status"] == "finishing"
+
+    # Finished feed without a foreign marker still attempts the final publish,
+    # which write_live_snapshot rejects because the pointer is already finishing.
+    _write_feed(feed, _finished_feed())
+    clean = recorder.capture(SESSION)
+    assert clean.exists()
+    assert store.objects["live/current.json"]["status"] == "finishing"
+
+
+def test_object_store_construction_failure_maps_to_503(monkeypatch):
+    import racelens.api as api
+
+    api._object_store.cache_clear()
+    monkeypatch.setattr(api, "STORAGE_CONFIG", object())
+    monkeypatch.setattr(api, "_live", None)
+    monkeypatch.setattr(api, "_remote_live_cache", None)
+    monkeypatch.setattr(
+        api, "S3Store",
+        lambda _config: (_ for _ in ()).throw(storage.StorageError("secret bucket")),
+    )
+    client = TestClient(api.app)
+
+    response = client.get("/api/live/status")
+    assert response.status_code == 503
+    assert "secret" not in response.text
+
+
+def test_live_stream_sets_sse_buffering_headers(monkeypatch):
+    import racelens.api as api
+    from racelens.live.runner import LiveRunner
+    from tests.test_replay import mini_race
+
+    runner = LiveRunner(lambda: mini_race(), poll_interval_s=5.0)
+    runner._poll_once()
+    monkeypatch.setattr(api, "_live", runner)
+    response = asyncio.run(api.live_stream(tick_s=0.5, lang="en", level="pro"))
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-accel-buffering"] == "no"

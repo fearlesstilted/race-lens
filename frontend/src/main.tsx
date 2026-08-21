@@ -388,6 +388,11 @@ function App() {
     setLiveError(null)
     setCenterTab('FEED')
     setSelectedIds([])
+    if (next === 'replay' && !sessionId) {
+      // Switching away from Live without a chosen session must land on the
+      // catalog, not an empty stage.
+      setCatalogOpen(true)
+    }
   }
 
   const handleSessionChange = (id: string) => {

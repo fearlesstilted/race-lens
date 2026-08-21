@@ -473,6 +473,15 @@ def test_poll_once_no_finish_seen_without_finished_status():
     assert runner.auto_stopped is False
 
 
+def test_last_error_exposes_type_not_message():
+    def fetch():
+        raise RuntimeError("SECRET_ACCESS_KEY=hidden")
+
+    runner = LiveRunner(fetch, poll_interval_s=5.0)
+    runner._poll_once()
+    assert runner.status()["last_error"] == "RuntimeError"
+
+
 def test_runner_auto_stops_after_finish_plus_delay(monkeypatch):
     """The loop stops ITSELF (its normal stop() path) once AUTO_STOP_DELAY_S
     has elapsed since a 'finished' status was first observed — no external
