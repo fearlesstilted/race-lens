@@ -37,7 +37,7 @@ export function liveLifecycle(
 ): LiveLifecycle {
   const remote = status?.source === 'remote'
   const remoteAttachable = remote && (
-    status.status === 'live' || status.status === 'finishing' || status.status === 'failed'
+    status.status === 'live' || status.status === 'finishing'
   )
   const attachable = status?.is_running === true || remoteAttachable
 
@@ -46,7 +46,8 @@ export function liveLifecycle(
     remoteAvailable: remote && status.status === 'live',
     enterLive: !options.explicitReplay && !options.attachedToLive && attachable,
     showLiveNow: options.explicitReplay && !options.attachedToLive && remote && status.status === 'live',
-    replaySessionId: !options.explicitReplay && status?.status === 'replay_ready'
+    replaySessionId: !options.explicitReplay && options.attachedToLive
+      && status?.status === 'replay_ready'
       ? status.replay_session_id ?? null
       : null,
   }
