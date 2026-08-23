@@ -83,3 +83,13 @@ def test_future_pit_and_retirement_do_not_reclassify_a_pass() -> None:
     assert [(p.ahead, p.behind, p.kind) for p in detect_passes(evs)] == [
         ("A", "B", KIND_ON_TRACK),
     ]
+
+
+def test_start_shuffle_waits_for_first_completed_lap() -> None:
+    evs = _grid("A", "B")
+    evs.extend([
+        event(SID, "PositionChanged", 31_000, "B", position=1),
+        event(SID, "PositionChanged", 31_000, "A", position=2),
+    ])
+
+    assert detect_passes(evs) == []

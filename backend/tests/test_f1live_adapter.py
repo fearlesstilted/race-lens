@@ -156,3 +156,19 @@ def test_race_control_keyframe_uses_each_message_timestamp(tmp_path):
         (60_000, "FIRST"),
         (120_000, "SECOND"),
     ]
+
+
+def test_transient_retired_pulse_is_ignored(tmp_path):
+    feed = tmp_path / "retirement-pulse.txt"
+    feed.write_text("\n".join([
+        "['SessionStatus', {'Status': 'Started'}, '2026-07-05T15:00:00.000Z']",
+        "['DriverList', {'77': {'Tla': 'BOT'}}, '2026-07-05T15:00:01.000Z']",
+        "['TimingData', {'Lines': {'77': {'Retired': True, 'Stopped': True}}}, "
+        "'2026-07-05T15:01:00.000Z']",
+        "['TimingData', {'Lines': {'77': {'Retired': False, 'Stopped': False}}}, "
+        "'2026-07-05T15:01:01.000Z']",
+    ]) + "\n", encoding="utf-8")
+
+    events = ingest_f1live(str(feed), session_id="test")
+
+    assert not any(event.type == "RetirementDetected" for event in events)

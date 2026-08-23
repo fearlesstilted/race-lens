@@ -505,6 +505,7 @@ class Recorder:
             sys.executable, "-m", "racelens.cli", "ingest", str(session.year),
             session.event_name, session.kind, "-o", str(paths["fixture"]),
         ], env=env)
+        validate_fixture(paths["fixture"])
         if captured is not None:
             merge_captured_radio(paths["fixture"], captured)
         if captured is not None and self.config.transcribe_radio:
@@ -602,6 +603,9 @@ class Recorder:
             print(f"official DOTD sync deferred: {type(exc).__name__}", file=sys.stderr)
 
     def process(self, session: ScheduledSession) -> None:
+        if self._transcripts is not None:
+            self._transcripts.close()
+            self._transcripts = None
         paths = self._paths(session)
         clean = paths["clean"]
         if not clean.is_file():

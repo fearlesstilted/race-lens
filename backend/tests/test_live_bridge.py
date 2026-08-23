@@ -301,6 +301,7 @@ def test_recorder_snapshot_handles_partial_append_sc_vsc_and_late_transcript(tmp
     _write_feed(feed, lines)
     with feed.open("a", encoding="utf-8") as handle:
         handle.write("['TimingData', {'Lines':")
+    os.utime(feed, (NOW.timestamp(), NOW.timestamp()))
 
     class Transcripts:
         calls = 0
