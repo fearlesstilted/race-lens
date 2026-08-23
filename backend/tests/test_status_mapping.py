@@ -36,6 +36,11 @@ def test_vsc_message():
     assert message_to_status("VIRTUAL SAFETY CAR DEPLOYED") == "vsc"
 
 
+def test_abbreviated_vsc_messages():
+    assert message_to_status("VSC DEPLOYED") == "vsc"
+    assert message_to_status("VSC ENDING") == "started"
+
+
 def test_sc_deployed():
     assert message_to_status("SAFETY CAR DEPLOYED") == "safety_car"
 
@@ -44,8 +49,8 @@ def test_green_light():
     assert message_to_status("GREEN LIGHT - PIT EXIT OPEN") == "started"
 
 
-def test_track_clear():
-    assert message_to_status("TRACK CLEAR") == "started"
+def test_track_clear_does_not_resume_a_red_flag():
+    assert message_to_status("TRACK CLEAR") is None
 
 
 def test_unknown_message_returns_none():

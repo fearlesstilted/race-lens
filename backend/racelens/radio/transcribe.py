@@ -14,6 +14,7 @@ returns None and the worker stays idle instead of crashing the API.
 """
 from __future__ import annotations
 
+import gc
 import sys
 import tempfile
 import urllib.request
@@ -82,6 +83,11 @@ class TranscriptWorker:
         text = transcribe(url)
         if text:
             self._cache[url] = text
+
+    def close(self) -> None:
+        self._pool.shutdown(wait=True)
+        _model.cache_clear()
+        gc.collect()
 
 
 def enrich_fixture(path: Path) -> int:

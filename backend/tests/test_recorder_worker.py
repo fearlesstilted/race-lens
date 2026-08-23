@@ -57,6 +57,24 @@ def test_official_award_delay_never_fails_archive_publication(tmp_path, monkeypa
     recorder._publish(SESSION, [], 1)
 
 
+def test_invalid_canonical_fixture_skips_radio_transcription(tmp_path, monkeypatch):
+    recorder = Recorder(replace(_config(tmp_path), transcribe_radio=True))
+    commands = []
+    monkeypatch.setattr(recorder, "_run", lambda argv, **_kwargs: commands.append(argv))
+    monkeypatch.setattr("racelens.recorder.worker.merge_captured_radio", lambda *_args: None)
+    monkeypatch.setattr(
+        "racelens.recorder.worker.validate_fixture",
+        lambda _path: (_ for _ in ()).throw(RuntimeError("canonical unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="canonical unavailable"):
+        recorder._build_archive(
+            SESSION, captured=tmp_path / "captured.jsonl", full=True,
+        )
+
+    assert not any("radio-transcribe" in command for command in commands)
+
+
 def test_config_rejects_unknown_publish_session(tmp_path, monkeypatch):
     monkeypatch.setenv("RACELENS_RECORDER_DATA", str(tmp_path))
     monkeypatch.setenv("RECORDER_PUBLISH_SESSIONS", "R,wat")

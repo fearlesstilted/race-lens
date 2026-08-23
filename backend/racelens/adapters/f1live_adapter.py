@@ -32,6 +32,7 @@ _STATUS_MAP = {
 }
 
 _LAPTIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2})\.(\d{3})$")
+_RETIRE_CONFIRM_MS = 5_000
 
 
 def _parse_iso(ts: str) -> float | None:
@@ -210,7 +211,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     laps: dict[str, int] = {}
     in_pit: dict[str, bool] = {}
     last_lap_ms: dict[str, int | None] = {}
-    retired: set[str] = set()
+    retirement_candidates: dict[str, tuple[int, int]] = {}
     last_status: str | None = None  # dedupe SessionStatus vs RCM-derived statuses
     session_path: str | None = None  # SessionInfo "Path", to build absolute radio audio_url
 
@@ -275,12 +276,11 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                     elif was_in:  # only a real out after a seen in
                         events.append(event(sid, "PitOut", t_ms, d, lap=cur_lap))
 
-            # 'Retired' is definitive; 'Stopped' can be a spin-and-continue, so
-            # only the explicit flag retires a car. Once per driver.
-            if patch.get("Retired") and d not in retired:
-                retired.add(d)
-                events.append(event(sid, "RetirementDetected", t_ms, d,
-                                    lap=laps.get(d, 0) + 1))
+            if "Retired" in patch:
+                if patch["Retired"]:
+                    retirement_candidates.setdefault(d, (t_ms, laps.get(d, 0) + 1))
+                else:
+                    retirement_candidates.pop(d, None)
 
     def apply_tyres(lines: dict, t_ms: int) -> None:
         for num, patch in lines.items():
@@ -321,6 +321,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             apply_driver_list(payload)
 
     # Pass 2: chronological event emission.
+    latest_ms = 0
     for cat, payload, ts in rows:
         t_posix = _parse_iso(ts)
         if t_posix is None:
@@ -330,6 +331,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             t_ms = join_ms if join_ms is not None else 0
         else:
             t_ms = to_ms(t_posix)
+        latest_ms = max(latest_ms, t_ms)
 
         if cat == "SessionInfo":
             path = payload.get("Path")
@@ -386,6 +388,10 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                 events.append(event(sid, "RaceControlMessage", radio_ms, d,
                                     lap=laps.get(d, 0) + 1,
                                     **radio_payload))
+
+    for driver_id, (retired_at, lap) in retirement_candidates.items():
+        if latest_ms - retired_at >= _RETIRE_CONFIRM_MS:
+            events.append(event(sid, "RetirementDetected", retired_at, driver_id, lap=lap))
 
     events.sort(key=lambda e: (e.session_time_ms, e.event_id))
     return events

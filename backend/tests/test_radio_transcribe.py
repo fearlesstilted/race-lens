@@ -109,6 +109,20 @@ def test_enrich_fixture_restores_order_after_event_id_changes(tmp_path, monkeypa
     assert got == sorted(got, key=lambda item: (item.session_time_ms, item.event_id))
 
 
+def test_live_worker_close_waits_and_releases_model(monkeypatch) -> None:
+    completed: list[str] = []
+    cleared: list[bool] = []
+    monkeypatch.setattr(rt, "transcribe", lambda url: completed.append(url) or "box")
+    monkeypatch.setattr(rt._model, "cache_clear", lambda: cleared.append(True))
+    worker = rt.TranscriptWorker()
+    worker.get("https://provider.test/radio.mp3")
+
+    worker.close()
+
+    assert completed == ["https://provider.test/radio.mp3"]
+    assert cleared == [True]
+
+
 def _evaluation_manifest(tmp_path: Path, count: int = 50) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "private-radio-reference.jsonl"

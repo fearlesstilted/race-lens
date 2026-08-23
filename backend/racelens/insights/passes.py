@@ -61,6 +61,12 @@ def detect_passes(events: list[Event]) -> list[Pass]:
         if e.type == "LapCompleted" and e.lap is not None
     )
     lap1_end_ms = next((t for t, lap in lap_marks if lap == 1), None)
+    complete = any(
+        e.type == "SessionStatusChanged" and e.payload.get("status") == "finished"
+        for e in events
+    )
+    if lap1_end_ms is None and not complete:
+        return []
 
     def lap_at(t: int) -> int | None:
         if not lap_marks:
