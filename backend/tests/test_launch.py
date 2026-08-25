@@ -45,6 +45,15 @@ def test_detect_launch_ms_uses_session_clock(monkeypatch):
     assert launch.detect_launch_ms(Session()) == 2_701_000
 
 
+def test_launch_detection_uses_first_start_before_a_red_flag_restart():
+    from racelens.positions.launch import _first_launch_index
+
+    speed = [0] * 8 + [10] * 20 + [0] * 8 + [10] * 20
+    spread = [5] * 8 + list(range(10, 210, 10)) + [5] * 8 + list(range(10, 210, 10))
+
+    assert _first_launch_index(speed, spread, stop=1, move=4) == 8
+
+
 def test_raw_positions_skip_non_finite_coordinates(tmp_path, monkeypatch):
     from racelens.positions import launch, track
 

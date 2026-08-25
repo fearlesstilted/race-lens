@@ -538,6 +538,7 @@ def _attach_frame(state: dict, session_id: str | None = None) -> dict:
 # Overtake-attention window: a pass stays "recent" (flashed on the map) for
 # this many ms of session time after it happened.
 RECENT_PASS_WINDOW_MS = 20_000
+POST_RACE_RADIO_WINDOW_MS = 5 * 60_000
 
 
 def _recent_passes(passes: list[Pass], cur_ms: int, window_ms: int = RECENT_PASS_WINDOW_MS) -> list[dict]:
@@ -551,18 +552,25 @@ def _recent_passes(passes: list[Pass], cur_ms: int, window_ms: int = RECENT_PASS
 
 
 def _race_end_ms(eng: ReplayEngine) -> int:
-    """End of on-track action = chequered flag (or last lap), NOT the last event.
+    """End at the chequered flag plus a short, source-backed radio cooldown.
 
-    Post-race steward messages run minutes past the finish and have no telemetry,
-    so using them would leave a dead zone of frozen cars at the end of the
-    scrubber. Cap the replay timeline/stream at the finish instead.
+    Late steward messages stay outside the scrubber, while immediate post-race
+    team radio remains playable.
     """
     finished = [
         e.session_time_ms for e in eng.events
         if e.type == "SessionStatusChanged" and e.payload.get("status") == "finished"
     ]
     if finished:
-        return max(finished)
+        finish = max(finished)
+        radio = [
+            e.session_time_ms for e in eng.events
+            if e.type == "RaceControlMessage"
+            and e.payload.get("category") == "Radio"
+            and any(e.payload.get(key) for key in ("audio_url", "audio_path", "transcript"))
+            and finish < e.session_time_ms <= finish + POST_RACE_RADIO_WINDOW_MS
+        ]
+        return max([finish, *radio])
     laps = [e.session_time_ms for e in eng.events if e.type == "LapCompleted"]
     if laps:
         return max(laps)

@@ -8,6 +8,32 @@ absolute Date. Both positions-raw and track-progress use this.
 """
 from __future__ import annotations
 
+from statistics import fmean, median
+
+
+def _first_launch_index(speed, spread, *, stop: float, move: float,
+                        hold: int = 6, after_n: int = 20) -> int | None:
+    stationary = [value < stop for value in speed]
+    max_spread = max(spread, default=0)
+    i = 0
+    while i < len(stationary):
+        if not stationary[i]:
+            i += 1
+            continue
+        j = i
+        while j < len(stationary) and stationary[j]:
+            j += 1
+        after = speed[j:j + after_n]
+        if (
+            j - i >= hold
+            and len(after)
+            and median(after) > move
+            and 1 < fmean(spread[i:j]) < max_spread * 0.5
+        ):
+            return j
+        i = j
+    return None
+
 
 def detect_launch_date(ses):
     """Absolute Date of the standing-start launch, from pos_data X/Y motion.
@@ -44,23 +70,10 @@ def detect_launch_date(ses):
 
     mx = np.percentile(speed, 95) or 1.0
     stop, move, hold, after_n = mx * 0.05, mx * 0.4, 6, 20
-    stationary = speed < stop
-    launch = None
-    i = 0
-    while i < len(stationary):
-        if stationary[i]:
-            j = i
-            while j < len(stationary) and stationary[j]:
-                j += 1
-            if (j - i) >= hold:
-                after = speed[j:j + after_n]
-                if (len(after) and np.median(after) > move
-                        and 1 < spread[i:j].mean() < spread.max() * 0.5):
-                    launch = gt[j]
-            i = j
-        else:
-            i += 1
-    return pd.Timestamp(launch) if launch is not None else None
+    launch = _first_launch_index(
+        speed, spread, stop=stop, move=move, hold=hold, after_n=after_n,
+    )
+    return pd.Timestamp(gt[launch]) if launch is not None else None
 
 
 def detect_launch_ms(ses) -> int | None:

@@ -42,7 +42,7 @@ docker run -d \
     --read-only \
     --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m \
     --pids-limit 256 \
-    --memory 4g \
+    --memory 6g \
     --cpus 2.0 \
     --ulimit nofile=2048:2048 \
     --stop-timeout 45 \

@@ -3,7 +3,7 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from racelens.events.models import dump_jsonl  # noqa: E402
+from racelens.events.models import dump_jsonl, event  # noqa: E402
 
 from tests.test_replay import mini_race  # noqa: E402
 
@@ -323,3 +323,29 @@ def test_timeline(client):
     assert t["start_ms"] == 0
     assert t["end_ms"] == 250_000
     assert t["lap_marks"]["1"] == 80_000  # first lap-1 completion
+
+
+def test_timeline_includes_short_post_race_radio_not_late_steward_messages():
+    import racelens.api as api
+
+    session_id = "2024_mini_race"
+    events = mini_race() + [
+        event(
+            session_id, "RaceControlMessage", 300_000, "VER",
+            category="Radio", message="RADIO: VER", audio_url="https://provider.test/ver.mp3",
+        ),
+        event(
+            session_id, "RaceControlMessage", 400_000, "NOR",
+            category="Radio", message="RADIO: NOR",
+        ),
+        event(
+            session_id, "RaceControlMessage", 551_000, "LEC",
+            category="Radio", message="RADIO: LEC", audio_url="https://provider.test/lec.mp3",
+        ),
+        event(
+            session_id, "RaceControlMessage", 450_000,
+            category="Other", message="POST-RACE INVESTIGATION",
+        ),
+    ]
+
+    assert api._race_end_ms(api.ReplayEngine(events)) == 300_000
