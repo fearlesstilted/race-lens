@@ -51,6 +51,21 @@ Open [race-lens.onrender.com](https://race-lens.onrender.com). The free instance
 may take up to a minute to wake after inactivity; the UI keeps the selected
 session and shows the wake-up stage instead of a local development error.
 
+Choose your surface:
+
+- **Web:** open the link above; nothing to install.
+- **Windows:** download the unsigned x64 installer from
+  [Desktop v0.1.0](https://github.com/fearlesstilted/race-lens/releases/tag/desktop-v0.1.0).
+  It is a pre-release, so Windows SmartScreen may ask for confirmation.
+- **Terminal:** install the read-only
+  [TUI v0.1.0](https://github.com/fearlesstilted/race-lens/releases/tag/tui-v0.1.0)
+  on Python 3.11+ and point it at the public API:
+
+  ```bash
+  python -m pip install "racelens[tui] @ https://github.com/fearlesstilted/race-lens/releases/download/tui-v0.1.0/racelens-0.1.0-py3-none-any.whl"
+  racelens-tui --api-url https://race-lens.onrender.com
+  ```
+
 Open the app without a session to get the interactive catalog, or click the
 session name in the header to switch. Completed practice, sprint, qualifying,
 and race sessions from the full-telemetry era (2018 onward) are available.
