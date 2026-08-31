@@ -23,6 +23,7 @@ from racelens.events_significant import (
     KIND_OFF_TRACK,
     KIND_PENALTY,
     KIND_PODIUM_CHANGE,
+    KIND_RED_FLAG,
     KIND_SAFETY_CAR,
     SEV_CRITICAL,
     SEV_HIGH,
@@ -181,6 +182,25 @@ def test_mini_marker_schema():
         assert m["severity"] in valid_severities, f"Bad severity in {m}"
         assert isinstance(m["text_en"], str) and m["text_en"]
         assert isinstance(m["text_ru"], str) and m["text_ru"]
+
+
+def test_red_flag_marker_ends_when_engine_recovers_missing_restart():
+    events = [
+        event(SID, "SessionStarted", 0, total_laps=3),
+        event(SID, "LapCompleted", 80_000, "VER", lap=1, lap_time_ms=80_000),
+        event(SID, "SessionStatusChanged", 90_000, status="red_flag"),
+        event(SID, "LapCompleted", 200_000, "VER", lap=2, lap_time_ms=80_000),
+    ]
+
+    markers = significant_events(events)
+
+    assert [(marker["kind"], marker["at_ms"]) for marker in markers] == [
+        (KIND_RED_FLAG, 90_000),
+        (KIND_GREEN, 200_000),
+    ]
+    assert [marker["kind"] for marker in significant_events(events, until_ms=150_000)] == [
+        KIND_RED_FLAG,
+    ]
 
 
 # ── Miami 2026 tests ───────────────────────────────────────────────────────────

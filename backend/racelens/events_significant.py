@@ -203,7 +203,7 @@ def significant_events(
     _detect_lead_podium_fastest(visible_sorted, state_engine, markers, seen_ids)
     _detect_pass_markers(visible_sorted, markers, seen_ids)
     _detect_off_track(visible_sorted, markers, seen_ids)
-    _detect_status_events(visible_sorted, markers, seen_ids)
+    _detect_status_events(visible_sorted, state_engine, markers, seen_ids)
     _detect_race_control_events(visible_sorted, markers, seen_ids)
 
     # TODO: RETIREMENT — reliable detection requires tracking retired flag
@@ -413,6 +413,7 @@ def _detect_off_track(
 
 def _detect_status_events(
     visible_sorted: list[Event],
+    state_engine: ReplayEngine,
     markers: list[dict[str, Any]],
     seen_ids: set[str],
 ) -> None:
@@ -422,6 +423,26 @@ def _detect_status_events(
 
     for e in visible_sorted:
         if e.event_id in seen_ids:
+            continue
+        if (
+            e.type == "LapCompleted"
+            and neutralisation_active
+            and state_engine.state_at(e.session_time_ms)["session_status"] == "started"
+        ):
+            text_en, text_ru = _flag_texts(KIND_GREEN)
+            _add_marker(
+                markers, seen_ids,
+                at_ms=e.session_time_ms,
+                lap=e.lap,
+                kind=KIND_GREEN,
+                severity=SEV_MEDIUM,
+                driver_ids=[],
+                text_en=text_en,
+                text_ru=text_ru,
+                dedup_key=f"green:derived:{e.event_id}",
+            )
+            neutralisation_active = False
+            prev_status = "started"
             continue
         if e.type != "SessionStatusChanged":
             continue
