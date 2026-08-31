@@ -705,6 +705,7 @@ function App() {
             greenFlag={replay.greenFlag}
             greenFlagText={replay.greenFlagText}
             restartAnnouncement={restartAnnouncement}
+            restartAtMs={state?.restart_at_ms ?? null}
           />
           {sessionNotice && (
             <div className="feed-error" role="status">{sessionNotice}</div>

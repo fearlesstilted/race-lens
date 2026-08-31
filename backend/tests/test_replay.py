@@ -228,6 +228,26 @@ def test_red_flag_replay_recovers_when_source_omits_restart_status():
     assert resumed["status_since_ms"] == 200_000
 
 
+def test_restart_time_survives_red_flag_and_clears_on_restart():
+    events = [
+        event(SID, "SessionStarted", 0, total_laps=3),
+        event(SID, "SessionStatusChanged", 90_000, status="red_flag"),
+        event(
+            SID,
+            "RaceControlMessage",
+            100_000,
+            category="Other",
+            message="RACE WILL RESUME AT 15:03",
+            restart_at_ms=180_000,
+        ),
+        event(SID, "SessionStatusChanged", 180_000, status="started"),
+    ]
+    engine = ReplayEngine(events)
+
+    assert engine.state_at(150_000)["restart_at_ms"] == 180_000
+    assert engine.state_at(180_000)["restart_at_ms"] is None
+
+
 def test_jsonl_round_trip():
     events = mini_race()
     restored = load_jsonl(dump_jsonl(events))

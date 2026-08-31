@@ -108,6 +108,7 @@ class ReplayEngine:
             "session_status": "unknown",
             "session_name": None,  # e.g. "SILVERSTONE · RACE" (live only — see SessionStarted)
             "status_since_ms": 0,
+            "restart_at_ms": None,
             "total_laps": None,
             "classification": [],
             "drivers": {},
@@ -202,6 +203,7 @@ class ReplayEngine:
             new_status = p.get("status", state["session_status"])
             state["session_status"] = new_status
             state["status_since_ms"] = e.session_time_ms
+            state["restart_at_ms"] = None
             if new_status in {"red_flag", "safety_car", "vsc"}:
                 for drv in state["drivers"].values():
                     drv["recent_laps_ms"] = []
@@ -217,6 +219,7 @@ class ReplayEngine:
                 # proof that racing resumed; short pit-entry crossings are not.
                 state["session_status"] = "started"
                 state["status_since_ms"] = e.session_time_ms
+                state["restart_at_ms"] = None
             d = self._driver(state, e.driver_id)
             d["laps_completed"] = max(d["laps_completed"], e.lap or 0)
             lap_ms = p.get("lap_time_ms")
@@ -277,5 +280,9 @@ class ReplayEngine:
             d["tyre_compound"] = compound
             d["tyre_age_laps"] = age
 
-        # RaceControlMessage / WeatherUpdated are carried in the timeline but
-        # don't mutate MVP state yet — the insight engine will consume them.
+        elif e.type == "RaceControlMessage":
+            restart_at_ms = p.get("restart_at_ms")
+            if isinstance(restart_at_ms, int) and restart_at_ms >= 0:
+                state["restart_at_ms"] = restart_at_ms
+
+        # WeatherUpdated is carried in the timeline but does not mutate MVP state yet.

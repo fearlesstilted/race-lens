@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 
 import type { LiveStatusResult } from '../src/api/client.ts'
-import { liveLifecycle, livePresentation } from '../src/lib/liveStatus.ts'
+import {
+  liveLifecycle,
+  livePresentation,
+  restartCountdown,
+} from '../src/lib/liveStatus.ts'
 
 const remoteLive: LiveStatusResult = {
   is_running: true,
@@ -116,5 +120,9 @@ assert.equal(liveLifecycle(localLive, {
   explicitReplay: false,
   attachedToLive: true,
 }).canManage, true)
+
+assert.equal(restartCountdown(1_349_000, 1_980_000), '10:31')
+assert.equal(restartCountdown(1_979_001, 1_980_000), '00:01')
+assert.equal(restartCountdown(1_980_000, 1_980_000), null)
 
 console.log('production Live lifecycle checks passed')

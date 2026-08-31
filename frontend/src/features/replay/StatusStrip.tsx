@@ -1,3 +1,5 @@
+import { restartCountdown } from '../../lib/liveStatus'
+
 type Props = {
   status: string
   lap?: number | null
@@ -6,6 +8,7 @@ type Props = {
   greenFlag?: boolean
   greenFlagText?: string
   restartAnnouncement?: string | null
+  restartAtMs?: number | null
 }
 
 function formatNeutralTimer(atMs: number, startMs: number): string {
@@ -24,12 +27,14 @@ export function StatusStrip({
   greenFlag = false,
   greenFlagText = '',
   restartAnnouncement = null,
+  restartAtMs = null,
 }: Props) {
   const lapStr = lap != null ? `LAP ${lap}` : ''
   const timerStr =
     neutralizationStartMs != null
       ? formatNeutralTimer(atMs, neutralizationStartMs)
       : '00:00'
+  const restartTimer = restartCountdown(atMs, restartAtMs)
 
   if (status === 'formation') {
     return (
@@ -65,6 +70,7 @@ export function StatusStrip({
         <span>
           RED FLAG · SESSION STOPPED · {timerStr}
           {restartAnnouncement ? ` · ${restartAnnouncement}` : ''}
+          {restartTimer ? ` · RESUME IN ${restartTimer}` : ''}
         </span>
       </div>
     )

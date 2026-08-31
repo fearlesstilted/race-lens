@@ -16,7 +16,7 @@ from __future__ import annotations
 import ast
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
 from racelens.adapters._common import message_to_status
@@ -32,6 +32,8 @@ _STATUS_MAP = {
 }
 
 _LAPTIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2})\.(\d{3})$")
+_GMT_OFFSET_RE = re.compile(r"^([+-]?)(\d{1,2}):(\d{2}):(\d{2})$")
+_RESTART_RE = re.compile(r"\bRACE WILL RESUME AT\s+(\d{1,2}):(\d{2})\b", re.IGNORECASE)
 _RETIRE_CONFIRM_MS = 5_000
 
 
@@ -59,6 +61,39 @@ def _parse_laptime_ms(value: str | None) -> int | None:
         return None
     minutes = int(m.group(1) or 0)
     return (minutes * 60 + int(m.group(2))) * 1000 + int(m.group(3))
+
+
+def _parse_gmt_offset(value: object) -> int | None:
+    if not isinstance(value, str) or not (match := _GMT_OFFSET_RE.match(value.strip())):
+        return None
+    hours, minutes, seconds = map(int, match.groups()[1:])
+    if hours > 23 or minutes > 59 or seconds > 59:
+        return None
+    sign = -1 if match.group(1) == "-" else 1
+    return sign * (hours * 3600 + minutes * 60 + seconds)
+
+
+def _restart_at_ms(
+    message: str,
+    message_posix: float | None,
+    session_start_posix: float,
+    gmt_offset_s: int | None,
+) -> int | None:
+    match = _RESTART_RE.search(message)
+    if match is None or message_posix is None or gmt_offset_s is None:
+        return None
+    hour, minute = map(int, match.groups())
+    if hour > 23 or minute > 59:
+        return None
+    local_message = datetime.fromtimestamp(message_posix, tz=timezone.utc) + timedelta(
+        seconds=gmt_offset_s,
+    )
+    local_restart = local_message.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if local_restart < local_message - timedelta(minutes=1):
+        local_restart += timedelta(days=1)
+    restart_posix = (local_restart - timedelta(seconds=gmt_offset_s)).timestamp()
+    restart_ms = round((restart_posix - session_start_posix) * 1000)
+    return restart_ms if restart_ms >= 0 else None
 
 
 def _parse_gap_s(value: Any) -> float | None:
@@ -191,12 +226,14 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     # (full history resent on every re-parse), so the first occurrence in the
     # file is stable across polls once the feed has connected.
     session_name: str | None = None
+    gmt_offset_s: int | None = None
     for cat, payload, _ in rows:
         if cat == "SessionInfo":
             location = (payload.get("Meeting") or {}).get("Location")
             name = payload.get("Name")
             if location and name:
                 session_name = f"{location} · {name}".upper()
+            gmt_offset_s = _parse_gmt_offset(payload.get("GmtOffset"))
             break
 
     sid = session_id
@@ -382,8 +419,20 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                 lap_no = m.get("Lap") if isinstance(m.get("Lap"), int) else None
                 message_posix = _parse_iso(str(m.get("Utc") or ""))
                 message_ms = to_ms(message_posix) if message_posix is not None else t_ms
-                events.append(event(sid, "RaceControlMessage", message_ms, lap=lap_no,
-                                    category=str(m.get("Category", "")), message=text))
+                race_control_payload: dict[str, Any] = {
+                    "category": str(m.get("Category", "")),
+                    "message": text,
+                }
+                restart_at_ms = _restart_at_ms(text, message_posix, t0, gmt_offset_s)
+                if restart_at_ms is not None:
+                    race_control_payload["restart_at_ms"] = restart_at_ms
+                events.append(event(
+                    sid,
+                    "RaceControlMessage",
+                    message_ms,
+                    lap=lap_no,
+                    **race_control_payload,
+                ))
                 status = message_to_status(text)
                 if status is not None:
                     emit_status(status, message_ms)
