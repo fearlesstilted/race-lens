@@ -235,6 +235,17 @@ export function writeDeskPreference(
   return next
 }
 
+export function saveCustomWorkspace(
+  mode: WorkspaceMode,
+  workspace: WorkspaceLayout,
+  storage?: WorkspaceStorage,
+): { workspaces: Workspaces; desks: DeskPreferences } {
+  return {
+    workspaces: writeWorkspace(mode, workspace, storage),
+    desks: writeDeskPreference(mode, 'custom', storage),
+  }
+}
+
 export function updateWorkspaceWidget(
   workspace: WorkspaceLayout,
   mode: WorkspaceMode,

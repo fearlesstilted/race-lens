@@ -10,6 +10,7 @@ import {
   readMobileCenter,
   readWorkspaces,
   resetWorkspace,
+  saveCustomWorkspace,
   selectDensity,
   toggleDriverFocus,
   updateWorkspaceWidget,
@@ -45,6 +46,14 @@ writeDeskPreference('live', 'custom', deskStorage)
 assert.deepEqual(readDeskPreferences(deskStorage), { replay: 'custom', live: 'custom' },
   'Live desk choice persists independently')
 assert.equal(deskStorage.getItem(WORKSPACE_KEY), null, 'desk preferences do not write workspace schema v2')
+
+const editStorage = new MemoryStorage()
+const editedReplay = updateWorkspaceWidget(defaultWorkspace('replay'), 'replay', 'track', { visible: true })
+const savedEdit = saveCustomWorkspace('replay', editedReplay, editStorage)
+assert.equal(savedEdit.workspaces.replay.widgets.track.visible, true,
+  'Done saves the edited workspace')
+assert.deepEqual(savedEdit.desks, { replay: 'custom', live: 'classic' },
+  'Done activates Custom only for the edited mode')
 
 const migratedStorage = new MemoryStorage()
 migratedStorage.setItem('racelens_dashboard_layout', JSON.stringify({

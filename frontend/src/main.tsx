@@ -27,6 +27,7 @@ import {
   readDeskPreferences,
   readMobileCenter,
   readWorkspaces,
+  saveCustomWorkspace,
   toggleDriverFocus,
   updateWorkspaceWidget,
   workspaceAction,
@@ -155,12 +156,13 @@ function App() {
   }, [desk, mode])
   const handleEditCustom = useCallback(() => {
     if (workspaceDraft) return
-    setDeskPreferences(writeDeskPreference(mode, 'custom'))
     setWorkspaceDraft(workspace)
-  }, [mode, workspace, workspaceDraft])
+  }, [workspace, workspaceDraft])
   const handleCustomDone = useCallback(() => {
     if (!workspaceDraft) return
-    setWorkspaces(writeWorkspace(mode, workspaceDraft))
+    const saved = saveCustomWorkspace(mode, workspaceDraft)
+    setWorkspaces(saved.workspaces)
+    setDeskPreferences(saved.desks)
     setWorkspaceDraft(null)
   }, [mode, workspaceDraft])
   const handleMobileCenter = useCallback((center: MobileCenter) => {
@@ -459,12 +461,13 @@ function App() {
   const liveSessionName = state?.session_name ?? (
     liveStatusData?.replay_session_id ? sessionLabel(liveStatusData.replay_session_id) : null
   )
-  const projectionOn = desktopWorkspace && desk === 'custom'
+  const customDeskVisible = desktopWorkspace && (desk === 'custom' || customEditing)
+  const projectionOn = customDeskVisible
     ? customWorkspace.widgets.pace.visible
     : projection
   const handleProjection = (value: boolean) => {
     setProjection(value)
-    if (desktopWorkspace && desk === 'custom') {
+    if (customDeskVisible) {
       const next = updateWorkspaceWidget(customWorkspace, mode, 'pace', { visible: value })
       if (customEditing) setWorkspaceDraft(next)
       else handleWorkspace(next)
@@ -637,8 +640,8 @@ function App() {
         onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
         atMs={replay.atMs}
-        anchoredHighlights={!desktopWorkspace || desk === 'classic' || !customWorkspace.widgets.highlights.visible}
-        anchoredDotd={!desktopWorkspace || desk === 'classic' || !customWorkspace.widgets.dotd.visible}
+        anchoredHighlights={!customDeskVisible || !customWorkspace.widgets.highlights.visible}
+        anchoredDotd={!customDeskVisible || !customWorkspace.widgets.dotd.visible}
         sessionName={mode === 'live' ? liveSessionName : null}
       />
 
@@ -724,7 +727,7 @@ function App() {
             </div>
           </div>
 
-          {desktopWorkspace && desk === 'custom' ? (
+          {customDeskVisible ? (
             <WorkspaceGrid
               mode={mode}
               workspace={customWorkspace}
@@ -732,6 +735,7 @@ function App() {
               widgets={workspaceWidgets}
               onChange={setWorkspaceDraft}
               onDone={handleCustomDone}
+              onCancel={() => setWorkspaceDraft(null)}
               onReset={() => setWorkspaceDraft(defaultWorkspace(mode))}
             />
           ) : (
