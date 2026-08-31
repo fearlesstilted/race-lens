@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="tile">
+      <rect x="32" y="32" width="960" height="960" rx="176"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="32" y="32" width="960" height="960" fill="#070912"/>
+    <path d="M124 80H938L850 944H36Z" fill="#1b264f"/>
+    <path d="M58 80H166L78 944H-30Z" fill="#e8002d"/>
+    <path d="M214 944 820 80h118L332 944Z" fill="#070912" opacity=".22"/>
+    <g fill="none" stroke="#f4f4f6" stroke-linecap="square" stroke-linejoin="miter" stroke-width="76">
+      <path d="M298 724 342 304h190c116 0 104 210-22 210H320m190 0 128 210"/>
+      <path d="M706 304 662 724h190"/>
+    </g>
+  </g>
+  <rect x="36" y="36" width="952" height="952" rx="172" fill="none" stroke="#ffffff" stroke-opacity=".12" stroke-width="8"/>
+</svg>

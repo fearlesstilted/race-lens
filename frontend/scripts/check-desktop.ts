@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { withApiBase } from '../src/api/url.ts'
@@ -17,6 +17,7 @@ assert.throws(() => withApiBase('https://example.com/api/ping'))
 const config = JSON.parse(read('src-tauri/tauri.conf.json'))
 assert.deepEqual(config.bundle.targets, ['nsis'])
 assert.equal(config.build.beforeBuildCommand, 'npm run build:desktop')
+assert.equal(existsSync(resolve(root, 'src-tauri/icons/icon.ico')), true, 'Windows app icon exists')
 assert.match(config.app.security.csp, /https:\/\/race-lens\.onrender\.com/)
 assert.match(config.app.security.csp, /media-src 'self' https:\/\/livetiming\.formula1\.com/)
 
