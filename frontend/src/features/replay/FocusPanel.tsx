@@ -14,6 +14,7 @@ type Props = {
   atMs: number
   lap: number
   onStrategyRequest?: () => void
+  onRemoveDriver: (id: string) => void
 }
 
 type PitSnapshot = { atMs: number; lap: number }
@@ -361,7 +362,7 @@ function H2HDeltas({
   )
 }
 
-export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs, lap, onStrategyRequest }: Props) {
+export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers, sessionId, live, atMs, lap, onStrategyRequest, onRemoveDriver }: Props) {
   if (selectedIds.length === 0) return null
 
   const [idA, idB] = selectedIds
@@ -371,10 +372,20 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers,
   if (!driverA) return null
 
   const isH2H = driverB !== null && idB !== undefined
+  const selection = (
+    <div className="focus-selection" aria-label="Selected drivers">
+      {selectedIds.map((id) => (
+        <button type="button" key={id} onClick={() => onRemoveDriver(id)} aria-label={`Remove ${id} from driver focus`}>
+          {id}<span aria-hidden="true"> ×</span>
+        </button>
+      ))}
+    </div>
+  )
 
   if (isH2H && driverB) {
     return (
       <div className="focus-panel focus-panel-h2h">
+        {selection}
         <div className="focus-h2h-label">HEAD TO HEAD</div>
         <div className="h2h-body">
           <H2HDriver driverId={idA} driver={driverA} />
@@ -388,6 +399,7 @@ export const FocusPanel = React.memo(function FocusPanel({ selectedIds, drivers,
 
   return (
     <div className="focus-panel">
+      {selection}
       <div className="focus-cards">
         <DriverCard key={idA} driverId={idA} driver={driverA} sessionId={sessionId} live={live} atMs={atMs} lap={lap} onStrategyRequest={onStrategyRequest} />
       </div>

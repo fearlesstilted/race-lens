@@ -836,6 +836,28 @@
 .focus-panel-h2h {
   padding: var(--s2) var(--s3) var(--s3);
 }
+.focus-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.focus-selection button {
+  min-height: 32px;
+  padding: 4px 9px;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  background: var(--panel2);
+  color: var(--ink);
+  font: 700 12px var(--cond);
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.focus-selection button:hover,
+.focus-selection button:focus-visible {
+  border-color: var(--red);
+  color: #fff;
+}
 .focus-h2h-label {
   font: italic 800 11px var(--cond);
   letter-spacing: 0.35em;
