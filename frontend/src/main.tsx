@@ -532,6 +532,7 @@ function App() {
           atMs={replay.atMs}
           lap={currentLap}
           onStrategyRequest={mode === 'replay' ? replay.pause : undefined}
+          onRemoveDriver={handleSelectDriver}
         />
       </div>
     ) : (
@@ -847,6 +848,7 @@ function App() {
                   atMs={replay.atMs}
                   lap={currentLap}
                   onStrategyRequest={mode === 'replay' ? replay.pause : undefined}
+                  onRemoveDriver={handleSelectDriver}
                 />
               </div>
             ) : (
