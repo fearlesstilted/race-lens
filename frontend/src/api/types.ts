@@ -119,6 +119,8 @@ export type RaceState = {
   /** Live-only badge text, e.g. "SILVERSTONE · RACE" (null in replay / before SessionInfo arrives). */
   session_name?: string | null
   status_since_ms: number
+  /** Source-backed scheduled restart point, relative to session start. */
+  restart_at_ms?: number | null
   total_laps: number | null
   classification: string[]
   drivers: Record<string, DriverState>

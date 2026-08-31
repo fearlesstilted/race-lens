@@ -158,6 +158,48 @@ def test_race_control_keyframe_uses_each_message_timestamp(tmp_path):
     ]
 
 
+def test_restart_announcement_uses_source_gmt_offset(tmp_path):
+    session_info = {
+        "Meeting": {"Name": "Dutch Grand Prix", "Location": "Zandvoort"},
+        "Name": "Race",
+        "GmtOffset": "02:00:00",
+    }
+    lines = [
+        "['SessionInfo', %s, '']" % json.dumps(json.dumps(session_info)),
+        "['SessionStatus', {'Status': 'Started'}, '2026-08-23T13:00:00Z']",
+        "['RaceControlMessages', {'Messages': [{'Utc': '2026-08-23T13:22:29Z', "
+        "'Category': 'Other', 'Message': 'RACE WILL RESUME AT 15:33'}]}, "
+        "'2026-08-23T13:22:29Z']",
+    ]
+    feed = tmp_path / "restart.txt"
+    feed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    message = next(
+        event for event in ingest_f1live(str(feed), session_id="test")
+        if event.type == "RaceControlMessage"
+    )
+
+    assert message.payload["restart_at_ms"] == 1_980_000
+
+
+def test_restart_announcement_without_source_timezone_stays_unresolved(tmp_path):
+    lines = [
+        "['SessionStatus', {'Status': 'Started'}, '2026-08-23T13:00:00Z']",
+        "['RaceControlMessages', {'Messages': [{'Utc': '2026-08-23T13:22:29Z', "
+        "'Category': 'Other', 'Message': 'RACE WILL RESUME AT 15:33'}]}, "
+        "'2026-08-23T13:22:29Z']",
+    ]
+    feed = tmp_path / "restart-without-offset.txt"
+    feed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    message = next(
+        event for event in ingest_f1live(str(feed), session_id="test")
+        if event.type == "RaceControlMessage"
+    )
+
+    assert "restart_at_ms" not in message.payload
+
+
 def test_transient_retired_pulse_is_ignored(tmp_path):
     feed = tmp_path / "retirement-pulse.txt"
     feed.write_text("\n".join([

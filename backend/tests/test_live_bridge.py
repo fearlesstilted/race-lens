@@ -198,6 +198,11 @@ def test_live_records_reject_inner_identity_malformed_values_and_path_text():
     with pytest.raises(storage.LiveRecordError):
         storage.validate_live_snapshot(malformed_snapshot, pointer=pointer, now=NOW)
 
+    malformed_restart = copy.deepcopy(snapshot)
+    malformed_restart["race_state"]["restart_at_ms"] = "soon"
+    with pytest.raises(storage.LiveRecordError):
+        storage.validate_live_snapshot(malformed_restart, pointer=pointer, now=NOW)
+
     leaked = copy.deepcopy(snapshot)
     leaked["feed"]["en"] = [{
         "id": "leak",
@@ -853,6 +858,7 @@ def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
         "Key": 99,
         "Name": "Race",
         "StartDate": "2026-08-23T13:00:00Z",
+        "GmtOffset": "02:00:00",
         "Path": "2026/Dutch/Race/",
     }
     lines = [
@@ -905,6 +911,7 @@ def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
     assert recorder._publish_live_snapshot(SESSION, raw)
     red = copy.deepcopy(store.objects[f"live/{SESSION.session_id}/snapshot.json"])
     assert red["race_state"]["session_status"] == "red_flag"
+    assert red["race_state"]["restart_at_ms"] == 180_000
     assert red["stints"]["stints"]["VER"][0]["compound"] == "Medium"
     assert any("RACE WILL RESUME" in item["text"] for item in red["feed"]["en"])
 
@@ -912,6 +919,7 @@ def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
     assert recorder._publish_live_snapshot(SESSION, raw)
     quiet_red = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
     assert quiet_red["race_state"]["session_status"] == "red_flag"
+    assert quiet_red["race_state"]["restart_at_ms"] == 180_000
     assert quiet_red["race_state"]["at_ms"] >= red["race_state"]["at_ms"] + 45_000
 
     lines.extend([
@@ -929,6 +937,7 @@ def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
     assert recorder._publish_live_snapshot(SESSION, raw)
     restarted = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
     assert restarted["race_state"]["session_status"] == "started"
+    assert restarted["race_state"]["restart_at_ms"] is None
     assert restarted["recent_passes"] == []
 
     lines.extend([

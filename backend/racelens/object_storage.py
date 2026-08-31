@@ -462,6 +462,7 @@ _RACE_STATE_FIELDS = {
     "status_since_ms", "total_laps", "classification", "drivers",
     "data_quality", "frame_source", "viewbox",
 }
+_RACE_STATE_OPTIONAL_FIELDS = {"restart_at_ms"}
 _DRIVER_FIELDS = {
     "position", "rank", "grid_position", "laps_completed", "last_lap_ms",
     "best_lap_ms", "gap_s", "interval_s", "tyre_compound", "tyre_age_laps",
@@ -596,7 +597,11 @@ def _bounded_rows(value: object, name: str, limit: int) -> list:
 
 
 def _validate_race_state(value: object, replay_session_id: str) -> None:
-    if not isinstance(value, dict) or set(value) != _RACE_STATE_FIELDS:
+    if (
+        not isinstance(value, dict)
+        or not _RACE_STATE_FIELDS <= set(value)
+        or not set(value) <= _RACE_STATE_FIELDS | _RACE_STATE_OPTIONAL_FIELDS
+    ):
         raise LiveRecordError("live snapshot race state is invalid")
     if value["session_id"] != replay_session_id:
         raise LiveRecordError("live snapshot inner identity differs")
@@ -612,6 +617,10 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
             and not _public_text(value["session_name"], maximum=120)
         )
         or not _integer(value["status_since_ms"])
+        or (
+            value.get("restart_at_ms") is not None
+            and not _integer(value["restart_at_ms"])
+        )
         or (
             value["total_laps"] is not None
             and not _integer(value["total_laps"], maximum=500)

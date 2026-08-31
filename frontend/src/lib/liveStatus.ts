@@ -31,6 +31,14 @@ export type LiveLifecycle = {
   replaySessionId: string | null
 }
 
+export function restartCountdown(atMs: number, restartAtMs?: number | null): string | null {
+  if (restartAtMs == null || restartAtMs <= atMs) return null
+  const totalSec = Math.ceil((restartAtMs - atMs) / 1000)
+  const mm = Math.floor(totalSec / 60).toString().padStart(2, '0')
+  const ss = (totalSec % 60).toString().padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
 export function liveLifecycle(
   status: LiveStatusResult | null,
   options: LiveLifecycleOptions,
