@@ -1422,15 +1422,8 @@
 }
 .workspace-widget-header strong { color: var(--ink); }
 .workspace-grip { color: var(--dim); font-size: 16px; }
-.workspace-density { margin-left: auto; }
-.workspace-density select {
-  min-height: 28px;
-  border: 1px solid #ffffff2b;
-  background: #080910;
-  color: var(--dim);
-  font: 700 12px var(--cond);
-}
 .workspace-widget-hide {
+  margin-left: auto;
   width: 28px;
   height: 28px;
   padding: 0;

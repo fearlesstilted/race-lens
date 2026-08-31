@@ -12,7 +12,6 @@ import {
 } from './workspace'
 import type {
   WidgetId,
-  WidgetDensity,
   WorkspaceLayout,
   WorkspaceMode,
   WorkspaceWidget,
@@ -25,6 +24,7 @@ type Props = {
   widgets: Partial<Record<WidgetId, ReactNode>>
   onChange: (workspace: WorkspaceLayout) => void
   onDone: () => void
+  onCancel: () => void
   onReset: () => void
 }
 
@@ -44,18 +44,14 @@ const gridItem = (item: WorkspaceWidget): LayoutItem => ({
 
 function WorkspaceFrame({
   id,
-  item,
   editing,
   onHide,
-  onDensity,
   onKeyDown,
   children,
 }: {
   id: WidgetId
-  item: WorkspaceWidget
   editing: boolean
   onHide: () => void
-  onDensity: (density: WidgetDensity) => void
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
   children: ReactNode
 }) {
@@ -72,7 +68,7 @@ function WorkspaceFrame({
   }, [])
 
   const definition = WIDGET_REGISTRY[id]
-  const density = selectDensity(size.width, size.height, definition.densities, item.density)
+  const density = selectDensity(size.width, size.height, definition.densities, 'auto')
 
   return (
     <section ref={frame} className={`workspace-widget workspace-widget--${id}`} data-density={density} aria-label={`${definition.label} widget`}>
@@ -85,14 +81,6 @@ function WorkspaceFrame({
         >
           <span className="workspace-grip" aria-hidden="true">⠿</span>
           <strong>{definition.label}</strong>
-          <label className="workspace-density workspace-control">
-            <span className="sr-only">{definition.label} density</span>
-            <select value={item.density} onChange={(event) => onDensity(event.target.value as WidgetDensity)}>
-              {definition.densities.map((value) => (
-                <option value={value} key={value}>{value.toUpperCase()}</option>
-              ))}
-            </select>
-          </label>
           <button
             type="button"
             className="workspace-widget-hide workspace-control"
@@ -107,7 +95,7 @@ function WorkspaceFrame({
   )
 }
 
-export function WorkspaceGrid({ mode, workspace, editing, widgets, onChange, onDone, onReset }: Props) {
+export function WorkspaceGrid({ mode, workspace, editing, widgets, onChange, onDone, onCancel, onReset }: Props) {
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1600 })
   const visibleIds = useMemo(() => WIDGET_IDS.filter((id) => (
     workspace.widgets[id].visible
@@ -170,6 +158,7 @@ export function WorkspaceGrid({ mode, workspace, editing, widgets, onChange, onD
             >{WIDGET_REGISTRY[id].label.toUpperCase()}</button>
           ))}
           <button type="button" className="b workspace-edit-reset" onClick={onReset}>RESET</button>
+          <button type="button" className="b" onClick={onCancel}>CANCEL</button>
           <button type="button" className="b primary" onClick={onDone}>DONE</button>
         </div>
       )}
@@ -188,10 +177,8 @@ export function WorkspaceGrid({ mode, workspace, editing, widgets, onChange, onD
             <div key={id}>
               <WorkspaceFrame
                 id={id}
-                item={workspace.widgets[id]}
                 editing={editing}
                 onHide={() => onChange(updateWorkspaceWidget(workspace, mode, id, { visible: false }))}
-                onDensity={(density) => onChange(updateWorkspaceWidget(workspace, mode, id, { density }))}
                 onKeyDown={(event) => handleKeyboard(id, event)}
               >
                 {widgets[id]}

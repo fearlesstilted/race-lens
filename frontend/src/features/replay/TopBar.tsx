@@ -44,7 +44,7 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
     : 'YEAR · EVENT · SESSION'
   const [layersOpen, setLayersOpen] = useState(false)
   // LAYERS badge lights up when any optional layer is active.
-  const anyLayer = projection || voice || level === 'beginner' || desk === 'custom'
+  const anyLayer = projection || voice || level === 'beginner' || desk === 'custom' || customEditing
   return (
     <div className="top">
       <div className="ident">
