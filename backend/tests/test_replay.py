@@ -176,6 +176,7 @@ def test_retired_driver_goes_to_tail():
 
     # OCO should be retired
     assert state["drivers"]["OCO"]["retired"] is True
+    assert state["drivers"]["OCO"]["retirement_inferred"] is True
     # Active drivers not retired
     assert state["drivers"]["VER"]["retired"] is False
     assert state["drivers"]["HAM"]["retired"] is False
@@ -191,6 +192,13 @@ def test_no_retired_in_mini_race():
         assert drv_state["retired"] is False
 
 
+def test_source_backed_retirement_is_not_labelled_inferred():
+    events = mini_race() + [event(SID, "RetirementDetected", 200_000, "NOR", lap=3)]
+    state = ReplayEngine(events).state_at(300_000)
+    assert state["drivers"]["NOR"]["retired"] is True
+    assert state["drivers"]["NOR"]["retirement_inferred"] is False
+
+
 def test_status_since_ms():
     """status_since_ms reflects session_time_ms of the event that set the current status."""
     engine = ReplayEngine(mini_race())
@@ -203,6 +211,21 @@ def test_status_since_ms():
     s_late = engine.state_at(300_000)
     assert s_late["session_status"] == "finished"
     assert s_late["status_since_ms"] == 250_000
+
+
+def test_red_flag_replay_recovers_when_source_omits_restart_status():
+    events = [
+        event(SID, "SessionStarted", 0, total_laps=3),
+        event(SID, "LapCompleted", 80_000, "VER", lap=1, lap_time_ms=80_000),
+        event(SID, "SessionStatusChanged", 90_000, status="red_flag"),
+        event(SID, "LapCompleted", 200_000, "VER", lap=2, lap_time_ms=80_000),
+    ]
+    engine = ReplayEngine(events)
+
+    assert engine.state_at(150_000)["session_status"] == "red_flag"
+    resumed = engine.state_at(200_000)
+    assert resumed["session_status"] == "started"
+    assert resumed["status_since_ms"] == 200_000
 
 
 def test_jsonl_round_trip():

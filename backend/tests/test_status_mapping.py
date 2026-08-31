@@ -45,8 +45,8 @@ def test_sc_deployed():
     assert message_to_status("SAFETY CAR DEPLOYED") == "safety_car"
 
 
-def test_green_light():
-    assert message_to_status("GREEN LIGHT - PIT EXIT OPEN") == "started"
+def test_pit_exit_green_light_does_not_resume_a_red_flag():
+    assert message_to_status("GREEN LIGHT - PIT EXIT OPEN") is None
 
 
 def test_track_clear_does_not_resume_a_red_flag():

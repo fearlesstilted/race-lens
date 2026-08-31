@@ -18,7 +18,6 @@ STATUS_TABLE: tuple[tuple[str, str], ...] = (
     ("SAFETY CAR IN THIS LAP", "started"),
     ("SAFETY CAR DEPLOYED", "safety_car"),
     ("RED FLAG", "red_flag"),
-    ("GREEN LIGHT", "started"),
 )
 
 

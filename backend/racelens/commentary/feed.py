@@ -96,6 +96,8 @@ def render_feed(
         transcript: str | None = None
 
         if e.type == "SessionStarted":
+            if e.payload.get("formation"):
+                continue
             text = "Свет погас — старт!" if lang == "ru" else "Lights out — race start!"
             driver_id = None
 
@@ -178,6 +180,14 @@ def render_feed(
             category = e.payload.get("category", "")
             msg_up = msg.upper()
             has_incident = "INCIDENT" in msg_up or "INVESTIGATION" in msg_up
+            has_restart = "RACE WILL RESUME AT" in msg_up
+            has_driver_flag = "Flag" in category and any(
+                marker in msg_up
+                for marker in (
+                    "BLACK AND WHITE FLAG", "BLACK FLAG", "PENALTY",
+                    "DISQUALIFIED", "DRIVING ERRATICALLY",
+                )
+            )
             # For flag category, only include race-level flags (red flag, SC, VSC) —
             # exclude per-sector yellow/clear/green messages which are noise
             has_flag = (
@@ -188,7 +198,7 @@ def render_feed(
                     or "VIRTUAL SAFETY CAR" in msg_up
                 )
             )
-            if not (has_flag or has_incident):
+            if not (has_flag or has_incident or has_restart or has_driver_flag):
                 continue
             # Avoid duplicating SessionStatusChanged items that already cover SC/VSC/red flag
             dup = False

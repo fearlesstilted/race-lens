@@ -72,6 +72,7 @@ from racelens.object_storage import (
 )
 from racelens.preparations import PreparationQueue, QueueFullError, SESSION_ID
 from racelens.replay.engine import ReplayEngine
+from racelens.tyre_stints import stint_timeline
 
 FIXTURES_DIR = Path(os.environ.get("RACELENS_FIXTURES", "fixtures"))
 READONLY = os.environ.get("RACELENS_READONLY", "").lower() in {"1", "true", "yes"}
@@ -1103,6 +1104,7 @@ async def live_stream(
                     ).get(level, snapshot["commentary"]["en"]["pro"])
                     state["recent_passes"] = snapshot["recent_passes"]
                     state["battles"] = snapshot["battles"]
+                    state["stints"] = snapshot.get("stints")
                     state["live_status"] = _remote_live_status(current)
                     yield f"data: {json.dumps(state)}\n\n"
                 await asyncio.sleep(tick_s)
@@ -1126,6 +1128,12 @@ async def live_stream(
                 state["commentary"] = render_all(state["active_insights"], lang, level)
                 state["recent_passes"] = _recent_passes(passes_cache["passes"], state["at_ms"])
                 state["battles"] = detect_battles(state)
+                total_laps = state.get("total_laps") or state.get("lap") or 0
+                state["stints"] = {
+                    "session_id": state["session_id"],
+                    "total_laps": total_laps,
+                    "stints": stint_timeline(events, total_laps),
+                }
                 yield f"data: {json.dumps(state)}\n\n"
             await asyncio.sleep(tick_s)
 
@@ -1362,14 +1370,43 @@ def overtake_endpoint(
     return overtake_probability(state, ahead, behind, session_id)
 
 
-@app.get("/api/sessions/{session_id}/track")
-def track(session_id: str) -> dict:
+def _track_data(session_id: str) -> dict:
     """Return pre-computed track outline as {session_id, viewbox, points}."""
     with _fixture_lease(session_id, ".track.json") as root:
         path = root / f"{session_id}.track.json"
         if not path.is_file():
             raise HTTPException(404, f"track data for '{session_id}' not found")
         return json.loads(path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/sessions/{session_id}/track")
+def track(session_id: str) -> dict:
+    return _track_data(session_id)
+
+
+@app.get("/api/live/track")
+def live_track() -> dict:
+    pointer = _remote_live_required(snapshot=False)["pointer"]
+    replay_session_id = pointer.get("track_replay_session_id")
+    if not replay_session_id:
+        raise HTTPException(404, "Track data is not ready for this Live weekend")
+    return _track_data(replay_session_id)
+
+
+@app.get("/api/live/stints")
+def live_stints() -> dict:
+    if _live is not None and _live.engine is not None:
+        state = _live.state_now()
+        total_laps = state.get("total_laps") or state.get("lap") or 0
+        return {
+            "session_id": state["session_id"],
+            "total_laps": total_laps,
+            "stints": stint_timeline(_live.engine.events, total_laps),
+        }
+    snapshot = _remote_live_required()["snapshot"]
+    if "stints" not in snapshot:
+        raise HTTPException(404, "Live tyre strategy is not available yet")
+    return snapshot["stints"]
 
 
 @app.get("/api/sessions/{session_id}/positions")
@@ -1508,8 +1545,6 @@ def timeline(session_id: str) -> dict:
 @app.get("/api/sessions/{session_id}/stints")
 def stints(session_id: str) -> dict:
     """Per-driver tyre stint timeline (compound + lap range) for the strategy view."""
-    from racelens.tyre_stints import stint_timeline
-
     eng = _engine(session_id)
     end_ms = eng.events[-1].session_time_ms if eng.events else 0
     final = eng.state_at(end_ms)

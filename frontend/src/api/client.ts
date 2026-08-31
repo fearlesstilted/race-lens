@@ -74,6 +74,10 @@ export type TrackData = {
 export const getTrack = (sessionId: string) =>
   json<TrackData>(`/api/sessions/${encodeURIComponent(sessionId)}/track`)
 
+export const getLiveTrack = () => json<TrackData>('/api/live/track')
+
+export const getLiveStints = () => json<StintsResponse>('/api/live/stints')
+
 // ── Predictive endpoints (replay) ──────────────────────────────────────────────
 //
 // NOTE: These endpoints are session-scoped (/sessions/{id}/…), for replay mode.

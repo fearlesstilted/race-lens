@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import racelens.object_storage as storage  # noqa: E402
 from racelens.object_storage import StorageError, publish_session  # noqa: E402
 from racelens.recorder.schedule import ScheduledSession  # noqa: E402
+from racelens.recorder.state import Phase  # noqa: E402
 from racelens.recorder.worker import Config, Recorder, fixture_stem  # noqa: E402
 from tests.test_object_storage import MemoryStore  # noqa: E402
 
@@ -803,3 +804,197 @@ def test_live_stream_sets_sse_buffering_headers(monkeypatch):
     response = asyncio.run(api.live_stream(tick_s=0.5, lang="en", level="pro"))
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-accel-buffering"] == "no"
+
+
+def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
+    """One deterministic race covers the browser Live contract end to end."""
+    import racelens.api as api
+
+    clock = [NOW]
+    store = MemoryStore()
+    recorder = Recorder(_config(tmp_path), now=lambda: clock[0], object_store=store)
+    practice = ScheduledSession(
+        SESSION.year,
+        SESSION.round_number,
+        SESSION.event_name,
+        "FP1",
+        SESSION.starts_at - timedelta(days=2),
+    )
+    recorder._schedule = [practice, SESSION]
+    for phase in (Phase.RECORDING, Phase.CAPTURED, Phase.PROCESSING, Phase.COMPLETE):
+        recorder.store.transition(practice.session_id, phase, NOW - timedelta(days=1))
+
+    archive = recorder.config.data_dir / "archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    practice_replay = fixture_stem(practice)
+    fixture = archive / f"{practice_replay}.jsonl"
+    track = archive / f"{practice_replay}.track.json"
+    positions = archive / f"{practice_replay}.positions.json"
+    fixture.write_text("{}\n", encoding="utf-8")
+    track.write_text(json.dumps({
+        "session_id": practice_replay,
+        "viewbox": [600, 400],
+        "points": [[0, 0], [100, 0], [100, 100]],
+    }), encoding="utf-8")
+    positions.write_text("{}\n", encoding="utf-8")
+    publish_session(
+        store, practice.session_id, practice_replay,
+        fixture, track, positions, event_count=1,
+    )
+
+    raw = recorder._paths(SESSION)["raw"]
+    session_info = {
+        "Meeting": {
+            "Key": 15,
+            "Number": 15,
+            "Name": "Dutch Grand Prix",
+            "Location": "Zandvoort",
+        },
+        "Key": 99,
+        "Name": "Race",
+        "StartDate": "2026-08-23T13:00:00Z",
+        "Path": "2026/Dutch/Race/",
+    }
+    lines = [
+        _line("SessionInfo", json.dumps(session_info)),
+        _line("DriverList", {"1": {"Tla": "VER"}, "4": {"Tla": "NOR"}}),
+        _line("LapCount", {"CurrentLap": 0, "TotalLaps": 4}, "2026-08-23T12:59:00Z"),
+        _line("TimingAppData", {"Lines": {
+            "1": {"Stints": [{"Compound": "MEDIUM", "TotalLaps": 0}]},
+            "4": {"Stints": [{"Compound": "SOFT", "TotalLaps": 0}]},
+        }}),
+        _line("TimingData", {"Lines": {
+            "1": {"Position": "1"}, "4": {"Position": "2"},
+        }}, "2026-08-23T12:59:01Z"),
+    ]
+    _write_feed(raw, lines)
+
+    assert recorder._publish_live_snapshot(SESSION, raw)
+    snapshot = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
+    assert snapshot["race_state"]["session_status"] == "formation"
+    assert snapshot["race_state"]["lap"] == 0
+    assert not any(item["kind"] == "SessionStarted" for item in snapshot["feed"]["en"])
+    assert snapshot["stints"] == {"session_id": fixture_stem(SESSION), "total_laps": 4, "stints": {}}
+    assert store.objects["live/current.json"]["track_replay_session_id"] == practice_replay
+
+    lines.extend([
+        _line("SessionData", {"StatusSeries": [{
+            "SessionStatus": "Started", "Utc": "2026-08-23T13:00:00Z",
+        }]}),
+        _line("SessionStatus", {"Status": "Started"}, "2026-08-23T13:00:00Z"),
+        _line("TimingData", {"Lines": {
+            "1": {"Position": "2"}, "4": {"Position": "1"},
+        }}, "2026-08-23T13:00:01Z"),
+        _line("TimingData", {"Lines": {
+            "1": {"NumberOfLaps": 1, "LastLapTime": {"Value": "1:20.000"}},
+            "4": {"NumberOfLaps": 1, "LastLapTime": {"Value": "1:21.000"}},
+        }}, "2026-08-23T13:01:21Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:01:30Z", "Category": "Flag", "Message": "RED FLAG",
+        }]}, "2026-08-23T13:01:30Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:01:35Z", "Category": "Other",
+            "Message": "RACE WILL RESUME AT 15:03",
+        }]}, "2026-08-23T13:01:35Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:01:40Z", "Category": "Flag",
+            "Message": "GREEN LIGHT - PIT EXIT OPEN",
+        }]}, "2026-08-23T13:01:40Z"),
+    ])
+    _write_feed(raw, lines)
+    assert recorder._publish_live_snapshot(SESSION, raw)
+    red = copy.deepcopy(store.objects[f"live/{SESSION.session_id}/snapshot.json"])
+    assert red["race_state"]["session_status"] == "red_flag"
+    assert red["stints"]["stints"]["VER"][0]["compound"] == "Medium"
+    assert any("RACE WILL RESUME" in item["text"] for item in red["feed"]["en"])
+
+    clock[0] += timedelta(seconds=45)
+    assert recorder._publish_live_snapshot(SESSION, raw)
+    quiet_red = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
+    assert quiet_red["race_state"]["session_status"] == "red_flag"
+    assert quiet_red["race_state"]["at_ms"] >= red["race_state"]["at_ms"] + 45_000
+
+    lines.extend([
+        _line("TimingData", {"Lines": {
+            "1": {"InPit": False, "Position": "1"},
+            "4": {"InPit": False, "Position": "2"},
+        }}, "2026-08-23T13:02:25Z"),
+        _line("SessionStatus", {"Status": "Started"}, "2026-08-23T13:02:30Z"),
+        _line("TimingData", {"Lines": {
+            "1": {"Position": "2"}, "4": {"Position": "1"},
+        }}, "2026-08-23T13:02:31Z"),
+    ])
+    _write_feed(raw, lines)
+    clock[0] += timedelta(seconds=5)
+    assert recorder._publish_live_snapshot(SESSION, raw)
+    restarted = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
+    assert restarted["race_state"]["session_status"] == "started"
+    assert restarted["recent_passes"] == []
+
+    lines.extend([
+        _line("TimingData", {"Lines": {
+            "1": {"NumberOfLaps": 2}, "4": {"NumberOfLaps": 2},
+        }}, "2026-08-23T13:03:51Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:04:00Z", "Category": "Flag", "Message": "VSC DEPLOYED",
+        }]}, "2026-08-23T13:04:00Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:04:10Z", "Category": "Flag", "Message": "VSC ENDING",
+        }]}, "2026-08-23T13:04:10Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:04:12Z", "Category": "Flag",
+            "Message": "BLACK AND WHITE FLAG FOR CAR 4 - DRIVING ERRATICALLY",
+        }]}, "2026-08-23T13:04:12Z"),
+        _line("TimingData", {"Lines": {"1": {"Stopped": True}}},
+              "2026-08-23T13:04:15Z"),
+    ])
+    _write_feed(raw, lines)
+    clock[0] += timedelta(seconds=5)
+    assert recorder._publish_live_snapshot(SESSION, raw)
+    active = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
+    assert active["race_state"]["session_status"] == "started"
+    assert active["race_state"]["drivers"]["VER"]["stopped"] is True
+    assert any("BLACK AND WHITE" in item["text"] for item in active["feed"]["en"])
+
+    lines.extend([
+        _line("TimingData", {"Lines": {"1": {"Stopped": False, "Retired": True}}},
+              "2026-08-23T13:04:20Z"),
+        _line("TimingData", {"Lines": {"4": {
+            "NumberOfLaps": 4, "LastLapTime": {"Value": "1:20.500"},
+        }}}, "2026-08-23T13:05:41Z"),
+        _line("SessionStatus", {"Status": "Finished"}, "2026-08-23T13:05:42Z"),
+    ])
+    _write_feed(raw, lines)
+    clock[0] += timedelta(seconds=5)
+    assert recorder._publish_live_snapshot(SESSION, raw)
+    finished = store.objects[f"live/{SESSION.session_id}/snapshot.json"]
+    assert finished["race_state"]["session_status"] == "finished"
+    assert finished["race_state"]["drivers"]["VER"]["retired"] is True
+
+    monkeypatch.setattr(api, "_object_store", lambda: store)
+    monkeypatch.setattr(api, "_live", None)
+    monkeypatch.setattr(api, "_remote_live_cache", None)
+    monkeypatch.setattr(api, "_utcnow", lambda: clock[0])
+    assert api.live_stints()["total_laps"] == 4
+
+    recorder._finish_live(SESSION)
+    assert store.objects["live/current.json"]["status"] == "finishing"
+
+    monkeypatch.setattr(api, "_remote_live_cache", None)
+    monkeypatch.setattr(api, "REMOTE_CACHE_DIR", tmp_path / "remote-cache")
+    api._remote_cache.cache_clear()
+    assert api.live_track()["session_id"] == practice_replay
+
+    replay = fixture_stem(SESSION)
+    replay_files = []
+    for suffix, content in (
+        (".jsonl", "{}\n"),
+        (".track.json", track.read_text(encoding="utf-8")),
+        (".positions.json", "{}\n"),
+    ):
+        path = archive / f"{replay}{suffix}"
+        path.write_text(content, encoding="utf-8")
+        replay_files.append(path)
+    publish_session(store, SESSION.session_id, replay, *replay_files, event_count=1)
+    recorder._set_live_status(SESSION, "replay_ready")
+    assert store.objects["live/current.json"]["status"] == "replay_ready"

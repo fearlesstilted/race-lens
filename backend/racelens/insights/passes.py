@@ -68,6 +68,31 @@ def detect_passes(events: list[Event]) -> list[Pass]:
     if lap1_end_ms is None and not complete:
         return []
 
+    status_events = sorted(
+        (
+            e.session_time_ms,
+            e.payload.get("status"),
+        )
+        for e in events
+        if e.type == "SessionStatusChanged"
+    )
+    restart_blackouts: list[tuple[int, int | None]] = []
+    for index, (red_at, status) in enumerate(status_events):
+        if status != "red_flag":
+            continue
+        resumed_at = next(
+            (
+                at for at, next_status in status_events[index + 1:]
+                if next_status == "started"
+            ),
+            None,
+        )
+        stable_at = next(
+            (at for at, _lap in lap_marks if resumed_at is not None and at > resumed_at),
+            None,
+        )
+        restart_blackouts.append((red_at, stable_at))
+
     def lap_at(t: int) -> int | None:
         if not lap_marks:
             return None
@@ -116,6 +141,8 @@ def detect_passes(events: list[Event]) -> list[Pass]:
 
         if not before or (lap1_end_ms is not None and t <= lap1_end_ms):
             continue  # grid baseline / lap-1 shuffle
+        if any(start <= t and (end is None or t <= end) for start, end in restart_blackouts):
+            continue  # red-flag pit-exit/restart order is not an overtake
 
         changed = {e.driver_id for e in batch}
         for x in changed:

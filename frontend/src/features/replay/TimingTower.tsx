@@ -236,6 +236,8 @@ export const TimingTower = React.memo(function TimingTower({
         const isLead = row.position === 1
         const inBattle = battleSet.has(row.id)
         const isRetired = row.retired === true
+        const isStopped = !isRetired && row.stopped === true
+        const outLabel = row.retirement_inferred ? 'OUT?' : 'OUT'
         const color = teamColor(row.id)
         const isSelected = selectedIds.includes(row.id)
         const posChange = posChanges.get(row.id)
@@ -246,7 +248,9 @@ export const TimingTower = React.memo(function TimingTower({
         const displayGap = row.gap_s
 
         const intDisplay = isRetired
-          ? <span className="gap dim">OUT</span>
+          ? <span className="gap dim" title={row.retirement_inferred ? 'Inferred from lap deficit' : undefined}>{outLabel}</span>
+          : isStopped
+            ? <span className="gap dim">STOPPED</span>
           : isLead
             ? <span className="gap dim">—</span>
             : displayInterval !== null && displayInterval !== undefined
@@ -254,7 +258,9 @@ export const TimingTower = React.memo(function TimingTower({
               : <span className="gap dim">—</span>
 
         const gapDisplay = isRetired
-          ? <span className="gap dim">OUT</span>
+          ? <span className="gap dim" title={row.retirement_inferred ? 'Inferred from lap deficit' : undefined}>{outLabel}</span>
+          : isStopped
+            ? <span className="gap dim">STOPPED</span>
           : isLead
             ? <span className="gap dim">—</span>
             : <span className={`gap${displayGap === null || displayGap === undefined ? ' dim' : ''}`}>

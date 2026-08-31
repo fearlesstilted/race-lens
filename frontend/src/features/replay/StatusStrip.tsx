@@ -5,6 +5,7 @@ type Props = {
   neutralizationStartMs?: number | null
   greenFlag?: boolean
   greenFlagText?: string
+  restartAnnouncement?: string | null
 }
 
 function formatNeutralTimer(atMs: number, startMs: number): string {
@@ -22,12 +23,21 @@ export function StatusStrip({
   neutralizationStartMs = null,
   greenFlag = false,
   greenFlagText = '',
+  restartAnnouncement = null,
 }: Props) {
   const lapStr = lap != null ? `LAP ${lap}` : ''
   const timerStr =
     neutralizationStartMs != null
       ? formatNeutralTimer(atMs, neutralizationStartMs)
       : '00:00'
+
+  if (status === 'formation') {
+    return (
+      <div className="hazard hazard-formation">
+        <span>FORMATION LAP</span>
+      </div>
+    )
+  }
 
   // Pre-start banners (formation lap / on the grid) show regardless of session
   // status — there are no events before lights-out.
@@ -52,7 +62,10 @@ export function StatusStrip({
   if (status === 'red_flag') {
     return (
       <div className="hazard hazard-red">
-        <span>RED FLAG · SESSION STOPPED · {timerStr}</span>
+        <span>
+          RED FLAG · SESSION STOPPED · {timerStr}
+          {restartAnnouncement ? ` · ${restartAnnouncement}` : ''}
+        </span>
       </div>
     )
   }

@@ -101,3 +101,10 @@ export function progressPathPosition(
     path[before][1] + (path[after][1] - path[before][1]) * ratio,
   ]
 }
+
+export function resolveTrackPosition(
+  progressPosition: TrackPoint | null,
+  xyPosition: TrackPoint | null,
+): TrackPoint | null {
+  return progressPosition ?? xyPosition
+}

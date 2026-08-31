@@ -73,6 +73,10 @@ export type DriverState = {
   pit_count: number
   in_pit: boolean
   retired: boolean
+  /** True only for the conservative five-lap fallback, not an official OUT signal. */
+  retirement_inferred?: boolean
+  /** Official live timing Stopped flag; distinct from a confirmed retirement. */
+  stopped?: boolean
   /** Track telemetry for this frame. null in live mode (map dead-reckons). */
   x: number | null
   y: number | null
@@ -130,6 +134,8 @@ export type RaceState = {
   battles?: Battle[]
   /** Stream-rendered WTW copy for the selected language and detail level. */
   commentary?: CommentaryItem[]
+  /** Live-only tyre strategy embedded in each remote snapshot. */
+  stints?: StintsResponse | null
 }
 
 export type InsightsResponse = {

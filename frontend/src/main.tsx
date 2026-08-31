@@ -414,6 +414,9 @@ function App() {
 
   const sessionStatus = state?.session_status ?? 'started'
   const liveView = livePresentation(liveStatusData, state !== null, replay.error)
+  const restartAnnouncement = replay.feed.find((item) =>
+    item.text.toUpperCase().includes('RACE WILL RESUME AT'),
+  )?.text ?? null
 
   if (!startupReady) {
     return (
@@ -447,7 +450,7 @@ function App() {
   if (mode === 'replay') {
     currentLap = timeline?.session_id === sessionId ? lapAtTime(timeline, replay.atMs) : 0
   } else if (state) {
-    const inProgress = (state.lap ?? 0) + 1
+    const inProgress = state.session_status === 'formation' ? 0 : (state.lap ?? 0) + 1
     currentLap = state.total_laps ? Math.min(inProgress, state.total_laps) : inProgress
   }
 
@@ -515,6 +518,7 @@ function App() {
         positionsData={effectivePositionsData}
         battles={replay.battles}
         recentPasses={replay.recentPasses}
+        live={mode === 'live'}
       />
     ),
     insights: hasFocus ? (
@@ -552,9 +556,11 @@ function App() {
         isActionable={(item) => mode === 'replay' || Boolean(item.driver_id)}
       />
     ),
-    strategy: mode === 'replay' && sessionId ? (
+    strategy: (mode === 'replay' ? !!sessionId : isLiveActive) ? (
       <StintTimeline
-        sessionId={sessionId}
+        sessionId={mode === 'replay' ? sessionId : null}
+        live={mode === 'live'}
+        liveData={mode === 'live' ? state?.stints : null}
         currentLap={currentLap}
         order={state?.classification}
         onSelectDriver={(id) => handleWidgetAction('strategy', [id])}
@@ -694,6 +700,7 @@ function App() {
             neutralizationStartMs={replay.neutralizationStartMs}
             greenFlag={replay.greenFlag}
             greenFlagText={replay.greenFlagText}
+            restartAnnouncement={restartAnnouncement}
           />
           {sessionNotice && (
             <div className="feed-error" role="status">{sessionNotice}</div>
@@ -787,6 +794,7 @@ function App() {
                   positionsData={effectivePositionsData}
                   battles={replay.battles}
                   recentPasses={replay.recentPasses}
+                  live={mode === 'live'}
                 />
               )}
               {/* Center keeps its workspace and tabs while driver focus moves right. */}
@@ -794,7 +802,7 @@ function App() {
                 <CenterTabs
                   activeTab={centerTab}
                   showForecast={projection && (mode === 'replay' ? !!sessionId : isLiveActive)}
-                  showStrategy={mode === 'replay' && !!sessionId}
+                  showStrategy={mode === 'replay' ? !!sessionId : isLiveActive}
                   onTab={setCenterTab}
                 />
                 <div className="ctr-pane">
@@ -808,9 +816,11 @@ function App() {
                       isActionable={(item) => mode === 'replay' || Boolean(item.driver_id)}
                     />
                   )}
-                  {centerTab === 'STRATEGY' && mode === 'replay' && sessionId && (
+                  {centerTab === 'STRATEGY' && (mode === 'replay' ? !!sessionId : isLiveActive) && (
                     <StintTimeline
-                      sessionId={sessionId}
+                      sessionId={mode === 'replay' ? sessionId : null}
+                      live={mode === 'live'}
+                      liveData={mode === 'live' ? state?.stints : null}
                       currentLap={currentLap}
                       order={state?.classification}
                       onSelectDriver={(id) => handleWidgetAction('strategy', [id])}

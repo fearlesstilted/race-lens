@@ -1,23 +1,31 @@
 /**
  * StintTimeline — per-driver tyre strategy bars (compound-coloured, width = laps).
- * The whole race strategy at a glance. Replay only; fetched once per session.
+ * The whole race strategy at a glance. Live data arrives with each snapshot.
  */
-import { getStints } from '../../api/client'
+import { getLiveStints, getStints } from '../../api/client'
 import type { StintsResponse } from '../../api/types'
 import { clipStints, showStintLabel } from '../../lib/stints'
 import { compoundColor } from './teamColors'
 import { useAsync } from './useAsync'
 
 type Props = {
-  sessionId: string
+  sessionId: string | null
+  live?: boolean
+  liveData?: StintsResponse | null
   currentLap: number
   /** Current classification order (driver ids) to sort rows by; falls back to map order. */
   order?: string[]
   onSelectDriver?: (id: string) => void
 }
 
-export function StintTimeline({ sessionId, currentLap, order, onSelectDriver }: Props) {
-  const { data, loading, error } = useAsync<StintsResponse>(() => getStints(sessionId), [sessionId])
+export function StintTimeline({ sessionId, live = false, liveData = null, currentLap, order, onSelectDriver }: Props) {
+  const fetched = useAsync<StintsResponse>(
+    () => live ? getLiveStints() : getStints(sessionId!),
+    [live, sessionId],
+    !liveData,
+  )
+  const data = liveData ?? fetched.data
+  const { loading, error } = fetched
 
   if (loading) return <div className="stints stints-state">LOADING TYRE STRATEGY…</div>
   if (!data || error || data.total_laps <= 0) return <div className="stints stints-state">TYRE STRATEGY UNAVAILABLE</div>

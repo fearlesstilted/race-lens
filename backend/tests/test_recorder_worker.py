@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from racelens.object_storage import publish_session
+from racelens.insights.passes import KIND_ON_TRACK, Pass
 from racelens.recorder.schedule import ScheduledSession
 from racelens.recorder.worker import Config, Recorder, fixture_stem
 from racelens.recorder.state import Phase
@@ -29,6 +30,28 @@ def _config(tmp_path, publish=frozenset({"R"})):
 
 def test_fixture_stem_is_stable_and_readable():
     assert fixture_stem(SESSION) == "belgian_2026_race"
+
+
+def test_live_pass_requires_stable_order_for_five_seconds(tmp_path):
+    clock = [datetime(2026, 7, 19, 13, tzinfo=UTC)]
+    recorder = Recorder(_config(tmp_path), now=lambda: clock[0], object_store=MemoryStore())
+    candidate = Pass(120_000, 2, "VER", "NOR", 1, KIND_ON_TRACK)
+    stable = {"drivers": {
+        "VER": {"position": 1},
+        "NOR": {"position": 2},
+    }}
+    reverted = {"drivers": {
+        "VER": {"position": 2},
+        "NOR": {"position": 1},
+    }}
+
+    assert recorder._confirmed_live_passes(SESSION, [candidate], stable, clock[0]) == []
+    clock[0] += timedelta(seconds=2)
+    assert recorder._confirmed_live_passes(SESSION, [candidate], reverted, clock[0]) == []
+    clock[0] += timedelta(seconds=1)
+    assert recorder._confirmed_live_passes(SESSION, [candidate], stable, clock[0]) == []
+    clock[0] += timedelta(seconds=5)
+    assert recorder._confirmed_live_passes(SESSION, [candidate], stable, clock[0]) == [candidate]
 
 
 def test_stage_allows_only_archive_files_and_writes_manifest_last(tmp_path):

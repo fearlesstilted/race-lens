@@ -449,12 +449,14 @@ _LIVE_POINTER_FIELDS = {
     "schema_version", "canonical_session_id", "replay_session_id", "status",
     "snapshot_key", "created_at", "updated_at", "failure",
 }
+_LIVE_POINTER_OPTIONAL_FIELDS = {"track_replay_session_id"}
 _LIVE_SNAPSHOT_FIELDS = {
     "schema_version", "canonical_session_id", "replay_session_id", "sequence",
     "generated_at", "expires_at", "race_state", "battles", "active_insights",
     "recent_passes", "feed", "commentary", "radio", "capture_freshness",
     "data_quality",
 }
+_LIVE_SNAPSHOT_OPTIONAL_FIELDS = {"stints"}
 _RACE_STATE_FIELDS = {
     "session_id", "at_ms", "lap", "session_status", "session_name",
     "status_since_ms", "total_laps", "classification", "drivers",
@@ -465,6 +467,7 @@ _DRIVER_FIELDS = {
     "best_lap_ms", "gap_s", "interval_s", "tyre_compound", "tyre_age_laps",
     "pit_count", "in_pit", "recent_laps_ms", "retired", "x", "y", "progress",
 }
+_DRIVER_OPTIONAL_FIELDS = {"stopped", "retirement_inferred"}
 _INSIGHT_FIELDS = {
     "insight_id", "type", "severity", "confidence", "created_at_ms", "lap",
     "driver_ids", "evidence",
@@ -550,12 +553,17 @@ def live_snapshot_key(canonical_session_id: str) -> str:
 
 
 def validate_live_pointer(value: object) -> dict:
-    if not isinstance(value, dict) or set(value) != _LIVE_POINTER_FIELDS:
+    if (
+        not isinstance(value, dict)
+        or not _LIVE_POINTER_FIELDS <= set(value)
+        or not set(value) <= _LIVE_POINTER_FIELDS | _LIVE_POINTER_OPTIONAL_FIELDS
+    ):
         raise LiveRecordError("live pointer fields are invalid")
     canonical = value["canonical_session_id"]
     replay = value["replay_session_id"]
     status = value["status"]
     failure = value["failure"]
+    track_replay = value.get("track_replay_session_id")
     if (
         value["schema_version"] != SCHEMA_VERSION
         or not isinstance(canonical, str)
@@ -565,6 +573,9 @@ def validate_live_pointer(value: object) -> dict:
         or not _choice(status, _LIVE_STATUSES)
         or value["snapshot_key"] != live_snapshot_key(canonical)
         or (failure is not None and not _choice(failure, _LIVE_FAILURES))
+        or (track_replay is not None and (
+            not isinstance(track_replay, str) or not REPLAY_ID.fullmatch(track_replay)
+        ))
         or (status == "failed") != (failure is not None)
     ):
         raise LiveRecordError("live pointer metadata is invalid")
@@ -594,7 +605,7 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
         or not _integer(value["lap"], maximum=500)
         or not _choice(
             value["session_status"],
-            {"unknown", "started", "red_flag", "safety_car", "vsc", "finished"},
+            {"unknown", "formation", "started", "red_flag", "safety_car", "vsc", "finished"},
         )
         or (
             value["session_name"] is not None
@@ -615,7 +626,11 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
     ):
         raise LiveRecordError("live snapshot race state is invalid")
     for driver in drivers.values():
-        if not isinstance(driver, dict) or set(driver) != _DRIVER_FIELDS:
+        if (
+            not isinstance(driver, dict)
+            or not _DRIVER_FIELDS <= set(driver)
+            or not set(driver) <= _DRIVER_FIELDS | _DRIVER_OPTIONAL_FIELDS
+        ):
             raise LiveRecordError("live snapshot driver state is invalid")
         if (
             any(
@@ -647,6 +662,8 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
             or not _integer(driver["pit_count"], maximum=100)
             or not isinstance(driver["in_pit"], bool)
             or not isinstance(driver["retired"], bool)
+            or not isinstance(driver.get("retirement_inferred", False), bool)
+            or not isinstance(driver.get("stopped", False), bool)
             or not isinstance(driver["recent_laps_ms"], list)
             or len(driver["recent_laps_ms"]) > 3
             or not all(_integer(lap_ms) for lap_ms in driver["recent_laps_ms"])
@@ -776,7 +793,11 @@ def validate_live_snapshot(
     now: datetime | None = None,
 ) -> dict:
     pointer = validate_live_pointer(pointer)
-    if not isinstance(value, dict) or set(value) != _LIVE_SNAPSHOT_FIELDS:
+    if (
+        not isinstance(value, dict)
+        or not _LIVE_SNAPSHOT_FIELDS <= set(value)
+        or not set(value) <= _LIVE_SNAPSHOT_FIELDS | _LIVE_SNAPSHOT_OPTIONAL_FIELDS
+    ):
         raise LiveRecordError("live snapshot fields are invalid")
     try:
         encoded = json.dumps(value, separators=(",", ":"), sort_keys=True).encode() + b"\n"
@@ -845,6 +866,33 @@ def validate_live_snapshot(
             or not _integer(row["at_ms"])
         ):
             raise LiveRecordError("live snapshot radio is invalid")
+    stints = value.get("stints")
+    if stints is not None:
+        if (
+            not isinstance(stints, dict)
+            or set(stints) != {"session_id", "total_laps", "stints"}
+            or stints["session_id"] != pointer["replay_session_id"]
+            or not _integer(stints["total_laps"], maximum=500)
+            or not isinstance(stints["stints"], dict)
+            or len(stints["stints"]) > 30
+        ):
+            raise LiveRecordError("live snapshot stints are invalid")
+        for driver_id, rows in stints["stints"].items():
+            if not _driver_id(driver_id) or not isinstance(rows, list) or len(rows) > 20:
+                raise LiveRecordError("live snapshot stints are invalid")
+            for row in rows:
+                if (
+                    not isinstance(row, dict)
+                    or set(row) != {"compound", "start_lap", "end_lap", "laps"}
+                    or not _public_text(row["compound"], maximum=20)
+                    or not all(
+                        _integer(row[field], minimum=1, maximum=500)
+                        for field in ("start_lap", "end_lap", "laps")
+                    )
+                    or row["end_lap"] < row["start_lap"]
+                    or row["laps"] != row["end_lap"] - row["start_lap"] + 1
+                ):
+                    raise LiveRecordError("live snapshot stints are invalid")
     freshness = value["capture_freshness"]
     if (
         not isinstance(freshness, dict)

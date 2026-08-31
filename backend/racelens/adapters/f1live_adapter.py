@@ -143,7 +143,7 @@ def _current_session_rows(
     return ([driver_list] if driver_list else []) + rows[start:]
 
 
-def _find_t0(rows: list[tuple[str, Any, str]]) -> float | None:
+def _find_t0(rows: list[tuple[str, Any, str]]) -> tuple[float | None, bool]:
     """Session-start posix time: StatusSeries 'Started' (keyframe replays
     history, so this works mid-join), else first live SessionStatus Started,
     else first timestamped line (last resort)."""
@@ -155,17 +155,17 @@ def _find_t0(rows: list[tuple[str, Any, str]]) -> float | None:
                 if isinstance(item, dict) and item.get("SessionStatus") == "Started":
                     t = _parse_iso(item.get("Utc") or "")
                     if t is not None:
-                        return t
+                        return t, True
     for cat, payload, ts in rows:
         if cat == "SessionStatus" and payload.get("Status") == "Started":
             t = _parse_iso(ts)
             if t is not None:
-                return t
+                return t, True
     for _, _, ts in rows:
         t = _parse_iso(ts)
         if t is not None:
-            return t
-    return None
+            return t, False
+    return None, False
 
 
 def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
@@ -175,7 +175,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     same recording → same events; the runner dedupes by event_id across polls.
     """
     rows = _current_session_rows(list(_lines(feed_files)))
-    t0 = _find_t0(rows)
+    t0, has_started = _find_t0(rows)
     if t0 is None:
         return []
 
@@ -203,6 +203,18 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     initial_payload: dict[str, Any] = {}
     if session_name:
         initial_payload["session_name"] = session_name
+    if not has_started:
+        initial_payload["formation"] = True
+    total_laps = next(
+        (
+            payload.get("TotalLaps")
+            for category, payload, _ in reversed(rows)
+            if category == "LapCount" and isinstance(payload.get("TotalLaps"), int)
+        ),
+        None,
+    )
+    if total_laps:
+        initial_payload["total_laps"] = total_laps
     events: list[Event] = [event(sid, "SessionStarted", 0, source="f1live", **initial_payload)]
 
     num_to_abbr: dict[str, str] = {}
@@ -212,6 +224,7 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
     in_pit: dict[str, bool] = {}
     last_lap_ms: dict[str, int | None] = {}
     retirement_candidates: dict[str, tuple[int, int]] = {}
+    stopped: dict[str, bool] = {}
     last_status: str | None = None  # dedupe SessionStatus vs RCM-derived statuses
     session_path: str | None = None  # SessionInfo "Path", to build absolute radio audio_url
 
@@ -281,6 +294,16 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                     retirement_candidates.setdefault(d, (t_ms, laps.get(d, 0) + 1))
                 else:
                     retirement_candidates.pop(d, None)
+
+            if "Stopped" in patch:
+                now_stopped = bool(patch["Stopped"])
+                was_stopped = stopped.get(d)
+                stopped[d] = now_stopped
+                if now_stopped or was_stopped is not None:
+                    if was_stopped != now_stopped:
+                        events.append(event(
+                            sid, "DriverStoppedChanged", t_ms, d, stopped=now_stopped,
+                        ))
 
     def apply_tyres(lines: dict, t_ms: int) -> None:
         for num, patch in lines.items():

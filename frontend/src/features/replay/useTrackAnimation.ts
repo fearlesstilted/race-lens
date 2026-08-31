@@ -9,7 +9,7 @@ import type { DriverState } from '../../api/types'
 import type { PositionsData } from '../../lib/liveGaps'
 import { DEFAULT_LAP_MS } from '../../lib/liveGaps'
 import { interpolateRealPos, median } from '../../lib/trackGeometry'
-import { lastKnownFrame, progressPathPosition } from '../../lib/trackInterpolation'
+import { progressPathPosition, resolveTrackPosition } from '../../lib/trackInterpolation'
 import { advanceFraction, computeTargetFractions, statusDrMultiplier } from '../../lib/deadReckoning'
 
 type Args = {
@@ -67,7 +67,6 @@ export function useTrackAnimation({
 
   const positionsDataRef = useRef<PositionsData | null>(null)
   const progressPathRef = useRef<[number, number][] | undefined>(undefined)
-  const progressLastFrameRef = useRef<Map<string, number>>(new Map())
   const atMsRef = useRef(atMs)
   useEffect(() => { atMsRef.current = atMs }, [atMs])
 
@@ -82,10 +81,9 @@ export function useTrackAnimation({
         const tracked = progressFrames && progressPathRef.current
           ? progressPathPosition(progressFrames, progressPathRef.current, frameIndex)
           : null
-        const progressLastFrame = progressLastFrameRef.current.get(driverId)
-        const progressEnded = progressFrames && progressPathRef.current
-          && progressLastFrame !== undefined && frameIndex > progressLastFrame
-        const xy = progressEnded ? null : (tracked ?? interpolateRealPos(posData, driverId, queryMs))
+        const xy = resolveTrackPosition(
+          tracked, interpolateRealPos(posData, driverId, queryMs),
+        )
         if (xy === null) {
           groupEl.setAttribute('visibility', 'hidden')
         } else {
@@ -109,12 +107,6 @@ export function useTrackAnimation({
 
   useEffect(() => {
     positionsDataRef.current = positionsData
-    progressLastFrameRef.current = new Map(
-      Object.entries(positionsData?.progress ?? {}).flatMap(([driverId, frames]) => {
-        const last = lastKnownFrame(frames)
-        return last === null ? [] : [[driverId, last]]
-      }),
-    )
     if (!playingRef.current) renderPositions(atMsRef.current)
   }, [positionsData])
 

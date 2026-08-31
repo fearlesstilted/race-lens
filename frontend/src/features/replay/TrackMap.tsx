@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { TrackData } from '../../api/client'
-import { getTrack } from '../../api/client'
+import { getLiveTrack, getTrack } from '../../api/client'
 import type { Battle, DriverState, RecentPass } from '../../api/types'
 import { battlePair } from '../../lib/battles'
 import type { PositionsData } from '../../lib/liveGaps'
@@ -27,6 +27,7 @@ type Props = {
   battles?: Battle[]
   /** Overtakes in the last ~20s of session time — drives the on-map overtake flash. */
   recentPasses?: RecentPass[]
+  live?: boolean
 }
 
 /** How long the overtake flash ring stays on a driver after their pass. */
@@ -70,7 +71,7 @@ function fmtElapsed(ms: number): string {
 
 export const TrackMap = React.memo(function TrackMap({
   sessionId, atMs, playing, playbackSpeed, drivers, classification, totalLaps, sessionStatus, neutralizationStartMs,
-  selectedIds = [], positionsData, battles = [], recentPasses = [],
+  selectedIds = [], positionsData, battles = [], recentPasses = [], live = false,
 }: Props) {
   const [trackData, setTrackData] = useState<TrackData | null>(null)
   const [trackError, setTrackError] = useState(false)
@@ -129,12 +130,13 @@ export const TrackMap = React.memo(function TrackMap({
     let cancelled = false
     setTrackData(null)
     setTrackError(false)
-    if (!sessionId) return
-    getTrack(sessionId)
+    if (!live && !sessionId) return
+    const request = live ? getLiveTrack() : getTrack(sessionId!)
+    request
       .then((d) => { if (!cancelled) setTrackData(d) })
       .catch(() => { if (!cancelled) setTrackError(true) })
     return () => { cancelled = true }
-  }, [sessionId])
+  }, [live, sessionId])
 
   const status = sessionStatus ?? ''
   const watermark = statusWatermark(status)

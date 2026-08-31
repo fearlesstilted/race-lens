@@ -20,7 +20,7 @@ from racelens.adapters.f1live_adapter import ingest_f1live
 from racelens.commentary.feed import render_feed
 from racelens.commentary.renderer import render_all
 from racelens.insights.battles import detect_battles
-from racelens.insights.passes import detect_passes
+from racelens.insights.passes import Pass, detect_passes
 from racelens.insights.registry import detect_all
 from racelens.object_storage import (
     LIVE_SNAPSHOT_TTL_S,
@@ -41,6 +41,7 @@ from racelens.recorder.postprocess import merge_captured_radio, validate_archive
 from racelens.recorder.schedule import ScheduledSession, load_fastf1_schedule, select_due_session
 from racelens.recorder.state import Phase, StateStore
 from racelens.replay.engine import ReplayEngine
+from racelens.tyre_stints import stint_timeline
 
 FINISH_GRACE = timedelta(minutes=10)
 CAPTURE_RETRY = timedelta(minutes=5)
@@ -151,6 +152,8 @@ class Recorder:
         )
         self._live_sequences: dict[str, int] = {}
         self._live_transport: dict[str, tuple[int, datetime]] = {}
+        self._live_pass_pending: dict[str, dict[Pass, datetime]] = {}
+        self._live_pass_confirmed: dict[str, set[Pass]] = {}
         self._transcripts = None
         self._award_sync_at: datetime | None = None
         for path in (config.state_dir, config.raw_dir, config.data_dir):
@@ -209,6 +212,49 @@ class Recorder:
             "data_quality": "good" if growing else "stalled",
         }
 
+    def _live_track_replay_id(self, session: ScheduledSession) -> str | None:
+        completed = self.store.load().sessions
+        preference = {kind: index for index, kind in enumerate(("FP1", "FP2", "FP3", "SQ", "Sprint", "Q"))}
+        candidates = [
+            item for item in self._schedule
+            if item.year == session.year
+            and item.round_number == session.round_number
+            and item.starts_at < session.starts_at
+            and completed.get(item.session_id) is not None
+            and completed[item.session_id].phase is Phase.COMPLETE
+            and self._paths(item)["track"].is_file()
+        ]
+        if not candidates:
+            return None
+        return fixture_stem(min(candidates, key=lambda item: preference.get(item.kind, 99)))
+
+    def _confirmed_live_passes(
+        self,
+        session: ScheduledSession,
+        candidates: list[Pass],
+        state: dict,
+        current: datetime,
+    ) -> list[Pass]:
+        pending = self._live_pass_pending.setdefault(session.session_id, {})
+        confirmed = self._live_pass_confirmed.setdefault(session.session_id, set())
+        candidate_set = set(candidates)
+        confirmed.intersection_update(candidate_set)
+        drivers = state.get("drivers", {})
+        stable = {
+            item for item in candidates
+            if drivers.get(item.ahead, {}).get("position") is not None
+            and drivers.get(item.behind, {}).get("position") is not None
+            and drivers[item.ahead]["position"] < drivers[item.behind]["position"]
+        }
+        for item in list(pending):
+            if item not in stable:
+                del pending[item]
+        for item in stable:
+            since = pending.setdefault(item, current)
+            if current - since >= timedelta(seconds=5):
+                confirmed.add(item)
+        return [item for item in candidates if item in confirmed]
+
     def _publish_live_snapshot(self, session: ScheduledSession, raw: Path) -> bool:
         if self.object_store is None or session.kind not in LIVE_SESSION_KINDS:
             return False
@@ -216,11 +262,30 @@ class Recorder:
         if not inspection.matched or inspection.segment_ended:
             return False
         replay_id = fixture_stem(session)
+        current = self.now().astimezone(UTC)
+        prior_snapshot = self.object_store.get_json(
+            live_snapshot_key(session.session_id), limit=MAX_LIVE_SNAPSHOT_BYTES,
+        )
         events = ingest_f1live(str(raw), session_id=replay_id)
         if not events:
             return False
         engine = ReplayEngine(events)
         at_ms = engine.events[-1].session_time_ms
+        if (
+            isinstance(prior_snapshot, dict)
+            and prior_snapshot.get("canonical_session_id") == session.session_id
+            and prior_snapshot.get("replay_session_id") == replay_id
+            and isinstance(prior_snapshot.get("race_state"), dict)
+            and isinstance(prior_snapshot["race_state"].get("at_ms"), int)
+        ):
+            generated = datetime.fromisoformat(
+                str(prior_snapshot["generated_at"]).replace("Z", "+00:00")
+            ).astimezone(UTC)
+            at_ms = max(
+                at_ms,
+                prior_snapshot["race_state"]["at_ms"]
+                + max(0, round((current - generated).total_seconds() * 1000)),
+            )
         state = engine.state_at(at_ms)
         for driver in state["drivers"].values():
             driver.setdefault("x", None)
@@ -229,15 +294,32 @@ class Recorder:
         state["frame_source"] = "live"
         state["viewbox"] = None
         insights = detect_all(state)
-        passes = [
-            {"ahead": item.ahead, "behind": item.behind, "kind": item.kind, "at_ms": item.at_ms}
+        pass_candidates = [
+            item
             for item in detect_passes(engine.events)
             if at_ms - 20_000 < item.at_ms <= at_ms
+        ]
+        confirmed_passes = self._confirmed_live_passes(
+            session, pass_candidates, state, current,
+        )
+        passes = [
+            {"ahead": item.ahead, "behind": item.behind, "kind": item.kind, "at_ms": item.at_ms}
+            for item in confirmed_passes
         ]
         feeds = {
             language: render_feed(engine.events, at_ms, lang=language, limit=100)
             for language in ("en", "ru")
         }
+        confirmed_ids = {
+            f"pass:{item.kind}:{item.at_ms}:{item.ahead}:{item.behind}:{item.position}"
+            for item in confirmed_passes
+        }
+        for language in feeds:
+            feeds[language] = [
+                item for item in feeds[language]
+                if item["kind"] not in {"ON_TRACK", "UNDERCUT"}
+                or item["id"] in confirmed_ids
+            ]
         radio_text: dict[str, str | None] = {}
         if self.config.transcribe_radio:
             if self._transcripts is None:
@@ -263,15 +345,11 @@ class Recorder:
             for item in feeds["en"]
             if item.get("audio_url")
         ][:20]
-        current = self.now().astimezone(UTC)
         stamp = current.isoformat().replace("+00:00", "Z")
         expires = (current + timedelta(seconds=LIVE_SNAPSHOT_TTL_S)).isoformat().replace(
             "+00:00", "Z"
         )
         prior_sequence = 0
-        prior_snapshot = self.object_store.get_json(
-            live_snapshot_key(session.session_id), limit=MAX_LIVE_SNAPSHOT_BYTES,
-        )
         if (
             isinstance(prior_snapshot, dict)
             and prior_snapshot.get("canonical_session_id") == session.session_id
@@ -302,6 +380,13 @@ class Recorder:
                 for language in ("en", "ru")
             },
             "radio": radio,
+            "stints": {
+                "session_id": replay_id,
+                "total_laps": state.get("total_laps") or state.get("lap") or 0,
+                "stints": stint_timeline(
+                    engine.events, state.get("total_laps") or state.get("lap") or 0,
+                ),
+            },
             **quality,
         }
         pointer = {
@@ -313,6 +398,7 @@ class Recorder:
             "created_at": stamp,
             "updated_at": stamp,
             "failure": None,
+            "track_replay_session_id": self._live_track_replay_id(session),
         }
         write_live_snapshot(self.object_store, pointer, snapshot, now=current)
         self._live_sequences[session.session_id] = sequence

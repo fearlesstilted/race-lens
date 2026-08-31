@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { hasFinishedRace, lastKnownFrame, progressPathPosition } from '../src/lib/trackInterpolation.ts'
+import { hasFinishedRace, lastKnownFrame, progressPathPosition, resolveTrackPosition } from '../src/lib/trackInterpolation.ts'
 
 assert.equal(hasFinishedRace(70, 70), true)
 assert.equal(hasFinishedRace(69, 70), false)
@@ -30,5 +30,10 @@ assert(samples.every((sample, index) => index === 0 || sample! >= samples[index 
 const leftVelocity = samples[30]! - samples[29]!
 const rightVelocity = samples[31]! - samples[30]!
 assert(Math.abs(leftVelocity - rightVelocity) < 0.002)
+
+assert.deepEqual(resolveTrackPosition(
+  null,
+  [3, 3],
+), [3, 3], 'XY telemetry keeps the car visible when derived progress ends early')
 
 console.log('track interpolation check passed')

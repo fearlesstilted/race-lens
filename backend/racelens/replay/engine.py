@@ -31,6 +31,7 @@ _EVENT_PRIORITY = {
     "GapUpdated": 60,
     "IntervalUpdated": 61,
     "RetirementDetected": 70,
+    "DriverStoppedChanged": 71,
 }
 
 
@@ -59,6 +60,8 @@ def _new_driver() -> dict[str, Any]:
         "in_pit": False,
         "recent_laps_ms": [],
         "retired": False,
+        "retirement_inferred": False,
+        "stopped": False,
     }
 
 
@@ -147,8 +150,13 @@ class ReplayEngine:
             default=0,
         )
         for s in state["drivers"].values():
-            if leader_laps >= 5 and s["laps_completed"] <= leader_laps - 5:
+            if (
+                not s["retired"]
+                and leader_laps >= 5
+                and s["laps_completed"] <= leader_laps - 5
+            ):
                 s["retired"] = True
+                s["retirement_inferred"] = True
 
         active = sorted(
             (d for d, s in state["drivers"].items() if s["position"] is not None and not s["retired"]),
@@ -184,7 +192,7 @@ class ReplayEngine:
         p = e.payload
 
         if e.type == "SessionStarted":
-            state["session_status"] = "started"
+            state["session_status"] = "formation" if p.get("formation") else "started"
             state["status_since_ms"] = e.session_time_ms
             state["total_laps"] = p.get("total_laps")
             if "session_name" in p:
@@ -199,6 +207,16 @@ class ReplayEngine:
                     drv["recent_laps_ms"] = []
 
         elif e.type == "LapCompleted":
+            if (
+                state["session_status"] == "red_flag"
+                and (e.lap or 0) > state["lap"]
+                and e.session_time_ms - state["status_since_ms"] >= 60_000
+            ):
+                # Some canonical feeds omit the explicit red-flag restart.
+                # A new global lap after a sustained stop is source-backed
+                # proof that racing resumed; short pit-entry crossings are not.
+                state["session_status"] = "started"
+                state["status_since_ms"] = e.session_time_ms
             d = self._driver(state, e.driver_id)
             d["laps_completed"] = max(d["laps_completed"], e.lap or 0)
             lap_ms = p.get("lap_time_ms")
@@ -230,7 +248,12 @@ class ReplayEngine:
             self._driver(state, e.driver_id)["interval_s"] = p.get("interval_s")
 
         elif e.type == "RetirementDetected":
-            self._driver(state, e.driver_id)["retired"] = True
+            driver = self._driver(state, e.driver_id)
+            driver["retired"] = True
+            driver["retirement_inferred"] = False
+
+        elif e.type == "DriverStoppedChanged":
+            self._driver(state, e.driver_id)["stopped"] = bool(p.get("stopped"))
 
         elif e.type == "PitIn":
             d = self._driver(state, e.driver_id)
