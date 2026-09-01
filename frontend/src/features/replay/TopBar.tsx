@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { sessionMeta, sessionTypeLabel } from '../../lib/format'
 import type { Lang, Level } from './useReplay'
 import { DriverOfDayPanel } from './DriverOfDayPanel'
@@ -35,9 +35,10 @@ type Props = {
   anchoredDotd?: boolean
   /** Live-only session badge text, e.g. "SILVERSTONE · RACE". */
   sessionName?: string | null
+  companion?: ReactNode
 }
 
-export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, liveNowAvailable, projection, voice, desk, customEditing, onModeChange, onLevel, onProjection, onVoice, onDeskChange, onEditCustom, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, anchoredHighlights = true, anchoredDotd = true, sessionName }: Props) {
+export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvailable, liveNowAvailable, projection, voice, desk, customEditing, onModeChange, onLevel, onProjection, onVoice, onDeskChange, onEditCustom, onSeek, onSettingsOpen, onCatalogOpen, sessionStatus, atMs, anchoredHighlights = true, anchoredDotd = true, sessionName, companion }: Props) {
   const current = sessionId ? sessionMeta(sessionId) : null
   const sessionTriggerLabel = current?.year
     ? `${current.year} · ${current.event} · ${sessionTypeLabel(current.type)}`
@@ -174,6 +175,8 @@ export function TopBar({ sessionId, lap, totalLaps, lang, level, mode, liveAvail
         title="Settings"
         aria-label="Open settings"
       >&#9881;</button>
+
+      {companion}
 
       <div className="lapbox">
         <span className="word">LAP</span>

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getCapabilities, listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
+import { resolvePendingLiveNavigation, useCompanionLink } from './api/companion'
+import type { CompanionState } from './api/companion'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { BattleIntelligence } from './features/replay/BattleIntelligence'
 import { BroadcastOverlay } from './features/replay/BroadcastOverlay'
@@ -17,6 +19,7 @@ import { SettingsDrawer } from './features/replay/SettingsDrawer'
 import { StatusStrip } from './features/replay/StatusStrip'
 import { TimingTower } from './features/replay/TimingTower'
 import { TopBar } from './features/replay/TopBar'
+import { CompanionLink } from './features/replay/CompanionLink'
 import { useVoiceAlerts } from './features/replay/useVoiceAlerts'
 import { TrackMap } from './features/replay/TrackMap'
 import { DriverOfDayPanel } from './features/replay/DriverOfDayPanel'
@@ -139,6 +142,8 @@ function App() {
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveStopping, setLiveStopping] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
+  const remoteSeek = useRef<{ raceId: string; atMs: number } | null>(null)
+  const pendingLivePublish = useRef(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
   const desktopWorkspace = useDesktopWorkspace()
@@ -194,6 +199,7 @@ function App() {
   }, [mode, sessionId, isLiveActive])
 
   const replay = useReplay(source)
+  const scrubReplay = replay.scrub
   useVoiceAlerts(replay.feed, voice, replay.lang, mode === 'replay' ? sessionId : 'live')
 
   const liveDecision = liveLifecycle(liveStatusData, {
@@ -231,6 +237,69 @@ function App() {
     setSelectedIds([])
     setWorkspaceDraft(null)
   }, [replay.pause])
+
+  const applyRemoteCompanionState = useCallback((next: CompanionState, previous: CompanionState | null) => {
+    pendingLivePublish.current = false
+    const navigationChanged = !previous
+      || previous.mode !== next.mode
+      || previous.race_id !== next.race_id
+    const selectionChanged = !previous
+      || previous.selected_driver_ids.join('\0') !== next.selected_driver_ids.join('\0')
+    if (next.mode === 'live') {
+      remoteSeek.current = null
+      if (navigationChanged && (mode !== 'live' || !isLiveActive)) adoptLive()
+      if (selectionChanged) setSelectedIds(next.selected_driver_ids)
+      return
+    }
+    const atMs = next.at_ms ?? 0
+    const seekChanged = navigationChanged || previous?.at_ms !== next.at_ms
+    const needsReplayNavigation = mode !== 'replay' || sessionId !== next.race_id
+    if (needsReplayNavigation || replay.timeline?.session_id !== next.race_id) {
+      remoteSeek.current = { raceId: next.race_id, atMs }
+      if (needsReplayNavigation) adoptReplay(next.race_id)
+    } else if (seekChanged) {
+      scrubReplay(atMs)
+    }
+    if (selectionChanged) setSelectedIds(next.selected_driver_ids)
+  }, [adoptLive, adoptReplay, isLiveActive, mode, replay.timeline?.session_id, scrubReplay, sessionId])
+
+  const companionState = useMemo<CompanionState | null>(() => {
+    const raceId = mode === 'replay'
+      ? sessionId
+      : isLiveActive
+        ? replay.state?.session_id ?? liveStatusData?.canonical_session_id ?? null
+        : null
+    if (!raceId) return null
+    return {
+      race_id: raceId,
+      mode,
+      at_ms: mode === 'replay' ? replay.atMs : null,
+      selected_driver_ids: selectedIds,
+    }
+  }, [isLiveActive, liveStatusData?.canonical_session_id, mode, replay.atMs, replay.state?.session_id, selectedIds, sessionId])
+  const companion = useCompanionLink(companionState, applyRemoteCompanionState)
+  const publishCompanion = companion.publish
+  const companionActive = companion.status === 'linked' || companion.status === 'reconnecting'
+
+  useEffect(() => {
+    if (mode !== 'live' || !isLiveActive) return
+    const directSessionId = replay.state?.frame_source === 'live' ? replay.state.session_id : null
+    const result = resolvePendingLiveNavigation(
+      pendingLivePublish.current,
+      directSessionId,
+      liveStatusData?.canonical_session_id ?? null,
+    )
+    pendingLivePublish.current = result.pending
+    if (result.action) publishCompanion(result.action)
+  }, [isLiveActive, liveStatusData?.canonical_session_id, mode, publishCompanion, replay.state?.frame_source, replay.state?.session_id])
+
+  useEffect(() => {
+    const pending = remoteSeek.current
+    if (!pending || mode !== 'replay' || sessionId !== pending.raceId) return
+    if (replay.timeline?.session_id !== pending.raceId) return
+    remoteSeek.current = null
+    scrubReplay(pending.atMs)
+  }, [mode, replay.timeline?.session_id, scrubReplay, sessionId])
 
   const loadSessions = useCallback(() => {
     let cancelled = false
@@ -302,16 +371,18 @@ function App() {
           explicitReplay: Boolean(initialSessionId),
           attachedToLive: false,
         })
-        if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
-        else if (decision.enterLive) adoptLive()
-        else if (!initialSessionId) setCatalogOpen(true)
-      } else if (!initialSessionId) {
+        if (!companionActive) {
+          if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
+          else if (decision.enterLive) adoptLive()
+          else if (!initialSessionId) setCatalogOpen(true)
+        }
+      } else if (!initialSessionId && !companionActive) {
         setCatalogOpen(true)
       }
       setStartupReady(true)
     })
     return () => { cancelled = true }
-  }, [adoptLive, adoptReplay, initialSessionId])
+  }, [adoptLive, adoptReplay, companionActive, initialSessionId])
 
   // Public deployments keep discovering lifecycle changes; attached local Live
   // uses the same five-second poll. Failed polls retain the last truthful state.
@@ -344,11 +415,14 @@ function App() {
   // Esc to clear selection
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedIds([])
+      if (e.key === 'Escape' && !document.querySelector('[aria-modal="true"]')) {
+        setSelectedIds([])
+        publishCompanion({ selected_driver_ids: [] })
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [publishCompanion])
 
   const handleWidgetAction = useCallback((
     source: 'battle' | 'strategy' | 'feed',
@@ -356,28 +430,43 @@ function App() {
     atMs?: number,
   ) => {
     const action = workspaceAction(mode, source, ids, atMs)
+    const update: Parameters<typeof publishCompanion>[0] = {}
     if (action.focusIds.length > 0) {
       setSelectedIds(action.focusIds)
       setMobTab('INSIGHTS')
+      update.selected_driver_ids = action.focusIds
     }
-    if (action.seekMs !== null) replay.scrub(action.seekMs)
-  }, [mode, replay.scrub])
+    if (action.seekMs !== null) {
+      replay.scrub(action.seekMs)
+      update.at_ms = action.seekMs
+    }
+    if (Object.keys(update).length > 0) publishCompanion(update)
+  }, [mode, publishCompanion, replay.scrub])
 
   const handleSelectDriver = useCallback((id: string) => {
+    const next = toggleDriverFocus(selectedIds, id)
     setMobTab('INSIGHTS')
-    setSelectedIds((current) => toggleDriverFocus(current, id))
-  }, [])
+    setSelectedIds(next)
+    publishCompanion({ selected_driver_ids: next })
+  }, [publishCompanion, selectedIds])
 
   const handleFocusDrivers = useCallback((ids: string[]) => {
     const focused = focusDriverIds(ids)
     if (focused.length === 0) return
     setSelectedIds(focused)
     setMobTab('INSIGHTS')
-  }, [])
+    publishCompanion({ selected_driver_ids: focused })
+  }, [publishCompanion])
+
+  const handleReplaySeek = useCallback((atMs: number) => {
+    scrubReplay(atMs)
+    publishCompanion({ at_ms: atMs })
+  }, [publishCompanion, scrubReplay])
 
   const handleModeSwitch = (next: AppMode) => {
     if (next === mode) return
     if (next === 'live' && !liveAvailable) return
+    pendingLivePublish.current = next === 'live'
     if (next === 'live' && (liveDecision.remoteAvailable || liveStatusData?.is_running)) {
       adoptLive()
       return
@@ -395,10 +484,15 @@ function App() {
       // catalog, not an empty stage.
       setCatalogOpen(true)
     }
+    if (next === 'replay' && sessionId) {
+      publishCompanion({ mode: 'replay', race_id: sessionId, at_ms: 0, selected_driver_ids: [] })
+    }
   }
 
   const handleSessionChange = (id: string) => {
+    pendingLivePublish.current = false
     adoptReplay(id)
+    publishCompanion({ mode: 'replay', race_id: id, at_ms: 0, selected_driver_ids: [] })
   }
 
   const state = replay.state
@@ -575,7 +669,7 @@ function App() {
       ? sessionId && <ForecastStrip sessionId={sessionId} atMs={replay.atMs} />
       : isLiveActive && <ForecastStrip live atMs={replay.atMs} />,
     highlights: mode === 'replay' && sessionId ? (
-      <HighlightsPanel sessionId={sessionId} lang={replay.lang} untilMs={replay.atMs} onSeek={replay.scrub} />
+      <HighlightsPanel sessionId={sessionId} lang={replay.lang} untilMs={replay.atMs} onSeek={handleReplaySeek} />
     ) : null,
     dotd: mode === 'replay' && sessionId ? (
       <DriverOfDayPanel
@@ -611,7 +705,7 @@ function App() {
         onLevel={replay.setLevel}
         onModeChange={handleModeSwitch}
         sessionId={mode === 'replay' ? sessionId : null}
-        onSeek={mode === 'replay' ? replay.scrub : undefined}
+        onSeek={mode === 'replay' ? handleReplaySeek : undefined}
         sessionStatus={sessionStatus}
         lap={currentLap}
         totalLaps={state?.total_laps ?? null}
@@ -636,7 +730,7 @@ function App() {
         onDeskChange={handleDeskChange}
         onEditCustom={handleEditCustom}
         onProjection={handleProjection}
-        onSeek={mode === 'replay' ? replay.scrub : undefined}
+        onSeek={mode === 'replay' ? handleReplaySeek : undefined}
         onSettingsOpen={() => setSettingsOpen(true)}
         onCatalogOpen={() => setCatalogOpen(true)}
         sessionStatus={sessionStatus}
@@ -644,6 +738,7 @@ function App() {
         anchoredHighlights={!customDeskVisible || !customWorkspace.widgets.highlights.visible}
         anchoredDotd={!customDeskVisible || !customWorkspace.widgets.dotd.visible}
         sessionName={mode === 'live' ? liveSessionName : null}
+        companion={<CompanionLink model={companion} canCreate={companionState !== null} />}
       />
 
       {liveDecision.canManage && mode === 'live' && !isLiveActive && (
@@ -652,7 +747,10 @@ function App() {
           onStart={async (y, c, sessionName, source) => {
             setLiveError(null)
             await liveStart(y, c, sessionName, 6, source)
+            pendingLivePublish.current = true
             setIsLiveActive(true)
+            const status = await liveStatus()
+            setLiveStatusData(status)
           }}
           onStop={() => { setIsLiveActive(false); setLiveStatusData(null) }}
         />
@@ -884,7 +982,7 @@ function App() {
             livePhase={liveView.phase}
             liveBadge={liveView.badge}
             liveDetail={liveView.detail}
-            onScrub={replay.scrub}
+            onScrub={handleReplaySeek}
             onPlay={replay.play}
             onPause={replay.pause}
             onSpeed={replay.setSpeed}

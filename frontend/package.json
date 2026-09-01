@@ -17,11 +17,13 @@
     "check:workspace": "node scripts/check-workspace.ts",
     "check:desktop": "node scripts/check-desktop.ts",
     "check:demo": "node scripts/check-demo-entry.ts",
+    "check:companion": "node scripts/check-companion.ts",
     "lint": "eslint src",
     "preview": "vite preview",
     "tauri": "tauri"
   },
   "dependencies": {
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-grid-layout": "2.2.4"

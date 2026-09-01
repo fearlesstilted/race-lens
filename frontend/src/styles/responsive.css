@@ -256,6 +256,9 @@
   .lapbox {
     flex-shrink: 0;
   }
+  .companion-link { margin-left: 0; }
+  .companion-trigger { padding: 0 12px; }
+  .companion-trigger > span:last-child { display: none; }
 
   /* Lapbox compact */
   .lapbox {
