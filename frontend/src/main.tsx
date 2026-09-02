@@ -201,6 +201,7 @@ function App() {
 
   const replay = useReplay(source)
   const scrubReplay = replay.scrub
+  const pauseReplay = replay.pause
   const [pocketApplied, setPocketApplied] = useState(false)
   useEffect(() => {
     if (pocketApplied || initialPocket?.mode !== 'replay' || replay.timeline?.session_id !== initialPocket.sessionId) return
@@ -218,7 +219,7 @@ function App() {
   const liveAvailable = liveDecision.canManage || liveDecision.remoteAvailable || isLiveActive
 
   const adoptReplay = useCallback((id: string) => {
-    replay.pause()
+    pauseReplay()
     setMode('replay')
     setIsLiveActive(false)
     setReplayPinned(true)
@@ -232,10 +233,10 @@ function App() {
     url.searchParams.set('session', id)
     url.searchParams.delete('catalog')
     window.history.replaceState(null, '', url)
-  }, [replay.pause])
+  }, [pauseReplay])
 
   const adoptLive = useCallback(() => {
-    replay.pause()
+    pauseReplay()
     setMode('live')
     setIsLiveActive(true)
     setReplayPinned(false)
@@ -244,7 +245,7 @@ function App() {
     setCenterTab('FEED')
     setSelectedIds([])
     setWorkspaceDraft(null)
-  }, [replay.pause])
+  }, [pauseReplay])
 
   const pocketTarget = useMemo<PocketTarget | null>(() => {
     const activeSession = mode === 'replay' ? sessionId : replay.state?.session_id ?? liveStatusData?.canonical_session_id
@@ -386,9 +387,9 @@ function App() {
       setMobTab('INSIGHTS')
     }
     if (action.seekMs !== null) {
-      replay.scrub(action.seekMs)
+      scrubReplay(action.seekMs)
     }
-  }, [mode, replay.scrub])
+  }, [mode, scrubReplay])
 
   const handleSelectDriver = useCallback((id: string) => {
     const next = toggleDriverFocus(selectedIds, id)
