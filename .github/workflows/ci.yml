@@ -75,3 +75,4 @@ jobs:
           npm run build
           npm run lint
           npm run check:live-lifecycle
+          npm run check:pocket

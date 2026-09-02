@@ -15,6 +15,7 @@ export function CompanionLink({ target }: { target: PocketTarget | null }) {
   }, [open, target])
   useEffect(() => {
     if (!open) { setCopied(null); return }
+    const opener = trigger.current
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
       if (event.key !== 'Tab' || !dialog.current) return
@@ -26,7 +27,7 @@ export function CompanionLink({ target }: { target: PocketTarget | null }) {
     }
     window.addEventListener('keydown', onKey)
     dialog.current?.querySelector<HTMLElement>('button')?.focus()
-    return () => { window.removeEventListener('keydown', onKey); trigger.current?.focus() }
+    return () => { window.removeEventListener('keydown', onKey); opener?.focus() }
   }, [open])
   const copy = async () => {
     try { await navigator.clipboard.writeText(browserLink); setCopied('LINK COPIED') }
