@@ -9,7 +9,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -108,6 +106,7 @@ private fun PocketScreen(
     ) {
         item { Masthead(state) }
         item { ActionRail(state, chooseReplay, enterLive) }
+        state.message?.let { message -> item { Notice(message, retry) } }
         if (target.sessionId.isBlank()) {
             item { EmptyReady(state, chooseReplay) }
         } else {
@@ -118,7 +117,6 @@ private fun PocketScreen(
             item { ClassificationLabel(state) }
             item { TimingList(state, toggleDriver) }
         }
-        state.message?.let { message -> item { Notice(message, retry, target.mode == WatchMode.LIVE) } }
         item { Text("OPEN A RACE LENS POCKET LINK TO HAND OFF A SESSION. THIS APP FETCHES DATA LOCALLY.", color = Dim, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(bottom = 16.dp)) }
     }
 }
@@ -146,9 +144,14 @@ private fun Brand() = Column {
 private fun StatusStamp(state: ScreenState) {
     val live = state.frame.target.mode == WatchMode.LIVE
     val stale = state.frame.freshness == Freshness.STALE
+    val detail = when {
+        stale && state.live.status in setOf("finishing", "replay_ready", "failed", "idle") -> state.live.detail
+        stale -> "Last frame held"
+        else -> state.live.detail
+    }
     Column(horizontalAlignment = Alignment.End) {
         Text(if (live) if (stale) "LIVE / STALE" else "LIVE / NOW" else "REPLAY", color = if (stale) Signal else Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        Text(if (stale) "LAST FRAME HELD" else state.live.detail.uppercase(), color = Dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(detail.uppercase(), color = Dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -188,9 +191,16 @@ private fun SessionTitle(state: ScreenState) = Column(verticalArrangement = Arra
     Text(if (state.frame.target.mode == WatchMode.LIVE) "LIVE SESSION" else "RACE REPLAY", color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.2.sp)
     Text(state.frame.snapshot?.sessionName ?: shortName(state.frame.target.sessionId), color = Paper, fontSize = 24.sp, fontWeight = FontWeight.Black, maxLines = 2)
     Text("LAP ${state.frame.snapshot?.lap ?: "—"}  /  ${state.frame.snapshot?.status?.uppercase() ?: "WAITING"}  /  ${formatTime(state.frame.snapshot?.atMs ?: state.frame.target.replayMs ?: 0)}", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-    state.frame.snapshot?.weather?.let { weather ->
-        Text("${if (weather.rainfall == true) "RAIN" else "DRY"}${weather.trackTempC?.let { " · TRACK ${it.toInt()}°" } ?: ""}${weather.airTempC?.let { " · AIR ${it.toInt()}°" } ?: ""}", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-    }
+    state.frame.snapshot?.weather?.let { weather -> Conditions(weather) }
+}
+
+@Composable
+private fun Conditions(weather: Weather) = Column(
+    modifier = Modifier.fillMaxWidth().background(Steel).padding(horizontal = 10.dp, vertical = 8.dp),
+    verticalArrangement = Arrangement.spacedBy(2.dp),
+) {
+    Text("CONDITIONS", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 9.sp)
+    Text("${if (weather.rainfall == true) "RAIN" else "DRY"}${weather.trackTempC?.let { " · TRACK ${it.toInt()}°" } ?: ""}${weather.airTempC?.let { " · AIR ${it.toInt()}°" } ?: ""}", color = Paper, fontFamily = FontFamily.Monospace, fontSize = 10.sp, maxLines = 2)
 }
 
 @Composable
@@ -215,27 +225,43 @@ private fun FocusArea(state: ScreenState) {
 @Composable
 private fun FeedPanel(items: List<FeedItem>) {
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    var playingId by remember { mutableStateOf<String?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) { player?.release(); player = null } }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) {
+            player?.setOnPreparedListener(null); player?.setOnErrorListener(null); player?.setOnCompletionListener(null)
+            player?.release(); player = null; playingId = null
+        } }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); player?.release() }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            player?.setOnPreparedListener(null); player?.setOnErrorListener(null); player?.setOnCompletionListener(null)
+            player?.release()
+        }
     }
     Column(modifier = Modifier.fillMaxWidth().background(Steel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("FEED / RADIO", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
-        items.take(4).forEach { item ->
+        visibleFeedItems(items).forEach { item ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(item.lap?.let { "L$it" } ?: "•", color = Signal, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(28.dp))
                 Text(item.text, color = Paper, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 item.audioUrl?.let { url -> Button(onClick = {
-                    playbackError = null; player?.release()
+                    playbackError = null
+                    player?.setOnPreparedListener(null); player?.setOnErrorListener(null); player?.setOnCompletionListener(null)
+                    player?.release(); playingId = item.id
                     val candidate = MediaPlayer(); player = candidate
                     runCatching {
-                        candidate.setOnErrorListener { failed, _, _ -> failed.release(); if (player === failed) player = null; playbackError = "Radio unavailable"; true }
-                        candidate.setDataSource(url); candidate.setOnPreparedListener { it.start() }; candidate.prepareAsync()
-                    }.onFailure { candidate.release(); if (player === candidate) player = null; playbackError = "Radio unavailable" }
-                }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Play radio: ${item.text}" }) { Text("▶") } }
+                        candidate.setOnErrorListener { failed, _, _ ->
+                            if (player === failed) { failed.release(); player = null; playingId = null; playbackError = "Radio unavailable" }
+                            true
+                        }
+                        candidate.setOnCompletionListener { finished -> if (player === finished) { finished.release(); player = null; playingId = null } }
+                        candidate.setDataSource(url)
+                        candidate.setOnPreparedListener { prepared -> if (player === prepared) prepared.start() }
+                        candidate.prepareAsync()
+                    }.onFailure { if (player === candidate) { candidate.release(); player = null; playingId = null; playbackError = "Radio unavailable" } }
+                }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Play radio: ${item.text}" }) { Text(if (playingId == item.id) "PLAYING" else "RADIO", fontSize = 9.sp) } }
             }
         }
         playbackError?.let { Text(it, color = Signal, fontSize = 10.sp) }
@@ -274,16 +300,20 @@ private fun TimingList(state: ScreenState, toggleDriver: (String) -> Unit) {
         drivers.forEach { driver ->
             val selected = driver.id in state.frame.target.focusedDrivers
             Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { toggleDriver(driver.id) }.semantics { contentDescription = "Driver ${driver.id}, position ${driver.position ?: "unknown"}, ${if (selected) "selected" else "not selected"}" }.padding(vertical = 12.dp, horizontal = 4.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { toggleDriver(driver.id) }.semantics { contentDescription = "Driver ${driver.id}, position ${driver.position ?: "unknown"}, ${if (selected) "selected" else "not selected"}" }.padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${driver.position ?: "—"}", color = if (selected) Acid else Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
                 Text(driver.id, color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp))
-                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    TimingCell("GAP", formatGap(driver.gapSeconds))
-                    TimingCell("INT", formatGap(driver.intervalSeconds))
-                    TimingCell("TYRE", "${driver.tyre ?: "—"} ${driver.tyreAge?.let { "L$it" } ?: ""}")
-                    TimingCell("LAPS", driver.laps.toString())
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth()) {
+                        TimingCell("GAP", formatGap(driver.gapSeconds), Modifier.weight(1f))
+                        TimingCell("INT", formatGap(driver.intervalSeconds), Modifier.weight(1f))
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        TimingCell("TYRE", "${driver.tyre?.take(1) ?: "—"}${driver.tyreAge?.let { " L$it" } ?: ""}", Modifier.weight(1f))
+                        TimingCell("LAPS", driver.laps.toString(), Modifier.weight(1f))
+                    }
                 }
             }
             HorizontalDivider(color = Color.White.copy(alpha = .1f))
@@ -292,18 +322,18 @@ private fun TimingList(state: ScreenState, toggleDriver: (String) -> Unit) {
 }
 
 @Composable
-private fun TimingCell(label: String, value: String) = Column {
+private fun TimingCell(label: String, value: String, modifier: Modifier = Modifier) = Column(modifier) {
     Text(label, color = Dim, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
-    Text(value, color = Paper, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1)
+    Text(value, color = Paper, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
-private fun Notice(message: String, retry: () -> Unit, canRetry: Boolean) = Row(
+private fun Notice(message: String, retry: () -> Unit) = Row(
     modifier = Modifier.fillMaxWidth().background(Signal.copy(alpha = .18f)).padding(12.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
     Text(message, color = Paper, modifier = Modifier.weight(1f), fontSize = 12.sp)
-    if (canRetry) Button(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("RETRY") }
+    Button(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("RETRY") }
 }
 
 private fun shortName(id: String): String {

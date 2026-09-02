@@ -78,8 +78,10 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
         navigate(WatchTarget(1, WatchMode.LIVE, state.live.raceId ?: "live", null, emptyList()))
     }
 
-    fun retry() = if (state.frame.target.mode == WatchMode.LIVE) startLiveStream() else {
-        state.frame.target.takeIf { it.sessionId.isNotBlank() }?.let { loadReplay(it) }
+    fun retry() = when {
+        state.frame.target.sessionId.isBlank() -> refresh()
+        state.frame.target.mode == WatchMode.LIVE -> startLiveStream()
+        else -> loadReplay(state.frame.target)
     }
 
     fun handleDeepLink(raw: String) {
@@ -124,6 +126,7 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
         if (target.sessionId.isBlank()) return
         replayJob?.cancel()
         val generation = ++replayGeneration
+        state = state.copy(loading = true, message = null)
         replayJob = viewModelScope.launch {
             try {
                 val api = RaceApi(origin)
@@ -131,7 +134,7 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
                 val atMs = (target.replayMs ?: 0).coerceIn(timeline.startMs.coerceAtLeast(0), timeline.endMs)
                 val snapshot = withContext(Dispatchers.IO) { api.replayState(target.sessionId, atMs) }
                 if (acceptsReplayCompletion(generation, replayGeneration, target, state.frame.target)) {
-                    state = state.copy(frame = state.frame.copy(timeline = timeline, snapshot = snapshot), loading = false)
+                    state = state.copy(frame = state.frame.copy(timeline = timeline, snapshot = snapshot), loading = false, message = null)
                     loadReplayFeed(generation, target, snapshot.atMs)
                 }
             } catch (_: CancellationException) {
@@ -200,6 +203,6 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun safeMessage(error: Exception) = when (error) {
         is HttpStatusException -> "HTTP ${error.status}"
-        else -> error.message?.take(120) ?: "Connection failed"
+        else -> "Connection failed"
     }
 }
