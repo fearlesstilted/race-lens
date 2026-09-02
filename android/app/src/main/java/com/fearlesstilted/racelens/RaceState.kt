@@ -43,6 +43,12 @@ fun acceptsReplayCompletion(generation: Long, currentGeneration: Long, requested
 
 fun shouldResumeReplay(loading: Boolean, snapshot: RaceSnapshot?) = loading || snapshot == null
 
+fun visibleFeedItems(items: List<FeedItem>): List<FeedItem> {
+    val visible = items.take(3)
+    val radio = items.firstOrNull { it.audioUrl != null && visible.none { shown -> shown.id == it.id } }
+    return if (radio == null) visible else visible + radio
+}
+
 fun recommendedReplayId(sessions: List<SessionSummary>): String? = sessions.map { it.id }.firstOrNull { it == "hungarian_2026_race" }
     ?: sessions.map { it.id }.firstOrNull { it == "bahrain_2021_race" }
     ?: sessions.map { it.id }.firstOrNull { it.endsWith("_race") }

@@ -86,4 +86,13 @@ class RaceReducerTest {
         assertEquals("Live ended; replay is preparing", liveStatusDetail("finishing", false, null))
         assertEquals("Live ended; replay ready", liveStatusDetail("replay_ready", false, null))
     }
+
+    @Test
+    fun feedKeepsRecentEventsAndTheNewestRadio() {
+        val items = (1..6).map { index ->
+            FeedItem("$index", "Event $index", index, if (index == 5) "https://livetiming.formula1.com/static/radio.mp3" else null)
+        }
+
+        assertEquals(listOf("1", "2", "3", "5"), visibleFeedItems(items).map(FeedItem::id))
+    }
 }
