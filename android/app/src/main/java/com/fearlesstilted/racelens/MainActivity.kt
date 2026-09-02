@@ -244,7 +244,7 @@ private fun FeedPanel(items: List<FeedItem>) {
         Text("FEED / RADIO", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
         visibleFeedItems(items).forEach { item ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.lap?.let { "L$it" } ?: "•", color = Signal, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(28.dp))
+                Text(item.lap?.let { "L$it" } ?: "•", color = Signal, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(44.dp), maxLines = 1)
                 Text(item.text, color = Paper, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 item.audioUrl?.let { url -> Button(onClick = {
                     playbackError = null
@@ -303,14 +303,14 @@ private fun TimingList(state: ScreenState, toggleDriver: (String) -> Unit) {
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { toggleDriver(driver.id) }.semantics { contentDescription = "Driver ${driver.id}, position ${driver.position ?: "unknown"}, ${if (selected) "selected" else "not selected"}" }.padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("${driver.position ?: "—"}", color = if (selected) Acid else Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
-                Text(driver.id, color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp))
+                Text("${driver.position ?: "—"}", color = if (selected) Acid else Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(36.dp), maxLines = 1)
+                Text(driver.id, color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(56.dp), maxLines = 1)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TimingCell("GAP", formatGap(driver.gapSeconds), Modifier.weight(1f))
                         TimingCell("INT", formatGap(driver.intervalSeconds), Modifier.weight(1f))
                     }
-                    Row(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TimingCell("TYRE", "${driver.tyre?.take(1) ?: "—"}${driver.tyreAge?.let { " L$it" } ?: ""}", Modifier.weight(1f))
                         TimingCell("LAPS", driver.laps.toString(), Modifier.weight(1f))
                     }
