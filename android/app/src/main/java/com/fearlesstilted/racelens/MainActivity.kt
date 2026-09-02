@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -123,16 +124,22 @@ private fun PocketScreen(
 }
 
 @Composable
-private fun Masthead(state: ScreenState) = Row(
-    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.Top,
-) {
-    Column {
+private fun Masthead(state: ScreenState) {
+    val largeText = LocalDensity.current.fontScale > 1.4f
+    val modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
+    if (largeText) Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Brand()
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { StatusStamp(state) }
+    } else Row(modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+        Brand()
+        StatusStamp(state)
+    }
+}
+
+@Composable
+private fun Brand() = Column {
         Text("RACE", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 28.sp, letterSpacing = 3.sp)
         Text("LENS / POCKET", color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.5.sp)
-    }
-    StatusStamp(state)
 }
 
 @Composable
@@ -242,18 +249,18 @@ private fun ReplayControl(state: ScreenState, seek: (Long) -> Unit) {
     val end = timeline.endMs.coerceAtLeast(start + 1)
     var scrub by remember(state.frame.target.sessionId, state.frame.snapshot?.atMs) { mutableFloatStateOf((state.frame.snapshot?.atMs ?: start).coerceIn(start, end).toFloat()) }
     Column(modifier = Modifier.fillMaxWidth().background(Steel).padding(12.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.fillMaxWidth()) {
             Text("REPLAY POSITION", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-            Text("${formatTime(scrub.toLong())} / ${formatTime(end)}", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Text("${formatTime(scrub.toLong())} / ${formatTime(end)}", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.align(Alignment.End))
         }
         Slider(value = scrub, onValueChange = { scrub = it }, onValueChangeFinished = { seek(scrub.toLong()) }, valueRange = start.toFloat()..end.toFloat(), modifier = Modifier.semantics { contentDescription = "Replay position" })
     }
 }
 
 @Composable
-private fun ClassificationLabel(state: ScreenState) = Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-    Text("CLASSIFICATION", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 13.sp)
-    Text(if (state.frame.freshness == Freshness.STALE) "STALE FRAME" else "TAP TO FOCUS", color = if (state.frame.freshness == Freshness.STALE) Signal else Dim, fontSize = 10.sp)
+private fun ClassificationLabel(state: ScreenState) = Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text("CLASSIFICATION", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(if (state.frame.freshness == Freshness.STALE) "STALE FRAME" else "TAP TO FOCUS", color = if (state.frame.freshness == Freshness.STALE) Signal else Dim, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable

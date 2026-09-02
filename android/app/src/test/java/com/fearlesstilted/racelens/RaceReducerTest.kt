@@ -74,4 +74,10 @@ class RaceReducerTest {
             parseWatchLink("racelens://pocket?v=1&mode=live&session=2026-16-r&drivers=VER,NOR"),
         )
     }
+
+    @Test
+    fun jsonNullDoesNotBecomeVisibleText() {
+        assertNull(nullableJsonString(Any()))
+        assertEquals("Dutch Grand Prix", nullableJsonString(" Dutch Grand Prix "))
+    }
 }
