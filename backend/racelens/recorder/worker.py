@@ -814,7 +814,29 @@ class Recorder:
             self.store.transition(session_id, Phase.CAPTURED, self.now())
             return f"captured: {session_id}"
 
-        # Captured work is always processed first, including after its live window.
+        unavailable = {
+            session_id
+            for session_id, item in state.sessions.items()
+            if item.phase is not Phase.RECORDING
+            and state.due_phase(session_id, now) is not Phase.RECORDING
+        }
+
+        # A due capture takes priority over older captured archive work.
+        session = select_due_session(sessions, now, unavailable)
+        if session is not None:
+            self.store.transition(session.session_id, Phase.RECORDING, now)
+            try:
+                self.capture(session)
+            except Exception as exc:
+                retry = self.now() + CAPTURE_RETRY
+                self.store.transition(
+                    session.session_id, Phase.FAILED, self.now(), error=str(exc), retry_at=retry,
+                )
+                return f"capture failed: {session.session_id}: {exc}"
+            self.store.transition(session.session_id, Phase.CAPTURED, self.now())
+            return f"captured: {session.session_id}"
+
+        # Archive processing precedes idle and remote work, including after its live window.
         for session_id, item in state.sessions.items():
             due = state.due_phase(session_id, now)
             if item.phase in {Phase.CAPTURED, Phase.PROCESSING}:
@@ -837,52 +859,33 @@ class Recorder:
             self.store.transition(session_id, Phase.COMPLETE, self.now())
             return f"complete: {session_id}"
 
-        unavailable = {
-            session_id
-            for session_id, item in state.sessions.items()
-            if item.phase is not Phase.RECORDING
-            and state.due_phase(session_id, now) is not Phase.RECORDING
-        }
-        session = select_due_session(sessions, now, unavailable)
-        if session is None:
-            next_session = min(
-                (
-                    item
-                    for item in sessions
-                    if item.capture_from > now
-                    and item.session_id not in unavailable
-                ),
-                key=lambda item: item.capture_from,
-                default=None,
+        next_session = min(
+            (
+                item
+                for item in sessions
+                if item.capture_from > now
+                and item.session_id not in unavailable
+            ),
+            key=lambda item: item.capture_from,
+            default=None,
+        )
+        if (
+            next_session is not None
+            and next_session.capture_from <= now + REMOTE_CAPTURE_GUARD
+        ):
+            return (
+                f"idle: next capture {next_session.session_id} at "
+                f"{next_session.capture_from.isoformat()} (approaching)"
             )
-            if (
-                next_session is not None
-                and next_session.capture_from <= now + REMOTE_CAPTURE_GUARD
-            ):
+        remote = self._run_remote_once()
+        if remote == "idle":
+            self._sync_completed_awards(sessions)
+            if next_session is not None:
                 return (
                     f"idle: next capture {next_session.session_id} at "
-                    f"{next_session.capture_from.isoformat()} (approaching)"
+                    f"{next_session.capture_from.isoformat()}"
                 )
-            remote = self._run_remote_once()
-            if remote == "idle":
-                self._sync_completed_awards(sessions)
-                if next_session is not None:
-                    return (
-                        f"idle: next capture {next_session.session_id} at "
-                        f"{next_session.capture_from.isoformat()}"
-                    )
-            return remote
-        self.store.transition(session.session_id, Phase.RECORDING, now)
-        try:
-            self.capture(session)
-        except Exception as exc:
-            retry = self.now() + CAPTURE_RETRY
-            self.store.transition(
-                session.session_id, Phase.FAILED, self.now(), error=str(exc), retry_at=retry,
-            )
-            return f"capture failed: {session.session_id}: {exc}"
-        self.store.transition(session.session_id, Phase.CAPTURED, self.now())
-        return f"captured: {session.session_id}"
+        return remote
 
     def run_forever(self) -> None:
         while True:
