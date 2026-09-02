@@ -54,12 +54,7 @@ class RaceApi(private val origin: String) {
         val body = getObject("/api/live/status")
         val status = nullableJsonString(body.opt("status")) ?: if (body.optBoolean("is_running")) "live" else "idle"
         val available = body.optBoolean("is_running") || status == "live"
-        val detail = when {
-            status == "failed" -> nullableJsonString(body.opt("failure")) ?: "Live failed"
-            available -> "Live timing active"
-            status == "finishing" || status == "replay_ready" -> "Live ended; replay is preparing"
-            else -> "No live session"
-        }
+        val detail = liveStatusDetail(status, available, nullableJsonString(body.opt("failure")))
         return LiveAvailability(
             available, detail, nullableJsonString(body.opt("canonical_session_id")),
             nullableJsonString(body.opt("replay_session_id")), status,
@@ -150,6 +145,13 @@ private fun parseFeed(items: JSONArray): List<FeedItem> = buildList {
 private fun JSONObject.optNullableInt(name: String) = if (isNull(name) || !has(name)) null else optInt(name)
 private fun JSONObject.optNullableDouble(name: String) = if (isNull(name) || !has(name)) null else optDouble(name)
 internal fun nullableJsonString(value: Any?) = (value as? String)?.trim()?.takeIf(String::isNotEmpty)
+internal fun liveStatusDetail(status: String, available: Boolean, failure: String?) = when {
+    status == "failed" -> failure ?: "Live failed"
+    available -> "Live timing active"
+    status == "finishing" -> "Live ended; replay is preparing"
+    status == "replay_ready" -> "Live ended; replay ready"
+    else -> "No live session"
+}
 private fun safeRadioUrl(value: String): String? = runCatching {
     val uri = java.net.URI(value)
     value.takeIf { value.length <= 2048 && uri.scheme == "https" && uri.host == "livetiming.formula1.com" && uri.path.startsWith("/static/") }
