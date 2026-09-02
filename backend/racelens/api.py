@@ -183,8 +183,8 @@ app.add_middleware(
         "tauri://localhost",
         "http://localhost:5173",
     ],
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["Accept", "Authorization", "Content-Type"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Accept", "Content-Type"],
 )
 
 
