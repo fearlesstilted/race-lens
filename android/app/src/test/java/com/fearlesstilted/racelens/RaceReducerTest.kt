@@ -80,4 +80,10 @@ class RaceReducerTest {
         assertNull(nullableJsonString(Any()))
         assertEquals("Dutch Grand Prix", nullableJsonString(" Dutch Grand Prix "))
     }
+
+    @Test
+    fun replayReadyIsNotPresentedAsStillPreparing() {
+        assertEquals("Live ended; replay is preparing", liveStatusDetail("finishing", false, null))
+        assertEquals("Live ended; replay ready", liveStatusDetail("replay_ready", false, null))
+    }
 }
