@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getCapabilities, listSessions, liveStart, liveStatus, liveStop } from './api/client'
 import type { LiveStatusResult } from './api/client'
 import type { DataSource } from './api/dataSource'
-import { resolvePendingLiveNavigation, useCompanionLink } from './api/companion'
-import type { CompanionState } from './api/companion'
+import type { PocketTarget } from './api/pocket'
+import { parsePocketLink, pocketBootstrap } from './api/pocket'
 import { LiveLobby } from './features/replay/LiveLobby'
 import { BattleIntelligence } from './features/replay/BattleIntelligence'
 import { BroadcastOverlay } from './features/replay/BroadcastOverlay'
@@ -115,35 +115,36 @@ function useDesktopWorkspace() {
 }
 
 function App() {
+  const initialPocket = useMemo(() => parsePocketLink(new URL(window.location.href)), [])
+  const initialPocketBoot = useMemo(() => pocketBootstrap(initialPocket), [initialPocket])
+  const initialPocketLive = initialPocketBoot.attachLive
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), [])
   const initialCatalogId = initialParams.get('catalog')
-  const initialSessionId = initialParams.get('session')
+  const initialSessionId = initialPocketLive ? null : initialPocketBoot.initialSessionId ?? initialParams.get('session')
   const initialCatalogSeason = initialCatalogId && /^\d{4}-/.test(initialCatalogId)
     ? Number(initialCatalogId.slice(0, 4))
     : undefined
-  const [mode, setMode] = useState<AppMode>('replay')
+  const [mode, setMode] = useState<AppMode>(initialPocket?.mode ?? 'replay')
   const [mobTab, setMobTab] = useState<MobTab>('MAP')
   const [workspaces, setWorkspaces] = useState(readWorkspaces)
   const [deskPreferences, setDeskPreferences] = useState(readDeskPreferences)
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceLayout | null>(null)
   const [mobileCenter, setMobileCenter] = useState<MobileCenter>(() => readMobileCenter())
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId))
+  const [catalogOpen, setCatalogOpen] = useState(Boolean(initialCatalogId) && !initialPocketLive)
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId)
   const [readyReplayIds, setReadyReplayIds] = useState<string[]>([])
-  const [replayPinned, setReplayPinned] = useState(Boolean(initialSessionId))
+  const [replayPinned, setReplayPinned] = useState(initialPocketLive ? false : initialPocketBoot.replayPinned || Boolean(initialParams.get('session')))
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [backendPhase, setBackendPhase] = useState<'connecting' | 'waking' | 'ready'>('connecting')
   const [startupReady, setStartupReady] = useState(false)
   const [readonlyDeployment, setReadonlyDeployment] = useState<boolean | null>(null)
-  const [isLiveActive, setIsLiveActive] = useState(false)
+  const [isLiveActive, setIsLiveActive] = useState(initialPocket?.mode === 'live')
   const [liveStatusData, setLiveStatusData] = useState<LiveStatusResult | null>(null)
   const [liveError, setLiveError] = useState<string | null>(null)
   const [liveStopping, setLiveStopping] = useState(false)
   const [signalrAvailable, setSignalrAvailable] = useState(false)
-  const remoteSeek = useRef<{ raceId: string; atMs: number } | null>(null)
-  const pendingLivePublish = useRef(false)
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const closeCatalog = useCallback(() => setCatalogOpen(false), [])
   const desktopWorkspace = useDesktopWorkspace()
@@ -175,7 +176,7 @@ function App() {
   }, [])
 
   // Driver focus: up to 2 selected IDs; survives scrub/play; resets on session change
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialPocket?.focusedDrivers ?? [])
 
   // PROJECTION toggle — replay only
   const [projection, setProjection] = useState(false)
@@ -200,6 +201,13 @@ function App() {
 
   const replay = useReplay(source)
   const scrubReplay = replay.scrub
+  const [pocketApplied, setPocketApplied] = useState(false)
+  useEffect(() => {
+    if (pocketApplied || initialPocket?.mode !== 'replay' || replay.timeline?.session_id !== initialPocket.sessionId) return
+    scrubReplay(initialPocket.atMs ?? 0)
+    setSelectedIds(initialPocket.focusedDrivers)
+    setPocketApplied(true)
+  }, [initialPocket, pocketApplied, replay.timeline?.session_id, scrubReplay])
   useVoiceAlerts(replay.feed, voice, replay.lang, mode === 'replay' ? sessionId : 'live')
 
   const liveDecision = liveLifecycle(liveStatusData, {
@@ -238,68 +246,11 @@ function App() {
     setWorkspaceDraft(null)
   }, [replay.pause])
 
-  const applyRemoteCompanionState = useCallback((next: CompanionState, previous: CompanionState | null) => {
-    pendingLivePublish.current = false
-    const navigationChanged = !previous
-      || previous.mode !== next.mode
-      || previous.race_id !== next.race_id
-    const selectionChanged = !previous
-      || previous.selected_driver_ids.join('\0') !== next.selected_driver_ids.join('\0')
-    if (next.mode === 'live') {
-      remoteSeek.current = null
-      if (navigationChanged && (mode !== 'live' || !isLiveActive)) adoptLive()
-      if (selectionChanged) setSelectedIds(next.selected_driver_ids)
-      return
-    }
-    const atMs = next.at_ms ?? 0
-    const seekChanged = navigationChanged || previous?.at_ms !== next.at_ms
-    const needsReplayNavigation = mode !== 'replay' || sessionId !== next.race_id
-    if (needsReplayNavigation || replay.timeline?.session_id !== next.race_id) {
-      remoteSeek.current = { raceId: next.race_id, atMs }
-      if (needsReplayNavigation) adoptReplay(next.race_id)
-    } else if (seekChanged) {
-      scrubReplay(atMs)
-    }
-    if (selectionChanged) setSelectedIds(next.selected_driver_ids)
-  }, [adoptLive, adoptReplay, isLiveActive, mode, replay.timeline?.session_id, scrubReplay, sessionId])
-
-  const companionState = useMemo<CompanionState | null>(() => {
-    const raceId = mode === 'replay'
-      ? sessionId
-      : isLiveActive
-        ? replay.state?.session_id ?? liveStatusData?.canonical_session_id ?? null
-        : null
-    if (!raceId) return null
-    return {
-      race_id: raceId,
-      mode,
-      at_ms: mode === 'replay' ? replay.atMs : null,
-      selected_driver_ids: selectedIds,
-    }
-  }, [isLiveActive, liveStatusData?.canonical_session_id, mode, replay.atMs, replay.state?.session_id, selectedIds, sessionId])
-  const companion = useCompanionLink(companionState, applyRemoteCompanionState)
-  const publishCompanion = companion.publish
-  const companionActive = companion.status === 'linked' || companion.status === 'reconnecting'
-
-  useEffect(() => {
-    if (mode !== 'live' || !isLiveActive) return
-    const directSessionId = replay.state?.frame_source === 'live' ? replay.state.session_id : null
-    const result = resolvePendingLiveNavigation(
-      pendingLivePublish.current,
-      directSessionId,
-      liveStatusData?.canonical_session_id ?? null,
-    )
-    pendingLivePublish.current = result.pending
-    if (result.action) publishCompanion(result.action)
-  }, [isLiveActive, liveStatusData?.canonical_session_id, mode, publishCompanion, replay.state?.frame_source, replay.state?.session_id])
-
-  useEffect(() => {
-    const pending = remoteSeek.current
-    if (!pending || mode !== 'replay' || sessionId !== pending.raceId) return
-    if (replay.timeline?.session_id !== pending.raceId) return
-    remoteSeek.current = null
-    scrubReplay(pending.atMs)
-  }, [mode, replay.timeline?.session_id, scrubReplay, sessionId])
+  const pocketTarget = useMemo<PocketTarget | null>(() => {
+    const activeSession = mode === 'replay' ? sessionId : replay.state?.session_id ?? liveStatusData?.canonical_session_id
+    if (!activeSession) return null
+    return { version: 1, mode, sessionId: activeSession, atMs: mode === 'replay' ? replay.atMs : null, focusedDrivers: selectedIds }
+  }, [liveStatusData?.canonical_session_id, mode, replay.atMs, replay.state?.session_id, selectedIds, sessionId])
 
   const loadSessions = useCallback(() => {
     let cancelled = false
@@ -319,6 +270,7 @@ function App() {
           setBackendPhase('ready')
           return
         }
+        if (initialPocketLive) { setBackendPhase('ready'); return }
         const requestedSession = items.find((item) => item.session_id === requested)
         const initialSession = requestedSession?.session_id ?? null
         setSessionId((current) => (
@@ -346,7 +298,7 @@ function App() {
       cancelled = true
       window.clearTimeout(wakeTimer)
     }
-  }, [])
+  }, [initialPocketLive])
 
   // Load replay sessions once; the bounded retry covers a sleeping free Render instance.
   useEffect(() => {
@@ -368,21 +320,21 @@ function App() {
         setLiveStatusData(status.value)
         const decision = liveLifecycle(status.value, {
           readonly,
-          explicitReplay: Boolean(initialSessionId),
-          attachedToLive: false,
+          explicitReplay: Boolean(initialSessionId) && !initialPocketLive,
+          attachedToLive: initialPocketLive,
         })
-        if (!companionActive) {
+        if (!initialPocketLive) {
           if (decision.replaySessionId) adoptReplay(decision.replaySessionId)
           else if (decision.enterLive) adoptLive()
           else if (!initialSessionId) setCatalogOpen(true)
         }
-      } else if (!initialSessionId && !companionActive) {
+      } else if (!initialSessionId && !initialPocketLive) {
         setCatalogOpen(true)
       }
       setStartupReady(true)
     })
     return () => { cancelled = true }
-  }, [adoptLive, adoptReplay, companionActive, initialSessionId])
+  }, [adoptLive, adoptReplay, initialPocketLive, initialSessionId])
 
   // Public deployments keep discovering lifecycle changes; attached local Live
   // uses the same five-second poll. Failed polls retain the last truthful state.
@@ -417,12 +369,11 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !document.querySelector('[aria-modal="true"]')) {
         setSelectedIds([])
-        publishCompanion({ selected_driver_ids: [] })
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [publishCompanion])
+  }, [])
 
   const handleWidgetAction = useCallback((
     source: 'battle' | 'strategy' | 'feed',
@@ -430,43 +381,35 @@ function App() {
     atMs?: number,
   ) => {
     const action = workspaceAction(mode, source, ids, atMs)
-    const update: Parameters<typeof publishCompanion>[0] = {}
     if (action.focusIds.length > 0) {
       setSelectedIds(action.focusIds)
       setMobTab('INSIGHTS')
-      update.selected_driver_ids = action.focusIds
     }
     if (action.seekMs !== null) {
       replay.scrub(action.seekMs)
-      update.at_ms = action.seekMs
     }
-    if (Object.keys(update).length > 0) publishCompanion(update)
-  }, [mode, publishCompanion, replay.scrub])
+  }, [mode, replay.scrub])
 
   const handleSelectDriver = useCallback((id: string) => {
     const next = toggleDriverFocus(selectedIds, id)
     setMobTab('INSIGHTS')
     setSelectedIds(next)
-    publishCompanion({ selected_driver_ids: next })
-  }, [publishCompanion, selectedIds])
+  }, [selectedIds])
 
   const handleFocusDrivers = useCallback((ids: string[]) => {
     const focused = focusDriverIds(ids)
     if (focused.length === 0) return
     setSelectedIds(focused)
     setMobTab('INSIGHTS')
-    publishCompanion({ selected_driver_ids: focused })
-  }, [publishCompanion])
+  }, [])
 
   const handleReplaySeek = useCallback((atMs: number) => {
     scrubReplay(atMs)
-    publishCompanion({ at_ms: atMs })
-  }, [publishCompanion, scrubReplay])
+  }, [scrubReplay])
 
   const handleModeSwitch = (next: AppMode) => {
     if (next === mode) return
     if (next === 'live' && !liveAvailable) return
-    pendingLivePublish.current = next === 'live'
     if (next === 'live' && (liveDecision.remoteAvailable || liveStatusData?.is_running)) {
       adoptLive()
       return
@@ -484,15 +427,10 @@ function App() {
       // catalog, not an empty stage.
       setCatalogOpen(true)
     }
-    if (next === 'replay' && sessionId) {
-      publishCompanion({ mode: 'replay', race_id: sessionId, at_ms: 0, selected_driver_ids: [] })
-    }
   }
 
   const handleSessionChange = (id: string) => {
-    pendingLivePublish.current = false
     adoptReplay(id)
-    publishCompanion({ mode: 'replay', race_id: id, at_ms: 0, selected_driver_ids: [] })
   }
 
   const state = replay.state
@@ -738,7 +676,7 @@ function App() {
         anchoredHighlights={!customDeskVisible || !customWorkspace.widgets.highlights.visible}
         anchoredDotd={!customDeskVisible || !customWorkspace.widgets.dotd.visible}
         sessionName={mode === 'live' ? liveSessionName : null}
-        companion={<CompanionLink model={companion} canCreate={companionState !== null} />}
+        companion={<CompanionLink target={pocketTarget} />}
       />
 
       {liveDecision.canManage && mode === 'live' && !isLiveActive && (
@@ -747,7 +685,6 @@ function App() {
           onStart={async (y, c, sessionName, source) => {
             setLiveError(null)
             await liveStart(y, c, sessionName, 6, source)
-            pendingLivePublish.current = true
             setIsLiveActive(true)
             const status = await liveStatus()
             setLiveStatusData(status)

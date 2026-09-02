@@ -4,7 +4,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -22,19 +21,18 @@ data class DriverTiming(
     val tyreAge: Int?,
     val laps: Int,
 )
-data class RaceSnapshot(val atMs: Long, val lap: Int, val status: String, val drivers: List<DriverTiming>)
-data class LiveAvailability(val available: Boolean, val detail: String, val raceId: String?)
-data class CompanionSnapshot(val revision: Long, val state: SharedRaceState)
-
+data class Weather(val rainfall: Boolean?, val trackTempC: Double?, val airTempC: Double?)
+data class RaceSnapshot(val atMs: Long, val lap: Int, val status: String, val drivers: List<DriverTiming>, val weather: Weather? = null, val sessionName: String? = null)
+data class LiveAvailability(
+    val available: Boolean,
+    val detail: String,
+    val raceId: String?,
+    val replaySessionId: String? = null,
+    val status: String = "idle",
+)
+data class FeedItem(val id: String, val text: String, val lap: Int?, val audioUrl: String?)
+enum class LiveStreamResult { ENDED, CLOSED }
 class HttpStatusException(val status: Int, message: String) : Exception(message)
-
-fun validatedOrigin(value: String): String? = runCatching {
-    val uri = URI(value.trim())
-    val local = uri.host in setOf("localhost", "127.0.0.1", "10.0.2.2", "::1")
-    if (uri.host == null || uri.userInfo != null || uri.query != null || uri.fragment != null) return null
-    if (uri.scheme != "https" && !(uri.scheme == "http" && local)) return null
-    "${uri.scheme}://${uri.rawAuthority}${uri.path.trimEnd('/')}"
-}.getOrNull()
 
 class RaceApi(private val origin: String) {
     fun sessions(): List<SessionSummary> = getJson("/api/sessions").let { array ->
@@ -62,24 +60,34 @@ class RaceApi(private val origin: String) {
             status == "finishing" || status == "replay_ready" -> "Live ended; replay is preparing"
             else -> "No live session"
         }
-        return LiveAvailability(available, detail, body.optString("canonical_session_id").takeIf { it.isNotBlank() })
+        return LiveAvailability(
+            available, detail, body.optString("canonical_session_id").takeIf { it.isNotBlank() },
+            body.optString("replay_session_id").takeIf { it.isNotBlank() }, status,
+        )
     }
 
-    fun streamLive(onState: (RaceSnapshot) -> Unit) {
+    fun feed(raceId: String, atMs: Long): List<FeedItem> = parseFeed(getJson("/api/sessions/${encoded(raceId)}/feed?until_ms=${atMs.coerceAtLeast(0)}&limit=8"))
+    fun liveFeed(): List<FeedItem> = parseFeed(getJson("/api/live/feed?limit=8"))
+
+    fun streamLive(onState: (RaceSnapshot) -> Unit): LiveStreamResult {
         val connection = open("/api/live/stream?tick_s=2")
-        connection.readTimeout = 35_000
-        checkResponse(connection)
-        connection.inputStream.bufferedReader().use { reader ->
-            while (true) {
-                val line = reader.readLine() ?: break
-                if (line.startsWith("data:")) {
-                    val payload = line.substringAfter("data:").trim()
-                    if (payload != "{}") onState(parseRaceState(JSONObject(payload)))
+        return try {
+            connection.readTimeout = 35_000
+            checkResponse(connection)
+            connection.inputStream.bufferedReader().use { reader ->
+                while (true) {
+                    val line = reader.readLine() ?: return LiveStreamResult.CLOSED
+                    if (line.startsWith("data:")) {
+                        val payload = line.substringAfter("data:").trim()
+                        if (payload != "{}") onState(parseRaceState(JSONObject(payload)))
+                    }
+                    if (line == "event: end") return LiveStreamResult.ENDED
                 }
-                if (line == "event: end") break
             }
+            LiveStreamResult.CLOSED
+        } finally {
+            connection.disconnect()
         }
-        connection.disconnect()
     }
 
     private fun getObject(path: String): JSONObject = JSONObject(request(path))
@@ -102,59 +110,13 @@ class RaceApi(private val origin: String) {
     }
 }
 
-class CompanionApi(private val link: CompanionLink) {
-    fun poll(afterRevision: Long, waitSeconds: Int = 25): CompanionSnapshot = response(
-        path = "/api/companion-links/${encoded(link.id)}?after_revision=$afterRevision&wait_seconds=$waitSeconds",
-    )
-
-    fun patch(expectedRevision: Long, state: SharedRaceState): CompanionSnapshot = response(
-        path = "/api/companion-links/${encoded(link.id)}",
-        method = "PATCH",
-        body = JSONObject().put("expected_revision", expectedRevision).put("state", state.toJson()).toString(),
-    )
-
-    private fun response(path: String, method: String = "GET", body: String? = null): CompanionSnapshot {
-        val connection = (URL(link.origin + path).openConnection() as HttpURLConnection).apply {
-            requestMethod = method
-            connectTimeout = 8_000
-            readTimeout = 30_000
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Authorization", "Bearer ${link.token}")
-            if (body != null) {
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-                outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
-            }
-        }
-        return try {
-            checkResponse(connection)
-            val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            CompanionSnapshot(json.getLong("revision"), json.getJSONObject("state").toSharedState())
-        } finally {
-            connection.disconnect()
-        }
-    }
-}
-
-private fun SharedRaceState.toJson() = JSONObject()
-    .put("race_id", raceId)
-    .put("mode", mode.name.lowercase())
-    .put("at_ms", atMs ?: JSONObject.NULL)
-    .put("selected_driver_ids", JSONArray(selectedDriverIds))
-
-private fun JSONObject.toSharedState(): SharedRaceState {
-    val selected = getJSONArray("selected_driver_ids")
-    return SharedRaceState(
-        raceId = getString("race_id"),
-        mode = if (getString("mode") == "live") RaceMode.LIVE else RaceMode.REPLAY,
-        atMs = if (isNull("at_ms")) null else getLong("at_ms"),
-        selectedDriverIds = List(selected.length()) { selected.getString(it) }.distinct().take(2),
-    )
-}
-
 private fun parseRaceState(json: JSONObject): RaceSnapshot {
     val order = json.optJSONArray("classification") ?: JSONArray()
     val drivers = json.optJSONObject("drivers") ?: JSONObject()
+    val weather = json.optJSONObject("weather")?.let { value ->
+        Weather(value.opt("rainfall") as? Boolean, value.optNullableDouble("track_temp_c"), value.optNullableDouble("air_temp_c"))
+            .takeIf { it.rainfall != null || it.trackTempC != null || it.airTempC != null }
+    }
     return RaceSnapshot(
         atMs = json.optLong("at_ms"),
         lap = json.optInt("lap"),
@@ -172,11 +134,26 @@ private fun parseRaceState(json: JSONObject): RaceSnapshot {
                 laps = driver.optInt("laps_completed"),
             )
         },
+        weather = weather,
+        sessionName = json.optString("session_name").trim().takeIf { it.isNotBlank() },
     )
+}
+
+private fun parseFeed(items: JSONArray): List<FeedItem> = buildList {
+    for (index in 0 until items.length()) {
+        val item = items.optJSONObject(index) ?: continue
+        val text = item.optString("text").trim()
+        if (text.isBlank()) continue
+        add(FeedItem(item.optString("id", "feed-$index"), text, item.optNullableInt("lap"), safeRadioUrl(item.optString("audio_url"))))
+    }
 }
 
 private fun JSONObject.optNullableInt(name: String) = if (isNull(name) || !has(name)) null else optInt(name)
 private fun JSONObject.optNullableDouble(name: String) = if (isNull(name) || !has(name)) null else optDouble(name)
+private fun safeRadioUrl(value: String): String? = runCatching {
+    val uri = java.net.URI(value)
+    value.takeIf { value.length <= 2048 && uri.scheme == "https" && uri.host == "livetiming.formula1.com" && uri.path.startsWith("/static/") }
+}.getOrNull()
 private fun encoded(value: String) = URLEncoder.encode(value, StandardCharsets.UTF_8.name())
 
 private fun checkResponse(connection: HttpURLConnection) {

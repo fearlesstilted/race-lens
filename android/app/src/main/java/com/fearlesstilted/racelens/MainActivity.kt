@@ -1,6 +1,7 @@
 package com.fearlesstilted.racelens
 
 import android.content.Intent
+import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,44 +9,47 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
     private val viewModel: RaceViewModel by viewModels()
@@ -63,6 +67,9 @@ class MainActivity : ComponentActivity() {
         setIntent(Intent(this, MainActivity::class.java))
     }
 
+    override fun onResume() { super.onResume(); viewModel.onForeground() }
+    override fun onPause() { viewModel.onBackground(); super.onPause() }
+
     private fun consumeDeepLink(intent: Intent?) {
         val raw = intent?.data?.toString() ?: return
         intent.data = null
@@ -70,137 +77,128 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val Ink = Color(0xFF090D12)
-private val Panel = Color(0xFF141A22)
-private val Signal = Color(0xFFFF4D35)
-private val Mint = Color(0xFF61E7B5)
-private val Muted = Color(0xFF9BA8B8)
+private val Ink = Color(0xFF0A0C0D)
+private val Paper = Color(0xFFF4F0E8)
+private val Steel = Color(0xFF20262B)
+private val Signal = Color(0xFFFF4E31)
+private val Acid = Color(0xFFD5FF3F)
+private val Dim = Color(0xFF9CA49E)
 
 @Composable
-fun RaceLensApp(viewModel: RaceViewModel) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Signal,
-            secondary = Mint,
-            background = Ink,
-            surface = Panel,
-        )
-    ) {
-        RaceScreen(
-            state = viewModel.state,
-            setOrigin = viewModel::setOriginInput,
-            saveOrigin = viewModel::saveOrigin,
-            refresh = viewModel::refresh,
-            chooseRace = viewModel::chooseRace,
-            enterLive = viewModel::enterLive,
-            seek = viewModel::seek,
-            toggleDriver = viewModel::toggleDriver,
-            leave = viewModel::leaveCompanion,
-        )
-    }
+fun RaceLensApp(viewModel: RaceViewModel) = MaterialTheme(
+    colorScheme = darkColorScheme(primary = Signal, secondary = Acid, background = Ink, surface = Steel),
+) {
+    PocketScreen(viewModel.state, viewModel::chooseReplay, viewModel::enterLive, viewModel::seek, viewModel::toggleDriver, viewModel::retry)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RaceScreen(
+private fun PocketScreen(
     state: ScreenState,
-    setOrigin: (String) -> Unit,
-    saveOrigin: () -> Unit,
-    refresh: () -> Unit,
-    chooseRace: (String) -> Unit,
+    chooseReplay: (String) -> Unit,
     enterLive: () -> Unit,
     seek: (Long) -> Unit,
     toggleDriver: (String) -> Unit,
-    leave: () -> Unit,
+    retry: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink),
-                title = {
-                    Column {
-                        Text("RACE LENS", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                        Text(
-                            "POCKET  •  Companion: ${state.race.link.name.lowercase()}",
-                            color = if (state.race.link == LinkState.LINKED) Mint else Muted,
-                            fontSize = 11.sp,
-                        )
-                    }
-                },
-                actions = {
-                    if (state.race.link != LinkState.DISCONNECTED) {
-                        OutlinedButton(onClick = leave, modifier = Modifier.padding(end = 8.dp)) { Text("Leave") }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            OriginBar(state, setOrigin, saveOrigin, refresh)
-            ModeBar(state, enterLive, chooseRace)
-            SessionStrip(state, chooseRace)
-            ReplayControls(state, seek)
-            state.message?.let { Text(it, color = Signal, style = MaterialTheme.typography.bodySmall) }
-            Comparison(state)
-            TimingHeader(state.snapshot)
-            TimingList(state, toggleDriver, Modifier.weight(1f))
+    val target = state.frame.target
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Ink).padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item { Masthead(state) }
+        item { ActionRail(state, chooseReplay, enterLive) }
+        if (target.sessionId.isBlank()) {
+            item { EmptyReady(state, chooseReplay) }
+        } else {
+            item { SessionTitle(state) }
+            item { FocusArea(state) }
+            if (state.feed.isNotEmpty()) item { FeedPanel(state.feed) }
+            if (target.mode == WatchMode.REPLAY) item { ReplayControl(state, seek) }
+            item { ClassificationLabel(state) }
+            item { TimingList(state, toggleDriver) }
         }
+        state.message?.let { message -> item { Notice(message, retry, target.mode == WatchMode.LIVE) } }
+        item { Text("OPEN A RACE LENS POCKET LINK TO HAND OFF A SESSION. THIS APP FETCHES DATA LOCALLY.", color = Dim, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(bottom = 16.dp)) }
     }
 }
 
 @Composable
-private fun OriginBar(state: ScreenState, setOrigin: (String) -> Unit, save: () -> Unit, refresh: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OutlinedTextField(
-            value = state.originInput,
-            onValueChange = setOrigin,
-            label = { Text("Race Lens origin") },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        Button(onClick = save, contentPadding = ButtonDefaults.ContentPadding) { Text("Save") }
-        OutlinedButton(onClick = refresh, contentPadding = ButtonDefaults.ContentPadding) { Text("Refresh") }
+private fun Masthead(state: ScreenState) = Row(
+    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.Top,
+) {
+    Column {
+        Text("RACE", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 28.sp, letterSpacing = 3.sp)
+        Text("LENS / POCKET", color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.5.sp)
+    }
+    StatusStamp(state)
+}
+
+@Composable
+private fun StatusStamp(state: ScreenState) {
+    val live = state.frame.target.mode == WatchMode.LIVE
+    val stale = state.frame.freshness == Freshness.STALE
+    Column(horizontalAlignment = Alignment.End) {
+        Text(if (live) if (stale) "LIVE / STALE" else "LIVE / NOW" else "REPLAY", color = if (stale) Signal else Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(if (stale) "LAST FRAME HELD" else state.live.detail.uppercase(), color = Dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun ModeBar(state: ScreenState, enterLive: () -> Unit, chooseRace: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun ActionRail(state: ScreenState, chooseReplay: (String) -> Unit, enterLive: () -> Unit) {
+    val recommendation = recommendedReplayId(state.sessions)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         Button(
-            onClick = { state.sessions.firstOrNull()?.let { chooseRace(it.id) } },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (state.race.race.mode == RaceMode.REPLAY) Signal else Panel
-            ),
-        ) { Text("REPLAY") }
+            onClick = { recommendation?.let(chooseReplay) },
+            enabled = recommendation != null,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            shape = RoundedCornerShape(2.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Signal, contentColor = Ink),
+        ) { Text(if (state.frame.target.mode == WatchMode.REPLAY && state.frame.target.sessionId == recommendation) "REPLAY LOADED" else "WATCH REPLAY", fontWeight = FontWeight.Black, fontSize = 12.sp) }
         Button(
             onClick = enterLive,
             enabled = state.live.available,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (state.race.race.mode == RaceMode.LIVE) Signal else Panel
-            ),
-        ) { Text(if (state.live.available) "● LIVE" else "LIVE OFF") }
-        Text(state.live.detail, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            modifier = Modifier.heightIn(min = 48.dp),
+            shape = RoundedCornerShape(2.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Steel, contentColor = Paper),
+        ) { Text("● LIVE", fontWeight = FontWeight.Black, fontSize = 12.sp) }
     }
 }
 
 @Composable
-private fun SessionStrip(state: ScreenState, chooseRace: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("READY REPLAYS", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(state.sessions, key = { it.id }) { session ->
-                val active = state.race.race.mode == RaceMode.REPLAY && state.race.race.raceId == session.id
-                OutlinedButton(
-                    onClick = { chooseRace(session.id) },
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = if (active) Signal.copy(alpha = .2f) else Color.Transparent),
-                ) {
-                    Column {
-                        Text(session.id.replace('_', ' ').uppercase(), maxLines = 1)
-                        Text(session.source.uppercase(), color = Muted, fontSize = 9.sp)
-                    }
+private fun EmptyReady(state: ScreenState, chooseReplay: (String) -> Unit) = Column(
+    modifier = Modifier.fillMaxWidth().background(Steel).padding(18.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+) {
+    Text("READY ON THE GRID", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 13.sp)
+    Text(if (state.loading) "Checking available sessions…" else "Choose the recommended replay or scan a Pocket handoff link.", color = Paper)
+    recommendedReplayId(state.sessions)?.let { Button(onClick = { chooseReplay(it) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("OPEN ${shortName(it)}") } }
+}
+
+@Composable
+private fun SessionTitle(state: ScreenState) = Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Text(if (state.frame.target.mode == WatchMode.LIVE) "LIVE SESSION" else "RACE REPLAY", color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.2.sp)
+    Text(state.frame.snapshot?.sessionName ?: shortName(state.frame.target.sessionId), color = Paper, fontSize = 24.sp, fontWeight = FontWeight.Black, maxLines = 2)
+    Text("LAP ${state.frame.snapshot?.lap ?: "—"}  /  ${state.frame.snapshot?.status?.uppercase() ?: "WAITING"}  /  ${formatTime(state.frame.snapshot?.atMs ?: state.frame.target.replayMs ?: 0)}", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+    state.frame.snapshot?.weather?.let { weather ->
+        Text("${if (weather.rainfall == true) "RAIN" else "DRY"}${weather.trackTempC?.let { " · TRACK ${it.toInt()}°" } ?: ""}${weather.airTempC?.let { " · AIR ${it.toInt()}°" } ?: ""}", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun FocusArea(state: ScreenState) {
+    val selected = state.frame.target.focusedDrivers
+    val byId = state.frame.snapshot?.drivers?.associateBy { it.id }.orEmpty()
+    Column(modifier = Modifier.fillMaxWidth().background(Paper).padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(if (selected.size == 2) "BATTLE FOCUS" else "FOCUS TWO DRIVERS", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            if (selected.isEmpty()) Text("Tap up to two names in classification.", color = Steel)
+            selected.forEach { id ->
+                val driver = byId[id]
+                Column {
+                    Text(id, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                    Text("P${driver?.position ?: "—"}  ${formatGap(driver?.gapSeconds)}", color = Steel, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 }
             }
         }
@@ -208,113 +206,103 @@ private fun SessionStrip(state: ScreenState, chooseRace: (String) -> Unit) {
 }
 
 @Composable
-private fun ReplayControls(state: ScreenState, seek: (Long) -> Unit) {
-    val timeline = state.timeline ?: return
-    if (state.race.race.mode != RaceMode.REPLAY) return
+private fun FeedPanel(items: List<FeedItem>) {
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) { player?.release(); player = null } }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); player?.release() }
+    }
+    Column(modifier = Modifier.fillMaxWidth().background(Steel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("FEED / RADIO", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
+        items.take(4).forEach { item ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.lap?.let { "L$it" } ?: "•", color = Signal, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(28.dp))
+                Text(item.text, color = Paper, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                item.audioUrl?.let { url -> Button(onClick = {
+                    playbackError = null; player?.release()
+                    val candidate = MediaPlayer(); player = candidate
+                    runCatching {
+                        candidate.setOnErrorListener { failed, _, _ -> failed.release(); if (player === failed) player = null; playbackError = "Radio unavailable"; true }
+                        candidate.setDataSource(url); candidate.setOnPreparedListener { it.start() }; candidate.prepareAsync()
+                    }.onFailure { candidate.release(); if (player === candidate) player = null; playbackError = "Radio unavailable" }
+                }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Play radio: ${item.text}" }) { Text("▶") } }
+            }
+        }
+        playbackError?.let { Text(it, color = Signal, fontSize = 10.sp) }
+    }
+}
+
+@Composable
+private fun ReplayControl(state: ScreenState, seek: (Long) -> Unit) {
+    val timeline = state.frame.timeline ?: return
     val start = timeline.startMs.coerceAtLeast(0)
     val end = timeline.endMs.coerceAtLeast(start + 1)
-    var scrub by remember(state.race.race.raceId, state.snapshot?.atMs) {
-        mutableFloatStateOf((state.snapshot?.atMs ?: start).coerceIn(start, end).toFloat())
-    }
-    Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("REPLAY TIME", color = Muted, fontSize = 11.sp)
-                Text("${formatTime(scrub.toLong())} / ${formatTime(end)}", fontWeight = FontWeight.Bold)
-            }
-            Slider(
-                value = scrub,
-                onValueChange = { scrub = it },
-                onValueChangeFinished = { seek(scrub.toLong()) },
-                valueRange = start.toFloat()..end.toFloat(),
-            )
+    var scrub by remember(state.frame.target.sessionId, state.frame.snapshot?.atMs) { mutableFloatStateOf((state.frame.snapshot?.atMs ?: start).coerceIn(start, end).toFloat()) }
+    Column(modifier = Modifier.fillMaxWidth().background(Steel).padding(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("REPLAY POSITION", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            Text("${formatTime(scrub.toLong())} / ${formatTime(end)}", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         }
+        Slider(value = scrub, onValueChange = { scrub = it }, onValueChangeFinished = { seek(scrub.toLong()) }, valueRange = start.toFloat()..end.toFloat(), modifier = Modifier.semantics { contentDescription = "Replay position" })
     }
 }
 
 @Composable
-private fun Comparison(state: ScreenState) {
-    val selected = state.race.race.selectedDriverIds
-    if (selected.isEmpty()) return
-    val byId = state.snapshot?.drivers?.associateBy { it.id }.orEmpty()
-    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(8.dp)) {
-        Column(Modifier.fillMaxWidth().padding(10.dp)) {
-            Text("DRIVER COMPARISON", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                selected.forEach { id ->
-                    val driver = byId[id]
-                    Text(
-                        "$id  P${driver?.position ?: "—"}  GAP ${formatGap(driver?.gapSeconds)}  ${driver?.tyre ?: "—"}",
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-            Text("Tap a selected timing row to deselect", color = Muted, fontSize = 10.sp)
-        }
-    }
+private fun ClassificationLabel(state: ScreenState) = Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Text("CLASSIFICATION", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 13.sp)
+    Text(if (state.frame.freshness == Freshness.STALE) "STALE FRAME" else "TAP TO FOCUS", color = if (state.frame.freshness == Freshness.STALE) Signal else Dim, fontSize = 10.sp)
 }
 
 @Composable
-private fun TimingHeader(snapshot: RaceSnapshot?) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("CLASSIFICATION", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-        Text(
-            "LAP ${snapshot?.lap ?: "—"}  •  ${snapshot?.status?.uppercase() ?: "WAITING"}",
-            color = Muted,
-            fontSize = 12.sp,
-        )
-    }
-}
-
-@Composable
-private fun TimingList(state: ScreenState, toggleDriver: (String) -> Unit, modifier: Modifier = Modifier) {
-    val selected = state.race.race.selectedDriverIds
-    val drivers = state.snapshot?.drivers.orEmpty()
+private fun TimingList(state: ScreenState, toggleDriver: (String) -> Unit) {
+    val drivers = state.frame.snapshot?.drivers.orEmpty()
     if (drivers.isEmpty()) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text(if (state.loading) "Loading timing…" else "No timing data", color = Muted)
-        }
+        Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).background(Steel), contentAlignment = Alignment.Center) { Text(if (state.loading) "Loading timing…" else "No timing frame yet", color = Dim) }
         return
     }
-    LazyColumn(modifier) {
-        items(drivers, key = { it.id }) { driver ->
-            val isSelected = driver.id in selected
-            val canSelect = isSelected || selected.size < 2
+    Column {
+        drivers.forEach { driver ->
+            val selected = driver.id in state.frame.target.focusedDrivers
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(if (isSelected) Mint.copy(alpha = .14f) else Color.Transparent)
-                    .clickable(enabled = canSelect) { toggleDriver(driver.id) }
-                    .padding(vertical = 11.dp, horizontal = 8.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { toggleDriver(driver.id) }.semantics { contentDescription = "Driver ${driver.id}, position ${driver.position ?: "unknown"}, ${if (selected) "selected" else "not selected"}" }.padding(vertical = 12.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("${driver.position ?: "—"}", fontWeight = FontWeight.Black, modifier = Modifier.width(32.dp))
-                Text(driver.id, fontWeight = FontWeight.Black, modifier = Modifier.width(52.dp))
-                TimingCell("GAP", formatGap(driver.gapSeconds), Modifier.width(80.dp))
-                TimingCell("INT", formatGap(driver.intervalSeconds), Modifier.width(80.dp))
-                TimingCell("TYRE", "${driver.tyre ?: "—"} ${driver.tyreAge?.let { "L$it" } ?: ""}", Modifier.width(80.dp))
-                TimingCell("LAPS", driver.laps.toString(), Modifier.width(48.dp))
+                Text("${driver.position ?: "—"}", color = if (selected) Acid else Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(28.dp))
+                Text(driver.id, color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp))
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    TimingCell("GAP", formatGap(driver.gapSeconds))
+                    TimingCell("INT", formatGap(driver.intervalSeconds))
+                    TimingCell("TYRE", "${driver.tyre ?: "—"} ${driver.tyreAge?.let { "L$it" } ?: ""}")
+                    TimingCell("LAPS", driver.laps.toString())
+                }
             }
-            HorizontalDivider(color = Color.White.copy(alpha = .07f))
+            HorizontalDivider(color = Color.White.copy(alpha = .1f))
         }
     }
 }
 
 @Composable
-private fun TimingCell(label: String, value: String, modifier: Modifier) {
-    Column(modifier) {
-        Text(label, color = Muted, fontSize = 8.sp)
-        Text(value, fontSize = 12.sp, maxLines = 1)
-    }
+private fun TimingCell(label: String, value: String) = Column {
+    Text(label, color = Dim, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+    Text(value, color = Paper, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1)
 }
 
-private fun formatGap(seconds: Double?) = when {
-    seconds == null -> "—"
-    seconds == 0.0 -> "LEADER"
-    else -> "+%.3f".format(seconds)
+@Composable
+private fun Notice(message: String, retry: () -> Unit, canRetry: Boolean) = Row(
+    modifier = Modifier.fillMaxWidth().background(Signal.copy(alpha = .18f)).padding(12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+) {
+    Text(message, color = Paper, modifier = Modifier.weight(1f), fontSize = 12.sp)
+    if (canRetry) Button(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("RETRY") }
 }
 
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms.coerceAtLeast(0) / 1_000
-    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+private fun shortName(id: String): String {
+    val canonical = Regex("(\\d{4})-(\\d+)-r").matchEntire(id)
+    return canonical?.let { "${it.groupValues[1]} · RACE ${it.groupValues[2]}" }
+        ?: id.replace('_', ' ').replaceFirstChar { it.uppercase() }
 }
+private fun formatGap(seconds: Double?) = when { seconds == null -> "—"; seconds == 0.0 -> "LEADER"; else -> "+%.3f".format(seconds) }
+private fun formatTime(ms: Long): String { val total = ms.coerceAtLeast(0) / 1_000; return "%d:%02d".format(total / 60, total % 60) }

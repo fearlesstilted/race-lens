@@ -17,7 +17,7 @@
     "check:workspace": "node scripts/check-workspace.ts",
     "check:desktop": "node scripts/check-desktop.ts",
     "check:demo": "node scripts/check-demo-entry.ts",
-    "check:companion": "node scripts/check-companion.ts",
+    "check:pocket": "node scripts/check-pocket.ts",
     "lint": "eslint src",
     "preview": "vite preview",
     "tauri": "tauri"
