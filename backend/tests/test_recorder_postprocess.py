@@ -149,6 +149,7 @@ def test_merge_preserves_only_valid_source_backed_weather(tmp_path):
         sample,
         sample,
         event("live", "WeatherUpdated", 1_000, source="f1live", air_temp_c="bad"),
+        event("live", "WeatherUpdated", 1_500, source="f1live", air_temp_c=70.1),
         event("live", "WeatherUpdated", 3_000, source="fixture", air_temp_c=19.0),
     ])
 

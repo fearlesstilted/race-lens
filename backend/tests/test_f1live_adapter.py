@@ -1,6 +1,8 @@
 """Tests for the direct SignalR feed → Event adapter (live team-radio bits)."""
 import json
 
+import pytest
+
 from racelens.adapters.f1live_adapter import ingest_f1live
 from racelens.commentary.feed import render_feed
 from racelens.replay.engine import ReplayEngine
@@ -130,6 +132,36 @@ def test_weather_data_is_normalized_and_malformed_values_are_ignored(tmp_path):
         "wind_direction_deg": 96.0,
         "wind_speed_mps": 2.2,
     }
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("AirTemp", "-50.1"), ("AirTemp", "70.1"),
+    ("TrackTemp", "-50.1"), ("TrackTemp", "100.1"),
+    ("Humidity", "-0.1"), ("Humidity", "100.1"),
+    ("Pressure", "699.9"), ("Pressure", "1100.1"),
+    ("WindDirection", "-0.1"), ("WindDirection", "360.1"),
+    ("WindSpeed", "-0.1"), ("WindSpeed", "100.1"),
+])
+def test_weather_data_ignores_out_of_range_fields_but_keeps_valid_patch(
+    tmp_path, field, value,
+):
+    fallback = {"Pressure": "1024.6"} if field != "Pressure" else {"AirTemp": "18.7"}
+    expected = {"pressure_mbar": 1024.6} if field != "Pressure" else {"air_temp_c": 18.7}
+    feed = tmp_path / "weather-bounds.txt"
+    feed.write_text("\n".join([
+        "['SessionStatus', {'Status': 'Started'}, '2026-08-23T13:00:00Z']",
+        repr([
+            "WeatherData",
+            {field: value, **fallback},
+            "2026-08-23T13:01:00Z",
+        ]),
+    ]) + "\n", encoding="utf-8")
+
+    weather = next(
+        item for item in ingest_f1live(str(feed), session_id="test")
+        if item.type == "WeatherUpdated"
+    )
+    assert weather.payload == expected
 
 
 def test_new_session_identity_drops_previous_session_rows(tmp_path):
