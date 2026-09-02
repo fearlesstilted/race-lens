@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Annotated, Any, Iterator, Optional
+from typing import Any, Iterator, Optional
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.middleware.base import RequestResponseEndpoint
@@ -32,16 +32,6 @@ from racelens.adapters.openf1_adapter import (
     list_sessions as _openf1_list_sessions,
 )
 from racelens.commentary.feed import render_feed
-from racelens.companion import (
-    LINK_ID,
-    MAX_REVISION,
-    CompanionCreateRequest,
-    CompanionCreateResponse,
-    CompanionPatchRequest,
-    CompanionRelay,
-    CompanionRelayError,
-    CompanionSnapshot,
-)
 from racelens.catalog import (
     FIRST_SEASON,
     build_catalog,
@@ -197,15 +187,6 @@ app.add_middleware(
     allow_headers=["Accept", "Authorization", "Content-Type"],
 )
 
-_companion_relay = CompanionRelay()
-_COMPANION_ERRORS = {
-    "not_found": (404, "Companion link not found"),
-    "expired": (410, "Companion link expired"),
-    "unauthorized": (401, "Invalid companion authorization"),
-    "conflict": (409, "Companion link revision conflict"),
-    "capacity": (503, "Companion link capacity reached"),
-}
-
 
 class _LeasedFileResponse(FileResponse):
     def __init__(self, *args, lease: AbstractContextManager[Path], **kwargs) -> None:
@@ -231,35 +212,6 @@ async def add_security_headers(
 def _require_writable() -> None:
     if READONLY:
         raise HTTPException(403, "This deployment is read-only")
-
-
-def _companion_link_id(link_id: str) -> str:
-    if not LINK_ID.fullmatch(link_id):
-        raise HTTPException(404, "Companion link not found")
-    return link_id
-
-
-def _companion_secret(authorization: str | None) -> str:
-    if authorization is None or len(authorization) > 256:
-        raise HTTPException(
-            401,
-            "Invalid companion authorization",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    scheme, separator, secret = authorization.partition(" ")
-    if not separator or scheme.lower() != "bearer" or not secret or secret != secret.strip():
-        raise HTTPException(
-            401,
-            "Invalid companion authorization",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return secret
-
-
-def _companion_error(exc: CompanionRelayError) -> HTTPException:
-    status, detail = _COMPANION_ERRORS[exc.code]
-    headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
-    return HTTPException(status, detail, headers=headers)
 
 
 def _safe_slug(value: str) -> str:
@@ -703,53 +655,6 @@ def ping():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
-
-
-@app.post("/api/companion-links", response_model=CompanionCreateResponse)
-async def create_companion_link(body: CompanionCreateRequest) -> CompanionCreateResponse:
-    try:
-        return await _companion_relay.create(body.state)
-    except CompanionRelayError as exc:
-        raise _companion_error(exc) from exc
-
-
-@app.get("/api/companion-links/{link_id}", response_model=CompanionSnapshot)
-async def get_companion_link(
-    link_id: str,
-    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
-    after_revision: int = Query(default=-1, ge=-1, le=MAX_REVISION),
-    wait_seconds: float = Query(default=0, ge=0, le=25, allow_inf_nan=False),
-) -> CompanionSnapshot:
-    link_id = _companion_link_id(link_id)
-    secret = _companion_secret(authorization)
-    try:
-        return await _companion_relay.read(
-            link_id,
-            secret,
-            after_revision=after_revision,
-            wait_seconds=wait_seconds,
-        )
-    except CompanionRelayError as exc:
-        raise _companion_error(exc) from exc
-
-
-@app.patch("/api/companion-links/{link_id}", response_model=CompanionSnapshot)
-async def patch_companion_link(
-    link_id: str,
-    body: CompanionPatchRequest,
-    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
-) -> CompanionSnapshot:
-    link_id = _companion_link_id(link_id)
-    secret = _companion_secret(authorization)
-    try:
-        return await _companion_relay.replace(
-            link_id,
-            secret,
-            expected_revision=body.expected_revision,
-            state=body.state,
-        )
-    except CompanionRelayError as exc:
-        raise _companion_error(exc) from exc
 
 
 @app.get("/api/diagnostics")
@@ -1653,9 +1558,8 @@ def stints(session_id: str) -> dict:
 
 # The static mount lives at the bottom of the module so every API route above
 # is already registered and wins the match (see _DIST comment up top).
-@app.get("/companion/{link_id}", include_in_schema=False)
-def companion_frontend(link_id: str) -> FileResponse:
-    _companion_link_id(link_id)
+@app.get("/pocket", include_in_schema=False)
+def pocket_frontend() -> FileResponse:
     index = _DIST / "index.html"
     if not index.is_file():
         raise HTTPException(404, "Frontend is not built")
