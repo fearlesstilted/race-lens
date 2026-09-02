@@ -6,7 +6,7 @@ import { battlePair } from '../../lib/battles'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
 import { hasFinishedRace } from '../../lib/trackInterpolation'
-import { isLiveTrackNotFound, LIVE_TRACK_RETRY_MS } from '../../lib/liveTrack'
+import { isRetryableLiveTrackError, LIVE_TRACK_RETRY_MS } from '../../lib/liveTrack'
 import { teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
@@ -140,7 +140,7 @@ export const TrackMap = React.memo(function TrackMap({
         .then((d) => { if (!cancelled) setTrackData(d) })
         .catch((error: unknown) => {
           if (cancelled) return
-          if (live && isLiveTrackNotFound(error)) {
+          if (live && isRetryableLiveTrackError(error)) {
             retryTimer = setTimeout(loadTrack, LIVE_TRACK_RETRY_MS)
             return
           }
