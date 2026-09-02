@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 
 import { hasFinishedRace, lastKnownFrame, progressPathPosition, resolveTrackPosition } from '../src/lib/trackInterpolation.ts'
+import { isLiveTrackNotFound } from '../src/lib/liveTrack.ts'
+
+assert.equal(isLiveTrackNotFound(new Error('404 Track data is not ready')), true)
+assert.equal(isLiveTrackNotFound(new Error('500 Backend unavailable')), false)
+assert.equal(isLiveTrackNotFound('404 Track data is not ready'), false)
 
 assert.equal(hasFinishedRace(70, 70), true)
 assert.equal(hasFinishedRace(69, 70), false)

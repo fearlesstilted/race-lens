@@ -6,6 +6,7 @@ import { battlePair } from '../../lib/battles'
 import type { PositionsData } from '../../lib/liveGaps'
 import { buildPathD, startFinishLine } from '../../lib/trackGeometry'
 import { hasFinishedRace } from '../../lib/trackInterpolation'
+import { isLiveTrackNotFound, LIVE_TRACK_RETRY_MS } from '../../lib/liveTrack'
 import { teamColor } from './teamColors'
 import { useTrackAnimation } from './useTrackAnimation'
 
@@ -128,14 +129,30 @@ export const TrackMap = React.memo(function TrackMap({
   // Fetch track data whenever session changes
   useEffect(() => {
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
     setTrackData(null)
     setTrackError(false)
     if (!live && !sessionId) return
-    const request = live ? getLiveTrack() : getTrack(sessionId!)
-    request
-      .then((d) => { if (!cancelled) setTrackData(d) })
-      .catch(() => { if (!cancelled) setTrackError(true) })
-    return () => { cancelled = true }
+
+    const loadTrack = () => {
+      const request = live ? getLiveTrack() : getTrack(sessionId!)
+      request
+        .then((d) => { if (!cancelled) setTrackData(d) })
+        .catch((error: unknown) => {
+          if (cancelled) return
+          if (live && isLiveTrackNotFound(error)) {
+            retryTimer = setTimeout(loadTrack, LIVE_TRACK_RETRY_MS)
+            return
+          }
+          setTrackError(true)
+        })
+    }
+
+    loadTrack()
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+    }
   }, [live, sessionId])
 
   const status = sessionStatus ?? ''
