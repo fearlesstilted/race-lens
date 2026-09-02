@@ -194,6 +194,40 @@ def test_approaching_capture_precedes_older_captured_archive(tmp_path, monkeypat
     assert processes == []
 
 
+def test_failed_capture_retry_precedes_older_captured_archive(tmp_path, monkeypatch):
+    now = datetime(2026, 7, 19, 12, 55, tzinfo=UTC)
+    older = ScheduledSession(
+        2026, 12, "Dutch Grand Prix", "FP1", now - timedelta(hours=3),
+    )
+    retry_session = ScheduledSession(
+        2026, 13, "Belgian Grand Prix", "FP1", now - timedelta(hours=2),
+    )
+    retry_at = now + timedelta(minutes=15)
+    recorder = Recorder(_config(tmp_path), now=lambda: now)
+    recorder.store.transition(older.session_id, Phase.RECORDING, now)
+    recorder.store.transition(older.session_id, Phase.CAPTURED, now)
+    recorder.store.transition(retry_session.session_id, Phase.RECORDING, now)
+    recorder.store.transition(
+        retry_session.session_id, Phase.FAILED, now,
+        error="capture unavailable", retry_at=retry_at,
+    )
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule",
+        lambda year: [older, retry_session],
+    )
+    captures = []
+    processes = []
+    monkeypatch.setattr(recorder, "capture", lambda item: captures.append(item.session_id))
+    monkeypatch.setattr(recorder, "process", lambda item: processes.append(item.session_id))
+
+    assert recorder.run_once() == (
+        f"idle: next capture {retry_session.session_id} at "
+        f"{retry_at.isoformat()} (approaching)"
+    )
+    assert captures == []
+    assert processes == []
+
+
 def test_retention_keeps_input_for_captured_work(tmp_path, monkeypatch):
     now = datetime(2026, 7, 19, 15, tzinfo=UTC)
     recorder = Recorder(_config(tmp_path), now=lambda: now)

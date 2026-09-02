@@ -836,23 +836,33 @@ class Recorder:
             self.store.transition(session.session_id, Phase.CAPTURED, self.now())
             return f"captured: {session.session_id}"
 
-        next_session = min(
+        capture_deadlines = [
             (
-                item
-                for item in sessions
-                if item.capture_from > now
-                and item.session_id not in unavailable
-            ),
-            key=lambda item: item.capture_from,
-            default=None,
+                item.capture_from,
+                item.session_id,
+            )
+            for item in sessions
+            if item.capture_from > now
+            and item.session_id not in unavailable
+        ]
+        capture_deadlines.extend(
+            (item.retry_at, session_id)
+            for session_id, item in state.sessions.items()
+            if (
+                item.phase is Phase.FAILED
+                and item.retry_phase is Phase.RECORDING
+                and item.retry_at is not None
+                and item.retry_at > now
+            )
         )
+        next_capture = min(capture_deadlines, default=None)
         if (
-            next_session is not None
-            and next_session.capture_from <= now + REMOTE_CAPTURE_GUARD
+            next_capture is not None
+            and next_capture[0] <= now + REMOTE_CAPTURE_GUARD
         ):
             return (
-                f"idle: next capture {next_session.session_id} at "
-                f"{next_session.capture_from.isoformat()} (approaching)"
+                f"idle: next capture {next_capture[1]} at "
+                f"{next_capture[0].isoformat()} (approaching)"
             )
 
         # Outside the capture guard, archive processing precedes idle and remote work.
@@ -881,10 +891,10 @@ class Recorder:
         remote = self._run_remote_once()
         if remote == "idle":
             self._sync_completed_awards(sessions)
-            if next_session is not None:
+            if next_capture is not None:
                 return (
-                    f"idle: next capture {next_session.session_id} at "
-                    f"{next_session.capture_from.isoformat()}"
+                    f"idle: next capture {next_capture[1]} at "
+                    f"{next_capture[0].isoformat()}"
                 )
         return remote
 
