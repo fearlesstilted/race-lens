@@ -836,7 +836,26 @@ class Recorder:
             self.store.transition(session.session_id, Phase.CAPTURED, self.now())
             return f"captured: {session.session_id}"
 
-        # Archive processing precedes idle and remote work, including after its live window.
+        next_session = min(
+            (
+                item
+                for item in sessions
+                if item.capture_from > now
+                and item.session_id not in unavailable
+            ),
+            key=lambda item: item.capture_from,
+            default=None,
+        )
+        if (
+            next_session is not None
+            and next_session.capture_from <= now + REMOTE_CAPTURE_GUARD
+        ):
+            return (
+                f"idle: next capture {next_session.session_id} at "
+                f"{next_session.capture_from.isoformat()} (approaching)"
+            )
+
+        # Outside the capture guard, archive processing precedes idle and remote work.
         for session_id, item in state.sessions.items():
             due = state.due_phase(session_id, now)
             if item.phase in {Phase.CAPTURED, Phase.PROCESSING}:
@@ -859,24 +878,6 @@ class Recorder:
             self.store.transition(session_id, Phase.COMPLETE, self.now())
             return f"complete: {session_id}"
 
-        next_session = min(
-            (
-                item
-                for item in sessions
-                if item.capture_from > now
-                and item.session_id not in unavailable
-            ),
-            key=lambda item: item.capture_from,
-            default=None,
-        )
-        if (
-            next_session is not None
-            and next_session.capture_from <= now + REMOTE_CAPTURE_GUARD
-        ):
-            return (
-                f"idle: next capture {next_session.session_id} at "
-                f"{next_session.capture_from.isoformat()} (approaching)"
-            )
         remote = self._run_remote_once()
         if remote == "idle":
             self._sync_completed_awards(sessions)
