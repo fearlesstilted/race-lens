@@ -1,6 +1,7 @@
 package com.fearlesstilted.racelens
 
 import java.net.URI
+import kotlin.math.abs
 
 private val sessionIdPattern = Regex("^[a-z0-9][a-z0-9_-]{0,79}$")
 private val driverIdPattern = Regex("^[A-Z0-9]{2,5}$")
@@ -22,6 +23,8 @@ data class WatchFrame(
     val snapshot: RaceSnapshot? = null,
     val freshness: Freshness = Freshness.FRESH,
 )
+
+data class FocusEdge(val driverId: String?, val seconds: Double)
 
 sealed interface WatchAction {
     data class Navigate(val target: WatchTarget) : WatchAction
@@ -47,6 +50,21 @@ fun visibleFeedItems(items: List<FeedItem>): List<FeedItem> {
     val visible = items.take(3)
     val radio = items.firstOrNull { it.audioUrl != null && visible.none { shown -> shown.id == it.id } }
     return if (radio == null) visible else visible + radio
+}
+
+fun focusEdge(drivers: List<DriverTiming>): FocusEdge? {
+    if (drivers.size != 2) return null
+    val firstGap = drivers[0].gapSeconds ?: if (drivers[0].position == 1) 0.0 else return null
+    val secondGap = drivers[1].gapSeconds ?: if (drivers[1].position == 1) 0.0 else return null
+    val delta = firstGap - secondGap
+    return FocusEdge(
+        driverId = when {
+            abs(delta) < .001 -> null
+            delta < 0 -> drivers[0].id
+            else -> drivers[1].id
+        },
+        seconds = abs(delta),
+    )
 }
 
 fun recommendedReplayId(sessions: List<SessionSummary>): String? = sessions.map { it.id }.firstOrNull { it == "hungarian_2026_race" }
