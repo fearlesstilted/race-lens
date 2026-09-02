@@ -1,5 +1,6 @@
 export const LIVE_TRACK_RETRY_MS = 3_000
 
-export function isLiveTrackNotFound(error: unknown): boolean {
-  return error instanceof Error && /^404(?:\s|:|$)/.test(error.message)
+export function isRetryableLiveTrackError(error: unknown): boolean {
+  return error instanceof TypeError
+    || (error instanceof Error && /^(?:404|502|503|504)(?:\s|:|$)/.test(error.message))
 }
