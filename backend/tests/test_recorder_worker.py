@@ -143,6 +143,30 @@ def test_capture_then_processing_retry_never_recaptures(tmp_path, monkeypatch):
     assert processes == [session.session_id, session.session_id]
 
 
+def test_due_capture_precedes_older_captured_archive(tmp_path, monkeypatch):
+    now = datetime(2026, 7, 19, 12, 55, tzinfo=UTC)
+    older = ScheduledSession(
+        2026, 12, "Dutch Grand Prix", "FP1", now - timedelta(hours=3),
+    )
+    later = ScheduledSession(
+        2026, 13, "Belgian Grand Prix", "FP1", now + timedelta(minutes=10),
+    )
+    recorder = Recorder(_config(tmp_path), now=lambda: now)
+    recorder.store.transition(older.session_id, Phase.RECORDING, now)
+    recorder.store.transition(older.session_id, Phase.CAPTURED, now)
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule", lambda year: [older, later]
+    )
+    captures = []
+    processes = []
+    monkeypatch.setattr(recorder, "capture", lambda item: captures.append(item.session_id))
+    monkeypatch.setattr(recorder, "process", lambda item: processes.append(item.session_id))
+
+    assert recorder.run_once() == f"captured: {later.session_id}"
+    assert captures == [later.session_id]
+    assert processes == []
+
+
 def test_retention_keeps_input_for_captured_work(tmp_path, monkeypatch):
     now = datetime(2026, 7, 19, 15, tzinfo=UTC)
     recorder = Recorder(_config(tmp_path), now=lambda: now)
