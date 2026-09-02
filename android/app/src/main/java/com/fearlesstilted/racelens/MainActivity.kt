@@ -3,6 +3,7 @@ package com.fearlesstilted.racelens
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Bundle
+import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -207,15 +208,25 @@ private fun Conditions(weather: Weather) = Column(
 private fun FocusArea(state: ScreenState) {
     val selected = state.frame.target.focusedDrivers
     val byId = state.frame.snapshot?.drivers?.associateBy { it.id }.orEmpty()
+    val edge = focusEdge(selected.mapNotNull(byId::get))
     Column(modifier = Modifier.fillMaxWidth().background(Paper).padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(if (selected.size == 2) "BATTLE FOCUS" else "FOCUS TWO DRIVERS", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        if (selected.size == 2) Text(
+            when {
+                edge == null -> "GAP COMPARISON PENDING"
+                edge.driverId == null -> "LEVEL ON GAP"
+                else -> "${edge.driverId} ${"%.3f".format(Locale.ROOT, edge.seconds)}S AHEAD"
+            },
+            color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 2,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             if (selected.isEmpty()) Text("Tap up to two names in classification.", color = Steel)
             selected.forEach { id ->
                 val driver = byId[id]
-                Column {
-                    Text(id, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-                    Text("P${driver?.position ?: "—"}  ${formatGap(driver?.gapSeconds)}", color = Steel, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(id, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, maxLines = 1)
+                    Text("P${driver?.position ?: "—"}  ${formatGap(driver?.gapSeconds)}", color = Steel, fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${driver?.tyre?.take(1) ?: "—"}${driver?.tyreAge?.let { " L$it" } ?: ""}  ·  ${driver?.laps ?: "—"} LAPS", color = Steel, fontFamily = FontFamily.Monospace, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -341,5 +352,5 @@ private fun shortName(id: String): String {
     return canonical?.let { "${it.groupValues[1]} · RACE ${it.groupValues[2]}" }
         ?: id.replace('_', ' ').replaceFirstChar { it.uppercase() }
 }
-private fun formatGap(seconds: Double?) = when { seconds == null -> "—"; seconds == 0.0 -> "LEADER"; else -> "+%.3f".format(seconds) }
+private fun formatGap(seconds: Double?) = when { seconds == null -> "—"; seconds == 0.0 -> "LEADER"; else -> "+%.3f".format(Locale.ROOT, seconds) }
 private fun formatTime(ms: Long): String { val total = ms.coerceAtLeast(0) / 1_000; return "%d:%02d".format(total / 60, total % 60) }

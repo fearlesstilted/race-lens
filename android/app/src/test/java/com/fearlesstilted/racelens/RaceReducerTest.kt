@@ -95,4 +95,14 @@ class RaceReducerTest {
 
         assertEquals(listOf("1", "2", "3", "5"), visibleFeedItems(items).map(FeedItem::id))
     }
+
+    @Test
+    fun focusShowsWhichSelectedDriverHasTheGapAdvantage() {
+        val verstappen = DriverTiming("VER", 4, 16.928, 2.1, "SOFT", 18, 55)
+        val norris = DriverTiming("NOR", 1, null, null, "HARD", 18, 56)
+
+        assertEquals(FocusEdge("NOR", 16.928), focusEdge(listOf(verstappen, norris)))
+        assertEquals(FocusEdge(null, 0.0), focusEdge(listOf(norris, norris.copy(id = "PIA"))))
+        assertNull(focusEdge(listOf(verstappen, norris.copy(id = "PIA", position = 2, gapSeconds = null))))
+    }
 }
