@@ -27,6 +27,7 @@ _EVENT_PRIORITY = {
     "PitOut": 21,
     "LapCompleted": 30,
     "TyreStintUpdated": 40,
+    "WeatherUpdated": 45,
     "PositionChanged": 50,
     "GapUpdated": 60,
     "IntervalUpdated": 61,
@@ -110,6 +111,7 @@ class ReplayEngine:
             "status_since_ms": 0,
             "restart_at_ms": None,
             "total_laps": None,
+            "weather": None,
             "classification": [],
             "drivers": {},
             "data_quality": {
@@ -280,9 +282,10 @@ class ReplayEngine:
             d["tyre_compound"] = compound
             d["tyre_age_laps"] = age
 
+        elif e.type == "WeatherUpdated":
+            state["weather"] = {**(state["weather"] or {}), **p}
+
         elif e.type == "RaceControlMessage":
             restart_at_ms = p.get("restart_at_ms")
             if isinstance(restart_at_ms, int) and restart_at_ms >= 0:
                 state["restart_at_ms"] = restart_at_ms
-
-        # WeatherUpdated is carried in the timeline but does not mutate MVP state yet.

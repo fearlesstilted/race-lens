@@ -265,6 +265,35 @@ def test_live_records_accept_multiline_whisper_and_nullable_undercut_evidence():
     assert storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW) == snapshot
 
 
+def test_live_records_accept_source_backed_weather():
+    pointer, snapshot = _valid_records()
+    snapshot["race_state"]["weather"] = {
+        "air_temp_c": 18.7,
+        "track_temp_c": 32.9,
+        "humidity_percent": 56.2,
+        "pressure_mbar": 1024.6,
+        "rainfall": False,
+        "wind_direction_deg": 96.0,
+        "wind_speed_mps": 2.2,
+    }
+
+    assert storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW) == snapshot
+
+
+@pytest.mark.parametrize("weather", [
+    {"unknown": 1.0},
+    {"air_temp_c": float("inf")},
+    {},
+    {"rainfall": "no"},
+])
+def test_live_records_reject_malformed_weather(weather):
+    pointer, snapshot = _valid_records()
+    snapshot["race_state"]["weather"] = weather
+
+    with pytest.raises(storage.LiveRecordError, match="race state"):
+        storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW)
+
+
 @pytest.mark.parametrize(
     "path",
     ["/root/private", "/srv/race-lens/secret", r"C:\private\secret"],

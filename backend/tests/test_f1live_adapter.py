@@ -89,6 +89,49 @@ def test_session_name_absent_when_no_session_info(tmp_path):
     assert state["session_name"] is None
 
 
+def test_weather_data_is_normalized_and_malformed_values_are_ignored(tmp_path):
+    lines = [
+        "['SessionStatus', {'Status': 'Started'}, '2026-08-23T13:00:00Z']",
+        repr([
+            "WeatherData",
+            {
+                "AirTemp": "18.7",
+                "TrackTemp": "32.9",
+                "Humidity": "56.2",
+                "Pressure": "1024.6",
+                "Rainfall": "0",
+                "WindDirection": "96",
+                "WindSpeed": "2.2",
+            },
+            "2026-08-23T13:01:00Z",
+        ]),
+        repr([
+            "WeatherData",
+            {"AirTemp": "not-a-number", "Rainfall": "maybe"},
+            "2026-08-23T13:02:00Z",
+        ]),
+    ]
+    feed = tmp_path / "weather.txt"
+    feed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    weather = [
+        item for item in ingest_f1live(str(feed), session_id="test")
+        if item.type == "WeatherUpdated"
+    ]
+
+    assert len(weather) == 1
+    assert weather[0].session_time_ms == 60_000
+    assert weather[0].payload == {
+        "air_temp_c": 18.7,
+        "track_temp_c": 32.9,
+        "humidity_percent": 56.2,
+        "pressure_mbar": 1024.6,
+        "rainfall": False,
+        "wind_direction_deg": 96.0,
+        "wind_speed_mps": 2.2,
+    }
+
+
 def test_new_session_identity_drops_previous_session_rows(tmp_path):
     previous = {
         "Meeting": {"Key": 1, "Name": "Hungarian Grand Prix", "Location": "Budapest"},

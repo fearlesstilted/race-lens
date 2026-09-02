@@ -462,7 +462,11 @@ _RACE_STATE_FIELDS = {
     "status_since_ms", "total_laps", "classification", "drivers",
     "data_quality", "frame_source", "viewbox",
 }
-_RACE_STATE_OPTIONAL_FIELDS = {"restart_at_ms"}
+_RACE_STATE_OPTIONAL_FIELDS = {"restart_at_ms", "weather"}
+_WEATHER_FIELDS = {
+    "air_temp_c", "track_temp_c", "humidity_percent", "pressure_mbar",
+    "rainfall", "wind_direction_deg", "wind_speed_mps",
+}
 _DRIVER_FIELDS = {
     "position", "rank", "grid_position", "laps_completed", "last_lap_ms",
     "best_lap_ms", "gap_s", "interval_s", "tyre_compound", "tyre_age_laps",
@@ -605,6 +609,7 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
         raise LiveRecordError("live snapshot race state is invalid")
     if value["session_id"] != replay_session_id:
         raise LiveRecordError("live snapshot inner identity differs")
+    weather = value.get("weather")
     if (
         not _integer(value["at_ms"])
         or not _integer(value["lap"], maximum=500)
@@ -627,6 +632,22 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
         )
         or value["frame_source"] != "live"
         or value["viewbox"] is not None
+        or (
+            weather is not None
+            and (
+                not isinstance(weather, dict)
+                or not weather
+                or not set(weather) <= _WEATHER_FIELDS
+                or any(
+                    key != "rainfall" and not _number(item)
+                    for key, item in weather.items()
+                )
+                or (
+                    "rainfall" in weather
+                    and not isinstance(weather["rainfall"], bool)
+                )
+            )
+        )
     ):
         raise LiveRecordError("live snapshot race state is invalid")
     drivers = value["drivers"]

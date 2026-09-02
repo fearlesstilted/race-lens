@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import type { Battle, DriverState } from '../../api/types'
+import type { Battle, DriverState, WeatherState } from '../../api/types'
 import { battleGap, battlePair } from '../../lib/battles'
 import { formatLapTime } from '../../lib/format'
+import { formatWeather } from '../../lib/weather'
 import { teamColor } from './teamColors'
 
 type DriverRow = { id: string } & DriverState
@@ -11,6 +12,7 @@ type Props = {
   battles: Battle[]
   currentLap: number
   totalLaps: number | null
+  weather?: WeatherState | null
   onSelectDriver: (id: string) => void
   onSelectBattle: (ids: string[]) => void
 }
@@ -28,6 +30,7 @@ export function BattleIntelligence({
   battles,
   currentLap,
   totalLaps,
+  weather,
   onSelectDriver,
   onSelectBattle,
 }: Props) {
@@ -44,6 +47,7 @@ export function BattleIntelligence({
     .sort((a, b) => a.average - b.average)
     .slice(0, 7), [rows])
   const fastestPace = pace[0]?.average
+  const weatherSummary = formatWeather(weather)
 
   return (
     <section className="battle-intelligence" aria-label="Battle intelligence">
@@ -92,6 +96,7 @@ export function BattleIntelligence({
         <article className="bi-card bi-state">
           <div className="bi-card-head">
             <b>RACE</b>
+            {weatherSummary && <span>{weatherSummary}</span>}
           </div>
           <div className="bi-lap">
             {currentLap || '—'} <small>/ {totalLaps ?? '—'} LAPS</small>

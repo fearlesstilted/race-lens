@@ -248,6 +248,26 @@ def test_restart_time_survives_red_flag_and_clears_on_restart():
     assert engine.state_at(180_000)["restart_at_ms"] is None
 
 
+def test_weather_state_follows_replay_time_and_merges_source_patches():
+    events = [
+        event(SID, "SessionStarted", 0),
+        event(SID, "WeatherUpdated", 1_000, air_temp_c=18.7, rainfall=False),
+        event(SID, "WeatherUpdated", 2_000, track_temp_c=32.9),
+    ]
+    engine = ReplayEngine(events)
+
+    assert engine.state_at(999)["weather"] is None
+    assert engine.state_at(1_000)["weather"] == {
+        "air_temp_c": 18.7,
+        "rainfall": False,
+    }
+    assert engine.state_at(2_000)["weather"] == {
+        "air_temp_c": 18.7,
+        "rainfall": False,
+        "track_temp_c": 32.9,
+    }
+
+
 def test_jsonl_round_trip():
     events = mini_race()
     restored = load_jsonl(dump_jsonl(events))
