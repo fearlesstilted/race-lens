@@ -38,7 +38,7 @@ class RaceApi(private val origin: String) {
     fun sessions(): List<SessionSummary> = getJson("/api/sessions").let { array ->
         List(array.length()) { index ->
             val item = array.getJSONObject(index)
-            SessionSummary(item.getString("session_id"), item.optString("source", "unknown"))
+            SessionSummary(item.getString("session_id"), nullableJsonString(item.opt("source")) ?: "unknown")
         }
     }
 
@@ -52,17 +52,17 @@ class RaceApi(private val origin: String) {
 
     fun liveStatus(): LiveAvailability {
         val body = getObject("/api/live/status")
-        val status = body.optString("status", if (body.optBoolean("is_running")) "live" else "idle")
+        val status = nullableJsonString(body.opt("status")) ?: if (body.optBoolean("is_running")) "live" else "idle"
         val available = body.optBoolean("is_running") || status == "live"
         val detail = when {
-            status == "failed" -> body.optString("failure", "Live failed")
+            status == "failed" -> nullableJsonString(body.opt("failure")) ?: "Live failed"
             available -> "Live timing active"
             status == "finishing" || status == "replay_ready" -> "Live ended; replay is preparing"
             else -> "No live session"
         }
         return LiveAvailability(
-            available, detail, body.optString("canonical_session_id").takeIf { it.isNotBlank() },
-            body.optString("replay_session_id").takeIf { it.isNotBlank() }, status,
+            available, detail, nullableJsonString(body.opt("canonical_session_id")),
+            nullableJsonString(body.opt("replay_session_id")), status,
         )
     }
 
@@ -120,7 +120,7 @@ private fun parseRaceState(json: JSONObject): RaceSnapshot {
     return RaceSnapshot(
         atMs = json.optLong("at_ms"),
         lap = json.optInt("lap"),
-        status = json.optString("session_status", "unknown"),
+        status = nullableJsonString(json.opt("session_status")) ?: "unknown",
         drivers = List(order.length()) { index ->
             val id = order.getString(index)
             val driver = drivers.optJSONObject(id) ?: JSONObject()
@@ -129,27 +129,27 @@ private fun parseRaceState(json: JSONObject): RaceSnapshot {
                 position = driver.optNullableInt("rank") ?: driver.optNullableInt("position"),
                 gapSeconds = driver.optNullableDouble("gap_s"),
                 intervalSeconds = driver.optNullableDouble("interval_s"),
-                tyre = driver.optString("tyre_compound").takeIf { it.isNotBlank() },
+                tyre = nullableJsonString(driver.opt("tyre_compound")),
                 tyreAge = driver.optNullableInt("tyre_age_laps"),
                 laps = driver.optInt("laps_completed"),
             )
         },
         weather = weather,
-        sessionName = json.optString("session_name").trim().takeIf { it.isNotBlank() },
+        sessionName = nullableJsonString(json.opt("session_name")),
     )
 }
 
 private fun parseFeed(items: JSONArray): List<FeedItem> = buildList {
     for (index in 0 until items.length()) {
         val item = items.optJSONObject(index) ?: continue
-        val text = item.optString("text").trim()
-        if (text.isBlank()) continue
-        add(FeedItem(item.optString("id", "feed-$index"), text, item.optNullableInt("lap"), safeRadioUrl(item.optString("audio_url"))))
+        val text = nullableJsonString(item.opt("text")) ?: continue
+        add(FeedItem(nullableJsonString(item.opt("id")) ?: "feed-$index", text, item.optNullableInt("lap"), safeRadioUrl(nullableJsonString(item.opt("audio_url")).orEmpty())))
     }
 }
 
 private fun JSONObject.optNullableInt(name: String) = if (isNull(name) || !has(name)) null else optInt(name)
 private fun JSONObject.optNullableDouble(name: String) = if (isNull(name) || !has(name)) null else optDouble(name)
+internal fun nullableJsonString(value: Any?) = (value as? String)?.trim()?.takeIf(String::isNotEmpty)
 private fun safeRadioUrl(value: String): String? = runCatching {
     val uri = java.net.URI(value)
     value.takeIf { value.length <= 2048 && uri.scheme == "https" && uri.host == "livetiming.formula1.com" && uri.path.startsWith("/static/") }
