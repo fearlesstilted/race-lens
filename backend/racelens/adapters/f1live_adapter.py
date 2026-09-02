@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
@@ -35,6 +36,14 @@ _LAPTIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2})\.(\d{3})$")
 _GMT_OFFSET_RE = re.compile(r"^([+-]?)(\d{1,2}):(\d{2}):(\d{2})$")
 _RESTART_RE = re.compile(r"\bRACE WILL RESUME AT\s+(\d{1,2}):(\d{2})\b", re.IGNORECASE)
 _RETIRE_CONFIRM_MS = 5_000
+_WEATHER_FIELDS = {
+    "AirTemp": "air_temp_c",
+    "TrackTemp": "track_temp_c",
+    "Humidity": "humidity_percent",
+    "Pressure": "pressure_mbar",
+    "WindDirection": "wind_direction_deg",
+    "WindSpeed": "wind_speed_mps",
+}
 
 
 def _parse_iso(ts: str) -> float | None:
@@ -107,6 +116,24 @@ def _parse_gap_s(value: Any) -> float | None:
         return float(v)
     except ValueError:
         return None
+
+
+def _parse_weather(payload: dict[str, Any]) -> dict[str, float | bool]:
+    weather: dict[str, float | bool] = {}
+    for source, target in _WEATHER_FIELDS.items():
+        value = payload.get(source)
+        if isinstance(value, bool):
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            weather[target] = number
+    rainfall = payload.get("Rainfall")
+    if rainfall in (0, 1, "0", "1", False, True):
+        weather["rainfall"] = str(rainfall).lower() in {"1", "true"}
+    return weather
 
 
 def _lines(feed_files: tuple[str, ...]) -> Iterator[tuple[str, Any, str]]:
@@ -409,6 +436,9 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
             lines = payload.get("Lines")
             if isinstance(lines, dict):
                 apply_tyres(lines, t_ms)
+        elif cat == "WeatherData":
+            if weather := _parse_weather(payload):
+                events.append(event(sid, "WeatherUpdated", t_ms, source="f1live", **weather))
         elif cat == "RaceControlMessages":
             msgs = payload.get("Messages")
             items = msgs.values() if isinstance(msgs, dict) else (msgs or [])

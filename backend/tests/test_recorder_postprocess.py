@@ -137,6 +137,36 @@ def test_absent_radio_leaves_canonical_untouched(tmp_path):
     assert canonical.read_bytes() == before
 
 
+def test_merge_preserves_only_valid_source_backed_weather(tmp_path):
+    canonical = tmp_path / "canonical.jsonl"
+    captured = tmp_path / "captured.jsonl"
+    _write(canonical, [event("canonical", "SessionStarted", 0)])
+    sample = event(
+        "live", "WeatherUpdated", 2_000, source="f1live",
+        air_temp_c=18.7, track_temp_c=32.9, rainfall=False,
+    )
+    _write(captured, [
+        sample,
+        sample,
+        event("live", "WeatherUpdated", 1_000, source="f1live", air_temp_c="bad"),
+        event("live", "WeatherUpdated", 3_000, source="fixture", air_temp_c=19.0),
+    ])
+
+    merge_captured_radio(canonical, captured)
+    merged = load_jsonl(canonical.read_text(encoding="utf-8"))
+    weather = [item for item in merged if item.type == "WeatherUpdated"]
+
+    assert len(weather) == 1
+    assert weather[0].session_id == "canonical"
+    assert weather[0].session_time_ms == 2_000
+    assert weather[0].payload == {
+        "air_temp_c": 18.7,
+        "track_temp_c": 32.9,
+        "rainfall": False,
+    }
+    assert merged == sorted(merged, key=lambda item: (item.session_time_ms, item.event_id))
+
+
 def test_validate_archive_reports_schema_and_coverage(tmp_path):
     report = validate_archive(*_archive(tmp_path))
 

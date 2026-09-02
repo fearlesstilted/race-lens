@@ -111,6 +111,16 @@ export type RecentPass = {
   at_ms: number
 }
 
+export type WeatherState = {
+  air_temp_c?: number
+  track_temp_c?: number
+  humidity_percent?: number
+  pressure_mbar?: number
+  rainfall?: boolean
+  wind_direction_deg?: number
+  wind_speed_mps?: number
+}
+
 export type RaceState = {
   session_id: string | null
   at_ms: number
@@ -122,6 +132,8 @@ export type RaceState = {
   /** Source-backed scheduled restart point, relative to session start. */
   restart_at_ms?: number | null
   total_laps: number | null
+  /** Latest source-backed F1 weather sample at this point in session time. */
+  weather?: WeatherState | null
   classification: string[]
   drivers: Record<string, DriverState>
   data_quality: DataQuality

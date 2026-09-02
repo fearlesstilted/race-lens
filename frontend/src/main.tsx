@@ -500,6 +500,7 @@ function App() {
           battles={replay.battles}
           currentLap={currentLap}
           totalLaps={state?.total_laps ?? null}
+          weather={state?.weather}
           onSelectDriver={handleSelectDriver}
           onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
         />
@@ -781,6 +782,7 @@ function App() {
                   battles={replay.battles}
                   currentLap={currentLap}
                   totalLaps={state?.total_laps ?? null}
+                  weather={state?.weather}
                   onSelectDriver={handleSelectDriver}
                   onSelectBattle={(ids) => handleWidgetAction('battle', ids)}
                 />
