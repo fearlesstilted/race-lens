@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
 
 from racelens.adapters._common import message_to_status
-from racelens.events.models import Event, event
+from racelens.events.models import WEATHER_BOUNDS, Event, event
 
 # SessionStatus.Status → our SessionStatusChanged payload status
 _STATUS_MAP = {
@@ -128,7 +128,8 @@ def _parse_weather(payload: dict[str, Any]) -> dict[str, float | bool]:
             number = float(value)
         except (TypeError, ValueError):
             continue
-        if math.isfinite(number):
+        lower, upper = WEATHER_BOUNDS[target]
+        if math.isfinite(number) and lower <= number <= upper:
             weather[target] = number
     rainfall = payload.get("Rainfall")
     if rainfall in (0, 1, "0", "1", False, True):

@@ -10,6 +10,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 import racelens.object_storage as storage  # noqa: E402
+from racelens.events.models import WEATHER_BOUNDS  # noqa: E402
 from racelens.object_storage import StorageError, publish_session  # noqa: E402
 from racelens.recorder.schedule import ScheduledSession  # noqa: E402
 from racelens.recorder.state import Phase  # noqa: E402
@@ -292,6 +293,38 @@ def test_live_records_reject_malformed_weather(weather):
 
     with pytest.raises(storage.LiveRecordError, match="race state"):
         storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("air_temp_c", -50.1), ("air_temp_c", 70.1),
+    ("track_temp_c", -50.1), ("track_temp_c", 100.1),
+    ("humidity_percent", -0.1), ("humidity_percent", 100.1),
+    ("pressure_mbar", 699.9), ("pressure_mbar", 1100.1),
+    ("wind_direction_deg", -0.1), ("wind_direction_deg", 360.1),
+    ("wind_speed_mps", -0.1), ("wind_speed_mps", 100.1),
+])
+def test_live_records_reject_out_of_range_weather(field, value):
+    pointer, snapshot = _valid_records()
+    snapshot["race_state"]["weather"] = {field: value}
+
+    with pytest.raises(storage.LiveRecordError, match="race state"):
+        storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW)
+
+
+@pytest.mark.parametrize(("field", "lower", "upper"), [
+    ("air_temp_c", -50.0, 70.0),
+    ("track_temp_c", -50.0, 100.0),
+    ("humidity_percent", 0.0, 100.0),
+    ("pressure_mbar", 700.0, 1100.0),
+    ("wind_direction_deg", 0.0, 360.0),
+    ("wind_speed_mps", 0.0, 100.0),
+])
+def test_weather_bounds_accept_endpoints_and_representative_integer(field, lower, upper):
+    assert WEATHER_BOUNDS[field] == (lower, upper)
+    pointer, snapshot = _valid_records()
+    for value in (lower, upper, int((lower + upper) / 2)):
+        snapshot["race_state"]["weather"] = {field: value}
+        assert storage.validate_live_snapshot(snapshot, pointer=pointer, now=NOW) == snapshot
 
 
 @pytest.mark.parametrize(

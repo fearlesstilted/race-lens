@@ -15,6 +15,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, ClassVar, Iterator
 
+from racelens.events.models import WEATHER_BOUNDS
 from racelens.preparations import QueueFullError, SESSION_ID
 
 SCHEMA_VERSION = 1
@@ -463,10 +464,7 @@ _RACE_STATE_FIELDS = {
     "data_quality", "frame_source", "viewbox",
 }
 _RACE_STATE_OPTIONAL_FIELDS = {"restart_at_ms", "weather"}
-_WEATHER_FIELDS = {
-    "air_temp_c", "track_temp_c", "humidity_percent", "pressure_mbar",
-    "rainfall", "wind_direction_deg", "wind_speed_mps",
-}
+_WEATHER_FIELDS = set(WEATHER_BOUNDS) | {"rainfall"}
 _DRIVER_FIELDS = {
     "position", "rank", "grid_position", "laps_completed", "last_lap_ms",
     "best_lap_ms", "gap_s", "interval_s", "tyre_compound", "tyre_age_laps",
@@ -639,7 +637,10 @@ def _validate_race_state(value: object, replay_session_id: str) -> None:
                 or not weather
                 or not set(weather) <= _WEATHER_FIELDS
                 or any(
-                    key != "rainfall" and not _number(item)
+                    key != "rainfall" and (
+                        not _number(item)
+                        or not WEATHER_BOUNDS[key][0] <= item <= WEATHER_BOUNDS[key][1]
+                    )
                     for key, item in weather.items()
                 )
                 or (

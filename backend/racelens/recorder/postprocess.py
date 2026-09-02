@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from racelens.events.models import Event, dump_jsonl, load_jsonl, make_event_id
+from racelens.events.models import WEATHER_BOUNDS, Event, dump_jsonl, load_jsonl, make_event_id
 
 
 class PostprocessError(RuntimeError):
@@ -132,10 +132,7 @@ def _radio(event_: Event) -> bool:
     )
 
 
-_WEATHER_FIELDS = {
-    "air_temp_c", "track_temp_c", "humidity_percent", "pressure_mbar",
-    "rainfall", "wind_direction_deg", "wind_speed_mps",
-}
+_WEATHER_FIELDS = set(WEATHER_BOUNDS) | {"rainfall"}
 
 
 def _weather(event_: Event) -> bool:
@@ -148,7 +145,11 @@ def _weather(event_: Event) -> bool:
         and all(
             isinstance(value, bool)
             if key == "rainfall"
-            else isinstance(value, float) and math.isfinite(value)
+            else (
+                isinstance(value, float)
+                and math.isfinite(value)
+                and WEATHER_BOUNDS[key][0] <= value <= WEATHER_BOUNDS[key][1]
+            )
             for key, value in payload.items()
         )
     )

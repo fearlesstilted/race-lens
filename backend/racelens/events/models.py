@@ -28,6 +28,15 @@ EVENT_TYPES = {
     "WeatherUpdated",
 }
 
+WEATHER_BOUNDS = {
+    "air_temp_c": (-50.0, 70.0),
+    "track_temp_c": (-50.0, 100.0),
+    "humidity_percent": (0.0, 100.0),
+    "pressure_mbar": (700.0, 1100.0),
+    "wind_direction_deg": (0.0, 360.0),
+    "wind_speed_mps": (0.0, 100.0),
+}
+
 
 class Event(BaseModel):
     """Normalized event envelope. Stable ID, ordered by session_time_ms."""
