@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -39,7 +40,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -117,13 +121,13 @@ private fun PocketScreen(
             item { EmptyReady(state, chooseReplay) }
         } else {
             item { SessionTitle(state) }
+            if (target.mode == WatchMode.REPLAY) item { ReplayControl(state, seek, beginSeek, toggleReplay, setReplaySpeed) }
             item { NowArea(state, focusBattle) }
             if (state.feed.isNotEmpty()) item { FeedPanel(state.feed) }
-            if (target.mode == WatchMode.REPLAY) item { ReplayControl(state, seek, beginSeek, toggleReplay, setReplaySpeed) }
             item { ClassificationLabel(state) }
             item { TimingList(state, toggleDriver) }
         }
-        item { Text("OPEN A RACE LENS POCKET LINK TO HAND OFF A SESSION. THIS APP FETCHES DATA LOCALLY.", color = Dim, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(bottom = 16.dp)) }
+        if (target.sessionId.isBlank()) item { Text("OPEN A RACE LENS POCKET LINK TO HAND OFF A SESSION.", color = Dim, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(bottom = 16.dp)) }
     }
 }
 
@@ -133,7 +137,10 @@ private fun BattleNow(battle: Battle, onClick: () -> Unit) = Column(
         .fillMaxWidth()
         .heightIn(min = 48.dp)
         .clickable(onClick = onClick)
-        .semantics { contentDescription = "Battle now: ${battle.driverOneId} versus ${battle.driverTwoId}. Tap to focus." }
+        .semantics {
+            contentDescription = "Battle now: ${battle.driverOneId} versus ${battle.driverTwoId}. Tap to focus."
+            role = Role.Button
+        }
         .background(Signal)
         .padding(horizontal = 14.dp, vertical = 10.dp),
     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -171,8 +178,8 @@ private fun Masthead(state: ScreenState) {
 
 @Composable
 private fun Brand() = Column {
-        Text("RACE", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 28.sp, letterSpacing = 3.sp)
-        Text("LENS / POCKET", color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.5.sp)
+        Text("RACE LENS", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 2.sp)
+        Text("POCKET", color = Signal, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 10.sp, letterSpacing = 1.5.sp)
 }
 
 @Composable
@@ -180,6 +187,9 @@ private fun StatusStamp(state: ScreenState) {
     val live = state.frame.target.mode == WatchMode.LIVE
     val stale = state.frame.freshness == Freshness.STALE
     val detail = when {
+        !live && state.loading -> "SEEKING"
+        !live && state.replayPlaying -> "${state.replaySpeed}X · PLAYING"
+        !live -> "${state.replaySpeed}X · PAUSED"
         stale && state.live.status in setOf("finishing", "replay_ready", "failed", "idle") -> state.live.detail
         stale -> "Last frame held"
         else -> state.live.detail
@@ -210,7 +220,7 @@ private fun ActionRail(state: ScreenState, chooseReplay: (String) -> Unit, enter
             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             shape = RoundedCornerShape(2.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Signal, contentColor = Ink),
-        ) { Text(if (state.frame.target.mode == WatchMode.REPLAY && state.frame.target.sessionId == recommendation) "REPLAY LOADED" else "WATCH REPLAY", fontWeight = FontWeight.Black, fontSize = 12.sp) }
+        ) { Text("REPLAY", fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1) }
         Button(
             onClick = enterLive,
             enabled = state.live.available,
@@ -245,7 +255,7 @@ private fun Conditions(weather: Weather) = Column(
     verticalArrangement = Arrangement.spacedBy(2.dp),
 ) {
     Text("CONDITIONS", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 9.sp)
-    Text("${if (weather.rainfall == true) "RAIN" else "DRY"}${weather.trackTempC?.let { " · TRACK ${it.toInt()}°" } ?: ""}${weather.airTempC?.let { " · AIR ${it.toInt()}°" } ?: ""}", color = Paper, fontFamily = FontFamily.Monospace, fontSize = 10.sp, maxLines = 2)
+    Text(conditionsSummary(weather), color = Paper, fontFamily = FontFamily.Monospace, fontSize = 10.sp, maxLines = 2)
 }
 
 @Composable
@@ -282,46 +292,61 @@ private fun FeedPanel(items: List<FeedItem>) {
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var playingId by remember { mutableStateOf<String?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
+    val largeText = LocalDensity.current.fontScale > 1.4f
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) {
-            player?.setOnPreparedListener(null); player?.setOnErrorListener(null); player?.setOnCompletionListener(null)
-            player?.release(); player = null; playingId = null
+            releasePlayer(player); player = null; playingId = null
         } }
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
-            player?.setOnPreparedListener(null); player?.setOnErrorListener(null); player?.setOnCompletionListener(null)
-            player?.release()
+            releasePlayer(player)
         }
     }
     Column(modifier = Modifier.fillMaxWidth().background(Steel).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("FEED / RADIO", color = Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
         visibleFeedItems(items).forEach { item ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.lap?.let { "L$it" } ?: "•", color = Signal, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(44.dp), maxLines = 1)
-                Text(item.text, color = Paper, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                item.audioUrl?.let { url -> Button(onClick = {
-                    playbackError = null
-                    player?.setOnPreparedListener(null); player?.setOnErrorListener(null); player?.setOnCompletionListener(null)
-                    player?.release(); playingId = item.id
-                    val candidate = MediaPlayer(); player = candidate
-                    runCatching {
-                        candidate.setOnErrorListener { failed, _, _ ->
-                            if (player === failed) { failed.release(); player = null; playingId = null; playbackError = "Radio unavailable" }
-                            true
-                        }
-                        candidate.setOnCompletionListener { finished -> if (player === finished) { finished.release(); player = null; playingId = null } }
-                        candidate.setDataSource(url)
-                        candidate.setOnPreparedListener { prepared -> if (player === prepared) prepared.start() }
-                        candidate.prepareAsync()
-                    }.onFailure { if (player === candidate) { candidate.release(); player = null; playingId = null; playbackError = "Radio unavailable" } }
-                }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Play radio: ${item.text}" }) { Text(if (playingId == item.id) "PLAYING" else "RADIO", fontSize = 9.sp) } }
+            val playRadio = { url: String ->
+                playbackError = null
+                releasePlayer(player); playingId = item.id
+                val candidate = MediaPlayer(); player = candidate
+                runCatching {
+                    candidate.setOnErrorListener { failed, _, _ ->
+                        if (player === failed) { failed.release(); player = null; playingId = null; playbackError = "Radio unavailable" }
+                        true
+                    }
+                    candidate.setOnCompletionListener { finished -> if (player === finished) { finished.release(); player = null; playingId = null } }
+                    candidate.setDataSource(url)
+                    candidate.setOnPreparedListener { prepared -> if (player === prepared) prepared.start() }
+                    candidate.prepareAsync()
+                }.onFailure { if (player === candidate) { candidate.release(); player = null; playingId = null; playbackError = "Radio unavailable" } }
+            }
+            if (largeText && item.audioUrl != null) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.Top) { FeedText(item) }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    RadioButton(item, playingId) { playRadio(item.audioUrl) }
+                }
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
+                FeedText(item)
+                item.audioUrl?.let { url -> RadioButton(item, playingId) { playRadio(url) } }
             }
         }
         playbackError?.let { Text(it, color = Signal, fontSize = 10.sp) }
     }
 }
+
+@Composable
+private fun RowScope.FeedText(item: FeedItem) {
+    Text(item.lap?.let { "L$it" } ?: "•", color = Signal, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.width(44.dp), maxLines = 1)
+    Text(item.text, color = Paper, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+private fun RadioButton(item: FeedItem, playingId: String?, onClick: () -> Unit) = Button(
+    onClick = onClick,
+    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Play radio: ${item.text}" },
+) { Text(if (playingId == item.id) "PLAYING" else "RADIO", fontSize = 9.sp) }
 
 @Composable
 private fun ReplayControl(state: ScreenState, seek: (Long) -> Unit, beginSeek: () -> Unit, toggleReplay: () -> Unit, setReplaySpeed: (Int) -> Unit) {
@@ -344,9 +369,12 @@ private fun ReplayControl(state: ScreenState, seek: (Long) -> Unit, beginSeek: (
             listOf(1, 5, 10).forEach { speed ->
                 Button(
                     onClick = { setReplaySpeed(speed) },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
+                        selected = state.replaySpeed == speed
+                        contentDescription = "Replay speed ${speed}x"
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = if (state.replaySpeed == speed) Signal else Ink, contentColor = if (state.replaySpeed == speed) Ink else Paper),
-                ) { Text("${speed}x") }
+                ) { Text("${speed}×", fontSize = 11.sp, maxLines = 1) }
             }
         }
     }
@@ -369,7 +397,11 @@ private fun TimingList(state: ScreenState, toggleDriver: (String) -> Unit) {
         drivers.forEach { driver ->
             val selected = driver.id in state.frame.target.focusedDrivers
             Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { toggleDriver(driver.id) }.semantics { contentDescription = "Driver ${driver.id}, position ${driver.position ?: "unknown"}, ${if (selected) "selected" else "not selected"}" }.padding(vertical = 8.dp, horizontal = 4.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { toggleDriver(driver.id) }.semantics {
+                    contentDescription = "Driver ${driver.id}, position ${driver.position ?: "unknown"}"
+                    this.selected = selected
+                    role = Role.Button
+                }.padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${driver.position ?: "—"}", color = if (selected) Acid else Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, modifier = Modifier.width(36.dp), maxLines = 1)
@@ -412,3 +444,9 @@ private fun shortName(id: String): String {
 }
 private fun formatGap(seconds: Double?) = when { seconds == null -> "—"; seconds == 0.0 -> "LEADER"; else -> "+%.3f".format(Locale.ROOT, seconds) }
 private fun formatTime(ms: Long): String { val total = ms.coerceAtLeast(0) / 1_000; return "%d:%02d".format(total / 60, total % 60) }
+private fun releasePlayer(player: MediaPlayer?) {
+    player?.setOnPreparedListener(null)
+    player?.setOnErrorListener(null)
+    player?.setOnCompletionListener(null)
+    player?.release()
+}

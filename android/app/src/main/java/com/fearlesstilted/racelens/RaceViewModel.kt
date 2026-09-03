@@ -1,10 +1,9 @@
 package com.fearlesstilted.racelens
 
-import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +26,7 @@ data class ScreenState(
     val message: String? = null,
 )
 
-class RaceViewModel(application: Application) : AndroidViewModel(application) {
+class RaceViewModel : ViewModel() {
     private val origin = DEFAULT_ORIGIN
     private var refreshJob: Job? = null
     private var replayJob: Job? = null
@@ -154,7 +153,7 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
         replayJob?.cancel()
         feedJob?.cancel()
         val changedSession = next.sessionId != state.frame.target.sessionId || next.mode != state.frame.target.mode
-        val frame = if (changedSession) reduceWatch(state.frame, WatchAction.Navigate(next)) else state.frame.copy(target = next, freshness = Freshness.FRESH)
+        val frame = navigateWatchFrame(state.frame, next)
         state = state.copy(
             frame = frame,
             feed = if (changedSession) emptyList() else state.feed,
@@ -181,7 +180,7 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
                 val resolvedAt = resolvedReplayStart(atMs, timeline, snapshot.drivers.isNotEmpty())
                 if (resolvedAt != atMs) snapshot = withContext(Dispatchers.IO) { api.replayState(target.sessionId, resolvedAt) }
                 if (acceptsReplayCompletion(generation, replayGeneration, target, state.frame.target)) {
-                    state = state.copy(frame = state.frame.copy(timeline = timeline, snapshot = snapshot), loading = false, message = null)
+                    state = state.copy(frame = acceptSnapshot(state.frame, snapshot).copy(timeline = timeline), loading = false, message = null)
                     loadReplayFeed(generation, target, snapshot.atMs)
                     val battle = withContext(Dispatchers.IO) { runCatching { api.replayBattle(target.sessionId, snapshot.atMs) }.getOrNull() }
                     if (acceptsReplayCompletion(generation, replayGeneration, target, state.frame.target)) {
@@ -254,7 +253,7 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
                 api.streamReplay(sessionId, snapshot.atMs, state.replaySpeed) { next -> viewModelScope.launch {
                     if (foreground && state.replayPlaying && acceptsStreamEvent(generation, replayGeneration, sessionId, state.frame.target)) {
                         state = state.copy(
-                            frame = state.frame.copy(target = state.frame.target.copy(replayMs = next.atMs), snapshot = next),
+                            frame = acceptSnapshot(state.frame.copy(target = state.frame.target.copy(replayMs = next.atMs)), next),
                             connecting = false,
                             message = null,
                         )
