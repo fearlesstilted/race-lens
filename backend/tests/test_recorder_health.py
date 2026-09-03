@@ -28,3 +28,15 @@ def test_health_rejects_a_stalled_recording(tmp_path):
 
     with pytest.raises(RuntimeError, match="stale file"):
         check(tmp_path, now)
+
+
+def test_health_rejects_a_worker_without_a_schedule(tmp_path):
+    now = datetime(2026, 9, 3, 20, tzinfo=UTC)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "heartbeat").touch()
+    (state_dir / "schedule-failure").write_text("schedule host offline\n", encoding="utf-8")
+    os.utime(state_dir / "heartbeat", (now.timestamp(), now.timestamp()))
+
+    with pytest.raises(RuntimeError, match="schedule unavailable"):
+        check(tmp_path, now)

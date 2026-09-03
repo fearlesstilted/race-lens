@@ -23,6 +23,8 @@ def _require_fresh(path: Path, now: datetime, max_age: int) -> None:
 
 def check(base: Path, now: datetime | None = None) -> None:
     current = now or datetime.now(UTC)
+    if (base / "state" / "schedule-failure").is_file():
+        raise RuntimeError("schedule unavailable")
     state = StateStore(base / "state" / "recorder.json").load()
     processing = (
         any(item.phase is Phase.PROCESSING for item in state.sessions.values())
