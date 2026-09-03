@@ -139,6 +139,8 @@ class Recorder:
         self.sleep = sleep
         self.store = StateStore(config.state_dir / "recorder.json")
         self.heartbeat = config.state_dir / "heartbeat"
+        self.schedule_cache = config.state_dir / "schedule.json"
+        self.schedule_failure = config.state_dir / "schedule-failure"
         self.remote_processing = config.state_dir / "remote-processing"
         self._schedule: list[ScheduledSession] = []
         self._schedule_loaded_at: datetime | None = None
@@ -162,6 +164,44 @@ class Recorder:
 
     def _beat(self) -> None:
         self.heartbeat.touch()
+
+    def _load_schedule_cache(self) -> list[ScheduledSession]:
+        if self.schedule_cache.stat().st_size > 1024 * 1024:
+            raise ValueError("schedule cache is too large")
+        value = json.loads(self.schedule_cache.read_text(encoding="utf-8"))
+        if not isinstance(value, dict) or value.get("version") != 1:
+            raise ValueError("invalid schedule cache")
+        rows = value.get("sessions")
+        if not isinstance(rows, list):
+            raise ValueError("invalid schedule cache")
+        return [
+            ScheduledSession(
+                int(row["year"]), int(row["round"]), str(row["event"]),
+                str(row["kind"]), datetime.fromisoformat(str(row["starts_at"])),
+            )
+            for row in rows
+        ]
+
+    def _save_schedule_cache(self, sessions: list[ScheduledSession]) -> None:
+        value = {
+            "version": 1,
+            "sessions": [
+                {
+                    "year": item.year,
+                    "round": item.round_number,
+                    "event": item.event_name,
+                    "kind": item.kind,
+                    "starts_at": item.starts_at.isoformat(),
+                }
+                for item in sessions
+            ],
+        }
+        temporary = self.schedule_cache.with_suffix(".tmp")
+        try:
+            temporary.write_text(json.dumps(value, separators=(",", ":")) + "\n", encoding="utf-8")
+            os.replace(temporary, self.schedule_cache)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def _paths(self, session: ScheduledSession) -> dict[str, Path]:
         stem = fixture_stem(session)
@@ -780,15 +820,30 @@ class Recorder:
         )
         if refresh:
             refreshed = []
+            try:
+                disk_cache = self._load_schedule_cache()
+            except (OSError, KeyError, TypeError, ValueError):
+                disk_cache = []
             for year in sorted(years):
                 try:
-                    refreshed.extend(load_fastf1_schedule(year))
+                    loaded = load_fastf1_schedule(year)
+                    if year == now.year and not loaded:
+                        raise RuntimeError(f"empty schedule for {year}")
+                    refreshed.extend(loaded)
                 except Exception:
                     cached = [session for session in self._schedule if session.year == year]
+                    if not cached:
+                        cached = [session for session in disk_cache if session.year == year]
                     if cached:
                         refreshed.extend(cached)
                     elif year == now.year:
+                        self.schedule_failure.write_text("schedule unavailable\n", encoding="utf-8")
                         raise
+            try:
+                self._save_schedule_cache(refreshed)
+            except OSError as exc:
+                logger.warning("failed to persist schedule cache: %s", type(exc).__name__)
+            self.schedule_failure.unlink(missing_ok=True)
             self._schedule_loaded_at = now
             self._schedule_years = years
             self._schedule = refreshed

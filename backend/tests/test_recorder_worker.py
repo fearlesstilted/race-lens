@@ -298,6 +298,64 @@ def test_idle_worker_reports_the_next_capture_window(tmp_path, monkeypatch):
     )
 
 
+def test_restart_uses_persisted_schedule_when_fastf1_is_unavailable(tmp_path, monkeypatch):
+    now = datetime(2026, 9, 3, 20, tzinfo=UTC)
+    session = ScheduledSession(
+        2026, 13, "Italian Grand Prix", "FP1", datetime(2026, 9, 4, 10, 30, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule", lambda _year: [session],
+    )
+    first = Recorder(_config(tmp_path), now=lambda: now)
+    assert first.run_once().startswith("idle: next capture 2026-13-fp1")
+
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule",
+        lambda _year: (_ for _ in ()).throw(OSError("schedule host offline")),
+    )
+    restarted = Recorder(_config(tmp_path), now=lambda: now)
+
+    assert restarted.run_once().startswith("idle: next capture 2026-13-fp1")
+
+
+def test_missing_schedule_cache_is_marked_for_healthcheck(tmp_path, monkeypatch):
+    recorder = Recorder(_config(tmp_path), now=lambda: datetime(2026, 9, 3, tzinfo=UTC))
+    monkeypatch.setattr(
+        "racelens.recorder.worker.load_fastf1_schedule",
+        lambda _year: (_ for _ in ()).throw(OSError("schedule host offline")),
+    )
+
+    with pytest.raises(OSError, match="schedule host offline"):
+        recorder.run_once()
+
+    assert (tmp_path / "state" / "schedule-failure").is_file()
+
+
+def test_empty_current_schedule_is_not_reported_as_healthy(tmp_path, monkeypatch):
+    recorder = Recorder(_config(tmp_path), now=lambda: datetime(2026, 9, 3, tzinfo=UTC))
+    monkeypatch.setattr("racelens.recorder.worker.load_fastf1_schedule", lambda _year: [])
+
+    with pytest.raises(RuntimeError, match="empty schedule for 2026"):
+        recorder.run_once()
+
+    assert (tmp_path / "state" / "schedule-failure").is_file()
+
+
+def test_schedule_cache_write_failure_does_not_block_capture_selection(tmp_path, monkeypatch):
+    now = datetime(2026, 9, 3, 20, tzinfo=UTC)
+    session = ScheduledSession(
+        2026, 13, "Italian Grand Prix", "FP1", datetime(2026, 9, 4, 10, 30, tzinfo=UTC),
+    )
+    recorder = Recorder(_config(tmp_path), now=lambda: now)
+    monkeypatch.setattr("racelens.recorder.worker.load_fastf1_schedule", lambda _year: [session])
+    monkeypatch.setattr(
+        recorder, "_save_schedule_cache",
+        lambda _sessions: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    assert recorder.run_once().startswith("idle: next capture 2026-13-fp1")
+
+
 def test_idle_worker_processes_one_durable_historical_request(tmp_path, monkeypatch):
     now = datetime(2026, 1, 10, tzinfo=UTC)
     historical = ScheduledSession(
@@ -308,7 +366,7 @@ def test_idle_worker_processes_one_durable_historical_request(tmp_path, monkeypa
     recorder.remote_queue.enqueue(historical.session_id, fixture_stem(historical))
     monkeypatch.setattr(
         "racelens.recorder.worker.load_fastf1_schedule",
-        lambda year: [historical] if year == 2024 else [],
+        lambda year: [historical] if year == 2024 else [SESSION],
     )
 
     def process_requested(session, replay_id):
