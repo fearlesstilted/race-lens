@@ -10,6 +10,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 import racelens.object_storage as storage  # noqa: E402
+from racelens.adapters.f1live_adapter import ingest_f1live  # noqa: E402
 from racelens.events.models import WEATHER_BOUNDS  # noqa: E402
 from racelens.object_storage import StorageError, publish_session  # noqa: E402
 from racelens.recorder.schedule import ScheduledSession  # noqa: E402
@@ -873,6 +874,58 @@ def test_live_stream_sets_sse_buffering_headers(monkeypatch):
     assert response.headers["x-accel-buffering"] == "no"
 
 
+@pytest.mark.parametrize(("messages", "expected_statuses"), [
+    pytest.param(
+        ["SAFETY CAR DEPLOYED", "SAFETY CAR IN THIS LAP", "TRACK CLEAR"],
+        [(0, "started"), (60_000, "safety_car"), (80_000, "started")],
+        id="safety-car",
+    ),
+    pytest.param(
+        ["VSC DEPLOYED", "VSC ENDING", "TRACK CLEAR"],
+        [(0, "started"), (60_000, "vsc"), (80_000, "started")],
+        id="vsc-ending",
+    ),
+    pytest.param(
+        ["VSC DEPLOYED", "VIRTUAL SAFETY CAR ENDING", "TRACK CLEAR"],
+        [(0, "started"), (60_000, "vsc"), (80_000, "started")],
+        id="virtual-safety-car-ending",
+    ),
+    pytest.param(
+        ["RED FLAG", "TRACK CLEAR"],
+        [(0, "started"), (60_000, "red_flag")],
+        id="red-flag",
+    ),
+])
+def test_live_race_control_resumes_only_on_track_clear(
+    tmp_path,
+    messages,
+    expected_statuses,
+):
+    lines = _feed_prefix()
+    for index, message in enumerate(messages):
+        timestamp = f"2026-08-23T13:01:{index * 10:02d}Z"
+        lines.append(_line(
+            "RaceControlMessages",
+            {"Messages": [{"Utc": timestamp, "Category": "Flag", "Message": message}]},
+            timestamp,
+        ))
+    feed = tmp_path / "status.txt"
+    _write_feed(feed, lines)
+
+    events = ingest_f1live(str(feed), session_id="test")
+
+    assert [
+        (item.session_time_ms, item.payload["status"])
+        for item in events
+        if item.type == "SessionStatusChanged"
+    ] == expected_statuses
+    assert [
+        item.payload["message"]
+        for item in events
+        if item.type == "RaceControlMessage"
+    ] == messages
+
+
 def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
     """One deterministic race covers the browser Live contract end to end."""
     import racelens.api as api
@@ -1012,6 +1065,9 @@ def test_complete_live_weekend_lifecycle_smoke(tmp_path, monkeypatch):
         _line("RaceControlMessages", {"Messages": [{
             "Utc": "2026-08-23T13:04:10Z", "Category": "Flag", "Message": "VSC ENDING",
         }]}, "2026-08-23T13:04:10Z"),
+        _line("RaceControlMessages", {"Messages": [{
+            "Utc": "2026-08-23T13:04:11Z", "Category": "Flag", "Message": "TRACK CLEAR",
+        }]}, "2026-08-23T13:04:11Z"),
         _line("RaceControlMessages", {"Messages": [{
             "Utc": "2026-08-23T13:04:12Z", "Category": "Flag",
             "Message": "BLACK AND WHITE FLAG FOR CAR 4 - DRIVING ERRATICALLY",

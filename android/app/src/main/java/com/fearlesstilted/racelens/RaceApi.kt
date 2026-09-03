@@ -22,7 +22,8 @@ data class DriverTiming(
     val laps: Int,
 )
 data class Weather(val rainfall: Boolean?, val trackTempC: Double?, val airTempC: Double?)
-data class RaceSnapshot(val atMs: Long, val lap: Int, val status: String, val drivers: List<DriverTiming>, val weather: Weather? = null, val sessionName: String? = null)
+data class Battle(val driverOneId: String, val driverTwoId: String, val intervalSeconds: Double?)
+data class RaceSnapshot(val atMs: Long, val lap: Int, val status: String, val drivers: List<DriverTiming>, val weather: Weather? = null, val sessionName: String? = null, val battle: Battle? = null)
 data class LiveAvailability(
     val available: Boolean,
     val detail: String,
@@ -48,6 +49,10 @@ class RaceApi(private val origin: String) {
 
     fun replayState(raceId: String, atMs: Long): RaceSnapshot = parseRaceState(
         getObject("/api/sessions/${encoded(raceId)}/state?at_ms=${atMs.coerceAtLeast(0)}")
+    )
+
+    fun replayBattle(raceId: String, atMs: Long): Battle? = parseBattles(
+        getObject("/api/sessions/${encoded(raceId)}/battles?at_ms=${atMs.coerceAtLeast(0)}").optJSONArray("battles")
     )
 
     fun liveStatus(): LiveAvailability {
@@ -131,8 +136,29 @@ private fun parseRaceState(json: JSONObject): RaceSnapshot {
         },
         weather = weather,
         sessionName = nullableJsonString(json.opt("session_name")),
+        battle = parseBattles(json.optJSONArray("battles")),
     )
 }
+
+private fun parseBattles(items: JSONArray?): Battle? {
+    if (items == null) return null
+    return parseBattleCandidates(buildList {
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index) ?: continue
+            val ids = item.optJSONArray("driver_ids")?.let { values ->
+                List(values.length()) { nullableJsonString(values.opt(it)).orEmpty() }
+            }.orEmpty()
+            val interval = (item.optJSONObject("evidence")?.opt("interval_s") as? Number)?.toDouble()
+            add(Triple(nullableJsonString(item.opt("type")), ids, interval))
+        }
+    })
+}
+
+internal fun parseBattleCandidates(candidates: List<Triple<String?, List<String>, Double?>>): Battle? =
+    candidates.firstNotNullOfOrNull { (type, drivers, interval) ->
+        drivers.takeIf { type == "BATTLE_DETECTED" && it.size == 2 && it.distinct().size == 2 && it.all(::isValidDriverId) }
+            ?.let { Battle(it[0], it[1], interval?.takeIf { value -> value.isFinite() && value >= 0 }) }
+    }
 
 private fun parseFeed(items: JSONArray): List<FeedItem> = buildList {
     for (index in 0 until items.length()) {
