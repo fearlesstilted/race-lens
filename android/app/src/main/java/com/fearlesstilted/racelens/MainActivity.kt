@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -88,7 +89,7 @@ private val Dim = Color(0xFF9CA49E)
 fun RaceLensApp(viewModel: RaceViewModel) = MaterialTheme(
     colorScheme = darkColorScheme(primary = Signal, secondary = Acid, background = Ink, surface = Steel),
 ) {
-    PocketScreen(viewModel.state, viewModel::chooseReplay, viewModel::enterLive, viewModel::seek, viewModel::toggleDriver, viewModel::focusBattle, viewModel::retry)
+    PocketScreen(viewModel.state, viewModel::chooseReplay, viewModel::enterLive, viewModel::seek, viewModel::beginSeek, viewModel::toggleReplay, viewModel::setReplaySpeed, viewModel::toggleDriver, viewModel::focusBattle, viewModel::retry)
 }
 
 @Composable
@@ -97,6 +98,9 @@ private fun PocketScreen(
     chooseReplay: (String) -> Unit,
     enterLive: () -> Unit,
     seek: (Long) -> Unit,
+    beginSeek: () -> Unit,
+    toggleReplay: () -> Unit,
+    setReplaySpeed: (Int) -> Unit,
     toggleDriver: (String) -> Unit,
     focusBattle: (Battle) -> Unit,
     retry: () -> Unit,
@@ -113,10 +117,9 @@ private fun PocketScreen(
             item { EmptyReady(state, chooseReplay) }
         } else {
             item { SessionTitle(state) }
-            state.frame.snapshot?.battle?.let { battle -> item { BattleNow(battle) { focusBattle(battle) } } }
-            item { FocusArea(state) }
+            item { NowArea(state, focusBattle) }
             if (state.feed.isNotEmpty()) item { FeedPanel(state.feed) }
-            if (target.mode == WatchMode.REPLAY) item { ReplayControl(state, seek) }
+            if (target.mode == WatchMode.REPLAY) item { ReplayControl(state, seek, beginSeek, toggleReplay, setReplaySpeed) }
             item { ClassificationLabel(state) }
             item { TimingList(state, toggleDriver) }
         }
@@ -138,6 +141,19 @@ private fun BattleNow(battle: Battle, onClick: () -> Unit) = Column(
     Text("BATTLE NOW", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 10.sp)
     Text("${battle.driverOneId}  /  ${battle.driverTwoId}${battle.intervalSeconds?.let { "  ·  ${"%.1f".format(Locale.ROOT, it)}S" } ?: ""}", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 18.sp)
     Text("TAP TO FOCUS", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+}
+
+@Composable
+private fun NowArea(state: ScreenState, focusBattle: (Battle) -> Unit) = Column(
+    modifier = Modifier.fillMaxWidth().background(Paper).padding(14.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+) {
+    Text("NOW", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
+    val selected = state.frame.target.focusedDrivers
+    val battle = state.frame.snapshot?.battle
+    if (selected.size == 2) FocusArea(state)
+    else if (battle != null) BattleNow(battle) { focusBattle(battle) }
+    else FocusArea(state)
 }
 
 @Composable
@@ -169,7 +185,17 @@ private fun StatusStamp(state: ScreenState) {
         else -> state.live.detail
     }
     Column(horizontalAlignment = Alignment.End) {
-        Text(if (live) if (stale) "LIVE / STALE" else "LIVE / NOW" else "REPLAY", color = if (stale) Signal else Acid, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            if (live) when {
+                state.connecting -> "LIVE / CONNECTING"
+                stale -> "LIVE / STALE"
+                else -> "LIVE / NOW"
+            } else "REPLAY",
+            color = if (stale) Signal else Acid,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+        )
         Text(detail.uppercase(), color = Dim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -227,7 +253,7 @@ private fun FocusArea(state: ScreenState) {
     val selected = state.frame.target.focusedDrivers
     val byId = state.frame.snapshot?.drivers?.associateBy { it.id }.orEmpty()
     val edge = focusEdge(selected.mapNotNull(byId::get))
-    Column(modifier = Modifier.fillMaxWidth().background(Paper).padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(if (selected.size == 2) "BATTLE FOCUS" else "FOCUS TWO DRIVERS", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp)
         if (selected.size == 2) Text(
             when {
@@ -298,17 +324,31 @@ private fun FeedPanel(items: List<FeedItem>) {
 }
 
 @Composable
-private fun ReplayControl(state: ScreenState, seek: (Long) -> Unit) {
+private fun ReplayControl(state: ScreenState, seek: (Long) -> Unit, beginSeek: () -> Unit, toggleReplay: () -> Unit, setReplaySpeed: (Int) -> Unit) {
     val timeline = state.frame.timeline ?: return
     val start = timeline.startMs.coerceAtLeast(0)
     val end = timeline.endMs.coerceAtLeast(start + 1)
     var scrub by remember(state.frame.target.sessionId, state.frame.snapshot?.atMs) { mutableFloatStateOf((state.frame.snapshot?.atMs ?: start).coerceIn(start, end).toFloat()) }
     Column(modifier = Modifier.fillMaxWidth().background(Steel).padding(12.dp)) {
-        Column(Modifier.fillMaxWidth()) {
-            Text("REPLAY POSITION", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-            Text("${formatTime(scrub.toLong())} / ${formatTime(end)}", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.align(Alignment.End))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = toggleReplay, enabled = !state.loading, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (state.replayPlaying) "PAUSE" else "PLAY")
+            }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                Text(if (state.connecting) "BUFFERING" else "REPLAY POSITION", color = Dim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                Text("${formatTime(scrub.toLong())} / ${formatTime(end)}", color = Paper, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
         }
-        Slider(value = scrub, onValueChange = { scrub = it }, onValueChangeFinished = { seek(scrub.toLong()) }, valueRange = start.toFloat()..end.toFloat(), modifier = Modifier.semantics { contentDescription = "Replay position" })
+        Slider(value = scrub, onValueChange = { beginSeek(); scrub = it }, onValueChangeFinished = { seek(scrub.toLong()) }, valueRange = start.toFloat()..end.toFloat(), modifier = Modifier.semantics { contentDescription = "Replay position"; stateDescription = formatTime(scrub.toLong()) })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(1, 5, 10).forEach { speed ->
+                Button(
+                    onClick = { setReplaySpeed(speed) },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (state.replaySpeed == speed) Signal else Ink, contentColor = if (state.replaySpeed == speed) Ink else Paper),
+                ) { Text("${speed}x") }
+            }
+        }
     }
 }
 

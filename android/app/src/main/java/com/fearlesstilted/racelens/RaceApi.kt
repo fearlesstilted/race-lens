@@ -7,11 +7,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicBoolean
 
 const val DEFAULT_ORIGIN = "https://race-lens.onrender.com"
 
 data class SessionSummary(val id: String, val source: String)
-data class Timeline(val startMs: Long, val endMs: Long)
+data class Timeline(
+    val startMs: Long,
+    val endMs: Long,
+    val lightsOutMs: Long = 0,
+)
 data class DriverTiming(
     val id: String,
     val position: Int?,
@@ -36,6 +41,9 @@ enum class LiveStreamResult { ENDED, CLOSED }
 class HttpStatusException(val status: Int, message: String) : Exception(message)
 
 class RaceApi(private val origin: String) {
+    private val streamCancelled = AtomicBoolean(false)
+    @Volatile private var streamConnection: HttpURLConnection? = null
+
     fun sessions(): List<SessionSummary> = getJson("/api/sessions").let { array ->
         List(array.length()) { index ->
             val item = array.getJSONObject(index)
@@ -43,8 +51,8 @@ class RaceApi(private val origin: String) {
         }
     }
 
-    fun timeline(raceId: String): Timeline = getObject("/api/sessions/${encoded(raceId)}/timeline").let {
-        Timeline(it.getLong("start_ms"), it.getLong("end_ms"))
+    fun timeline(raceId: String): Timeline = getObject("/api/sessions/${encoded(raceId)}/timeline").let { body ->
+        Timeline(body.getLong("start_ms"), body.getLong("end_ms"), body.optLong("lights_out_ms"))
     }
 
     fun replayState(raceId: String, atMs: Long): RaceSnapshot = parseRaceState(
@@ -69,8 +77,25 @@ class RaceApi(private val origin: String) {
     fun feed(raceId: String, atMs: Long): List<FeedItem> = parseFeed(getJson("/api/sessions/${encoded(raceId)}/feed?until_ms=${atMs.coerceAtLeast(0)}&limit=8"))
     fun liveFeed(): List<FeedItem> = parseFeed(getJson("/api/live/feed?limit=8"))
 
-    fun streamLive(onState: (RaceSnapshot) -> Unit): LiveStreamResult {
-        val connection = open("/api/live/stream?tick_s=2")
+    fun streamLive(onState: (RaceSnapshot) -> Unit) = stream("/api/live/stream?tick_s=2", onState)
+
+    fun streamReplay(raceId: String, fromMs: Long, speed: Int, onState: (RaceSnapshot) -> Unit) =
+        stream(replayStreamPath(raceId, fromMs, speed), onState)
+
+    fun cancelStream() {
+        streamCancelled.set(true)
+        streamConnection?.disconnect()
+    }
+
+    private fun stream(path: String, onState: (RaceSnapshot) -> Unit): LiveStreamResult {
+        if (streamCancelled.get()) return LiveStreamResult.CLOSED
+        val connection = open(path)
+        streamConnection = connection
+        if (streamCancelled.get()) {
+            connection.disconnect()
+            streamConnection = null
+            return LiveStreamResult.CLOSED
+        }
         return try {
             connection.readTimeout = 35_000
             checkResponse(connection)
@@ -87,6 +112,7 @@ class RaceApi(private val origin: String) {
             LiveStreamResult.CLOSED
         } finally {
             connection.disconnect()
+            if (streamConnection === connection) streamConnection = null
         }
     }
 
@@ -183,6 +209,8 @@ private fun safeRadioUrl(value: String): String? = runCatching {
     value.takeIf { value.length <= 2048 && uri.scheme == "https" && uri.host == "livetiming.formula1.com" && uri.path.startsWith("/static/") }
 }.getOrNull()
 private fun encoded(value: String) = URLEncoder.encode(value, StandardCharsets.UTF_8.name())
+internal fun replayStreamPath(raceId: String, fromMs: Long, speed: Int) =
+    "/api/sessions/${encoded(raceId)}/stream?speed=${normalizeReplaySpeed(speed)}&from_ms=${fromMs.coerceAtLeast(0)}&tick_ms=1000"
 
 private fun checkResponse(connection: HttpURLConnection) {
     val status = connection.responseCode
