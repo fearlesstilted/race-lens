@@ -68,7 +68,10 @@ export function useTrackAnimation({
   const positionsDataRef = useRef<PositionsData | null>(null)
   const progressPathRef = useRef<[number, number][] | undefined>(undefined)
   const atMsRef = useRef(atMs)
-  useEffect(() => { atMsRef.current = atMs }, [atMs])
+  useEffect(() => {
+    atMsRef.current = atMs
+    localAtMsRef.current = atMs
+  }, [atMs])
 
   // Render current positions imperatively via SVG element refs.
   function renderPositions(overrideAtMs?: number) {

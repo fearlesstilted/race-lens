@@ -14,6 +14,7 @@ import { useSnapshotLoader } from './useSnapshotLoader'
 
 /** Debounce before loading a snapshot while the user is scrubbing. */
 const SCRUB_DEBOUNCE_MS = 150
+const POSITIONS_RETRY_MS = 3_000
 
 export type { Lang, Level } from './replayTypes'
 
@@ -83,6 +84,16 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const languageRequestSeq = useRef(0)
   const positionsRequestSeq = useRef(0)
   const positionsLoadingRef = useRef(false)
+  const positionsRetryRef = useRef<number | null>(null)
+
+  const cancelPositionsRequest = useCallback(() => {
+    positionsRequestSeq.current++
+    positionsLoadingRef.current = false
+    if (positionsRetryRef.current !== null) {
+      window.clearTimeout(positionsRetryRef.current)
+      positionsRetryRef.current = null
+    }
+  }, [])
 
   const set = useMemo<ReplaySetters>(() => ({
     setState, setInsights, setBattles, setRecentPasses, setFeed, setCommentary,
@@ -108,26 +119,44 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
   const { closeStream, openStream } = useReplayStream(active, getStreamUrl, sessionId, set)
   const { greenFlag, greenFlagText } = useGreenFlag(atMs, markers, timeline?.lights_out_ms ?? 0)
 
-  const loadPositionsWindow = useCallback((sid: string, centerMs: number) => {
+  const loadPositionsWindow = useCallback((sid: string, centerMs: number, supersedeRetry = false) => {
     if (positionsLoadingRef.current) return
-    positionsLoadingRef.current = true
+    if (positionsRetryRef.current !== null) {
+      if (!supersedeRetry) return
+      window.clearTimeout(positionsRetryRef.current)
+      positionsRetryRef.current = null
+    }
     const seq = ++positionsRequestSeq.current
-    fetch(apiUrl(`/api/sessions/${encodeURIComponent(sid)}/positions?at_ms=${Math.max(0, Math.round(centerMs))}`))
-      .then((response) => response.ok ? response.json() as Promise<PositionsData> : null)
-      .then((data) => {
-        if (seq === positionsRequestSeq.current) setPositionsData(data)
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (seq === positionsRequestSeq.current) positionsLoadingRef.current = false
-      })
+    const url = apiUrl(`/api/sessions/${encodeURIComponent(sid)}/positions?at_ms=${Math.max(0, Math.round(centerMs))}`)
+    const attempt = () => {
+      positionsLoadingRef.current = true
+      fetch(url)
+        .then((response) => {
+          if (response.ok) return response.json() as Promise<PositionsData>
+          if (response.status >= 500) throw new Error(`positions ${response.status}`)
+          return null
+        })
+        .then((data) => {
+          if (seq !== positionsRequestSeq.current) return
+          setPositionsData(data)
+          positionsLoadingRef.current = false
+        })
+        .catch(() => {
+          if (seq !== positionsRequestSeq.current) return
+          positionsLoadingRef.current = false
+          positionsRetryRef.current = window.setTimeout(() => {
+            positionsRetryRef.current = null
+            attempt()
+          }, POSITIONS_RETRY_MS)
+        })
+    }
+    attempt()
   }, [])
 
   // Source change: reset everything, then load appropriately
   useEffect(() => {
     languageRequestSeq.current++
-    positionsRequestSeq.current++
-    positionsLoadingRef.current = false
+    cancelPositionsRequest()
     if (scrubTimeoutRef.current !== null) {
       window.clearTimeout(scrubTimeoutRef.current)
       scrubTimeoutRef.current = null
@@ -182,6 +211,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
 
     return () => {
       cancelled = true
+      cancelPositionsRequest()
       if (scrubTimeoutRef.current !== null) {
         window.clearTimeout(scrubTimeoutRef.current)
         scrubTimeoutRef.current = null
@@ -203,9 +233,9 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
     if (frameCount === 0) return
     const windowEndMs = positionsData.start_ms + (frameCount - 1) * positionsData.tick_ms
     if (atMs < positionsData.start_ms || atMs >= windowEndMs - 30_000) {
-      loadPositionsWindow(sessionId, atMs)
+      loadPositionsWindow(sessionId, atMs, !playing)
     }
-  }, [atMs, loadPositionsWindow, positionsData, sessionId])
+  }, [atMs, loadPositionsWindow, playing, positionsData, sessionId])
 
   // Re-fetch feed + commentary when lang/level change (without resetting position).
   useEffect(() => {
@@ -247,10 +277,11 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       if (scrubTimeoutRef.current !== null) window.clearTimeout(scrubTimeoutRef.current)
       scrubTimeoutRef.current = window.setTimeout(() => {
         scrubTimeoutRef.current = null
+        if (sessionId && !positionsData) loadPositionsWindow(sessionId, nextAtMs, true)
         void loadSnapshot(nextAtMs, lang, level)
       }, SCRUB_DEBOUNCE_MS)
     },
-    [closeStream, isReplay, lang, level, loadSnapshot],
+    [closeStream, isReplay, lang, level, loadPositionsWindow, loadSnapshot, positionsData, sessionId],
   )
 
   const play = useCallback(() => {
