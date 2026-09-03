@@ -35,6 +35,22 @@ class RaceReducerTest {
     }
 
     @Test
+    fun driverTapsKeepTheLatestTwoSelections() {
+        var selected = emptyList<String>()
+
+        selected = toggleFocusedDriver(selected, "ANT")
+        assertEquals(listOf("ANT"), selected)
+        selected = toggleFocusedDriver(selected, "HAM")
+        assertEquals(listOf("ANT", "HAM"), selected)
+        selected = toggleFocusedDriver(selected, "RUS")
+        assertEquals(listOf("HAM", "RUS"), selected)
+        selected = toggleFocusedDriver(selected, "NOR")
+        assertEquals(listOf("RUS", "NOR"), selected)
+        selected = toggleFocusedDriver(selected, "RUS")
+        assertEquals(listOf("NOR"), selected)
+    }
+
+    @Test
     fun staleReplayCompletionCannotReplaceNewTarget() {
         val target = WatchTarget(1, WatchMode.REPLAY, "spa_2026_race", 0, emptyList())
         assertEquals(true, acceptsReplayCompletion(2, 2, target, target))
@@ -53,6 +69,17 @@ class RaceReducerTest {
         assertEquals(true, shouldResumeReplay(loading = true, snapshot = RaceSnapshot(1, 1, "green", emptyList())))
         assertEquals(true, shouldResumeReplay(loading = false, snapshot = null))
         assertEquals(false, shouldResumeReplay(loading = false, snapshot = RaceSnapshot(1, 1, "green", emptyList())))
+    }
+
+    @Test
+    fun replayTimelineIsReusedOnlyForTheSameSession() {
+        val target = WatchTarget(1, WatchMode.REPLAY, "spa_2026_race", 12_000, emptyList())
+        val timeline = Timeline(1_000, 20_000)
+        val frame = WatchFrame(target.copy(replayMs = 0), timeline = timeline)
+
+        assertEquals(timeline, reusableReplayTimeline(frame, target))
+        assertNull(reusableReplayTimeline(frame, target.copy(sessionId = "monza_2026_race")))
+        assertNull(reusableReplayTimeline(frame, target.copy(mode = WatchMode.LIVE, replayMs = null)))
     }
 
     @Test
@@ -85,6 +112,29 @@ class RaceReducerTest {
     fun replayReadyIsNotPresentedAsStillPreparing() {
         assertEquals("Live ended; replay is preparing", liveStatusDetail("finishing", false, null))
         assertEquals("Live ended; replay ready", liveStatusDetail("replay_ready", false, null))
+    }
+
+    @Test
+    fun battleParserSkipsMalformedEntriesAndKeepsTheFirstValidBattle() {
+        val battle = parseBattleCandidates(listOf(
+            Triple("BATTLE_DETECTED", listOf("NOR"), 0.2),
+            Triple("OTHER", listOf("VER", "LEC"), 0.4),
+            Triple("BATTLE_DETECTED", listOf("NOR", "ANT"), 0.8),
+            Triple("BATTLE_DETECTED", listOf("HAM", "RUS"), 1.1),
+        ))
+
+        assertEquals(Battle("NOR", "ANT", 0.8), battle)
+        assertNull(parseBattleCandidates(listOf(Triple("BATTLE_DETECTED", listOf("NOR"), null))))
+    }
+
+    @Test
+    fun battleFocusReplacesTheExistingPair() {
+        val frame = WatchFrame(WatchTarget(1, WatchMode.REPLAY, "spa_2026_race", 0, listOf("VER", "LEC")))
+        val battle = Battle("NOR", "ANT", null)
+
+        val focused = reduceWatch(frame, WatchAction.Focus(listOf(battle.driverOneId, battle.driverTwoId)))
+
+        assertEquals(listOf("NOR", "ANT"), focused.target.focusedDrivers)
     }
 
     @Test

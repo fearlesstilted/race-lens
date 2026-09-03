@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ data class ScreenState(
 
 class RaceViewModel(application: Application) : AndroidViewModel(application) {
     private val origin = DEFAULT_ORIGIN
+    private var refreshJob: Job? = null
     private var replayJob: Job? = null
     private var replayGeneration = 0L
     private var liveJob: Job? = null
@@ -40,18 +42,20 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
     init { refresh() }
 
     fun refresh() {
-        viewModelScope.launch {
-            state = state.copy(loading = true, message = null)
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            state = state.copy(loading = state.frame.target.sessionId.isBlank(), message = null)
             val api = RaceApi(origin)
-            val sessions = withContext(Dispatchers.IO) { runCatching { api.sessions() } }
-            val live = withContext(Dispatchers.IO) { runCatching { api.liveStatus() } }
-            state = state.copy(
-                sessions = sessions.getOrElse { state.sessions },
-                live = live.getOrElse { LiveAvailability(false, "Live status unavailable", null) },
-                loading = false,
-                message = sessions.exceptionOrNull()?.let { "Replay catalog unavailable" },
-            )
-            if (state.frame.target.sessionId.isBlank()) recommendedReplayId(state.sessions)?.let(::chooseReplay)
+            val sessions = async(Dispatchers.IO) { runCatching { api.sessions() } }
+            val live = async(Dispatchers.IO) { runCatching { api.liveStatus() } }
+            val loadedSessions = sessions.await()
+            state = state.copy(sessions = loadedSessions.getOrElse { state.sessions })
+            if (state.frame.target.sessionId.isBlank()) {
+                recommendedReplayId(state.sessions)?.let(::chooseReplay) ?: run {
+                    state = state.copy(loading = false, message = loadedSessions.exceptionOrNull()?.let { "Replay catalog unavailable" })
+                }
+            }
+            state = state.copy(live = live.await().getOrElse { LiveAvailability(false, "Live status unavailable", null) })
             if (foreground && state.frame.target.mode == WatchMode.LIVE && state.live.available) startLiveStream()
         }
     }
@@ -65,9 +69,11 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleDriver(driverId: String) {
         val focused = state.frame.target.focusedDrivers
-        state = state.copy(frame = reduceWatch(state.frame, WatchAction.Focus(
-            if (driverId in focused) focused - driverId else focused + driverId,
-        )))
+        state = state.copy(frame = reduceWatch(state.frame, WatchAction.Focus(toggleFocusedDriver(focused, driverId))))
+    }
+
+    fun focusBattle(battle: Battle) {
+        state = state.copy(frame = reduceWatch(state.frame, WatchAction.Focus(listOf(battle.driverOneId, battle.driverTwoId))))
     }
 
     fun enterLive() {
@@ -92,12 +98,15 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onForeground() {
         foreground = true
+        if (refreshJob?.isActive != true) refresh()
         if (state.frame.target.mode == WatchMode.LIVE) startLiveStream()
-        else if (shouldResumeReplay(state.loading, state.frame.snapshot)) loadReplay(state.frame.target)
+        else if (state.frame.target.sessionId.isNotBlank() && shouldResumeReplay(state.loading, state.frame.snapshot)) loadReplay(state.frame.target)
     }
 
     fun onBackground() {
         foreground = false
+        refreshJob?.cancel()
+        refreshJob = null
         liveGeneration++
         liveJob?.cancel()
         liveJob = null
@@ -126,16 +135,21 @@ class RaceViewModel(application: Application) : AndroidViewModel(application) {
         if (target.sessionId.isBlank()) return
         replayJob?.cancel()
         val generation = ++replayGeneration
+        val knownTimeline = reusableReplayTimeline(state.frame, target)
         state = state.copy(loading = true, message = null)
         replayJob = viewModelScope.launch {
             try {
                 val api = RaceApi(origin)
-                val timeline = withContext(Dispatchers.IO) { api.timeline(target.sessionId) }
+                val timeline = knownTimeline ?: withContext(Dispatchers.IO) { api.timeline(target.sessionId) }
                 val atMs = (target.replayMs ?: 0).coerceIn(timeline.startMs.coerceAtLeast(0), timeline.endMs)
                 val snapshot = withContext(Dispatchers.IO) { api.replayState(target.sessionId, atMs) }
                 if (acceptsReplayCompletion(generation, replayGeneration, target, state.frame.target)) {
                     state = state.copy(frame = state.frame.copy(timeline = timeline, snapshot = snapshot), loading = false, message = null)
                     loadReplayFeed(generation, target, snapshot.atMs)
+                    val battle = withContext(Dispatchers.IO) { runCatching { api.replayBattle(target.sessionId, snapshot.atMs) }.getOrNull() }
+                    if (acceptsReplayCompletion(generation, replayGeneration, target, state.frame.target)) {
+                        state = state.copy(frame = state.frame.copy(snapshot = state.frame.snapshot?.copy(battle = battle)))
+                    }
                 }
             } catch (_: CancellationException) {
                 throw CancellationException()

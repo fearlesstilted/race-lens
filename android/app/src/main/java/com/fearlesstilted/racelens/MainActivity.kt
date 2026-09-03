@@ -88,7 +88,7 @@ private val Dim = Color(0xFF9CA49E)
 fun RaceLensApp(viewModel: RaceViewModel) = MaterialTheme(
     colorScheme = darkColorScheme(primary = Signal, secondary = Acid, background = Ink, surface = Steel),
 ) {
-    PocketScreen(viewModel.state, viewModel::chooseReplay, viewModel::enterLive, viewModel::seek, viewModel::toggleDriver, viewModel::retry)
+    PocketScreen(viewModel.state, viewModel::chooseReplay, viewModel::enterLive, viewModel::seek, viewModel::toggleDriver, viewModel::focusBattle, viewModel::retry)
 }
 
 @Composable
@@ -98,6 +98,7 @@ private fun PocketScreen(
     enterLive: () -> Unit,
     seek: (Long) -> Unit,
     toggleDriver: (String) -> Unit,
+    focusBattle: (Battle) -> Unit,
     retry: () -> Unit,
 ) {
     val target = state.frame.target
@@ -112,6 +113,7 @@ private fun PocketScreen(
             item { EmptyReady(state, chooseReplay) }
         } else {
             item { SessionTitle(state) }
+            state.frame.snapshot?.battle?.let { battle -> item { BattleNow(battle) { focusBattle(battle) } } }
             item { FocusArea(state) }
             if (state.feed.isNotEmpty()) item { FeedPanel(state.feed) }
             if (target.mode == WatchMode.REPLAY) item { ReplayControl(state, seek) }
@@ -120,6 +122,22 @@ private fun PocketScreen(
         }
         item { Text("OPEN A RACE LENS POCKET LINK TO HAND OFF A SESSION. THIS APP FETCHES DATA LOCALLY.", color = Dim, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(bottom = 16.dp)) }
     }
+}
+
+@Composable
+private fun BattleNow(battle: Battle, onClick: () -> Unit) = Column(
+    modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 48.dp)
+        .clickable(onClick = onClick)
+        .semantics { contentDescription = "Battle now: ${battle.driverOneId} versus ${battle.driverTwoId}. Tap to focus." }
+        .background(Signal)
+        .padding(horizontal = 14.dp, vertical = 10.dp),
+    verticalArrangement = Arrangement.spacedBy(2.dp),
+) {
+    Text("BATTLE NOW", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 10.sp)
+    Text("${battle.driverOneId}  /  ${battle.driverTwoId}${battle.intervalSeconds?.let { "  ·  ${"%.1f".format(Locale.ROOT, it)}S" } ?: ""}", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 18.sp)
+    Text("TAP TO FOCUS", color = Ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 9.sp)
 }
 
 @Composable

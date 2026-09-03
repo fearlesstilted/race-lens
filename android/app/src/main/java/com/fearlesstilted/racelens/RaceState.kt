@@ -5,6 +5,7 @@ import kotlin.math.abs
 
 private val sessionIdPattern = Regex("^[a-z0-9][a-z0-9_-]{0,79}$")
 private val driverIdPattern = Regex("^[A-Z0-9]{2,5}$")
+internal fun isValidDriverId(value: String) = driverIdPattern.matches(value)
 
 enum class WatchMode { REPLAY, LIVE }
 enum class Freshness { FRESH, STALE }
@@ -45,6 +46,13 @@ fun acceptsReplayCompletion(generation: Long, currentGeneration: Long, requested
     generation == currentGeneration && requested.replayIdentity() == current.replayIdentity() && current.mode == WatchMode.REPLAY
 
 fun shouldResumeReplay(loading: Boolean, snapshot: RaceSnapshot?) = loading || snapshot == null
+
+fun reusableReplayTimeline(frame: WatchFrame, target: WatchTarget) = frame.timeline.takeIf {
+    frame.target.mode == WatchMode.REPLAY && target.mode == WatchMode.REPLAY && frame.target.sessionId == target.sessionId
+}
+
+fun toggleFocusedDriver(drivers: List<String>, driverId: String) =
+    if (driverId in drivers) drivers - driverId else (drivers + driverId).takeLast(2)
 
 fun visibleFeedItems(items: List<FeedItem>): List<FeedItem> {
     val visible = items.take(3)
@@ -99,5 +107,5 @@ fun WatchTarget.normalized() = copy(
     focusedDrivers = focusedDrivers.focused(),
 )
 
-private fun List<String>.focused() = map(String::trim).filter(driverIdPattern::matches).distinct().take(2)
+private fun List<String>.focused() = map(String::trim).filter(::isValidDriverId).distinct().take(2)
 fun WatchTarget.replayIdentity() = listOf(version, mode, sessionId, replayMs)

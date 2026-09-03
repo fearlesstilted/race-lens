@@ -465,6 +465,10 @@ def ingest_f1live(*feed_files: str, session_id: str = "f1live") -> list[Event]:
                     **race_control_payload,
                 ))
                 status = message_to_status(text)
+                if status == "started":
+                    status = None
+                if "TRACK CLEAR" in text.upper() and last_status in {"safety_car", "vsc"}:
+                    status = "started"
                 if status is not None:
                     emit_status(status, message_ms)
         elif cat == "TeamRadio":
