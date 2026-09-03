@@ -47,6 +47,16 @@ fun acceptsReplayCompletion(generation: Long, currentGeneration: Long, requested
 
 fun shouldResumeReplay(loading: Boolean, snapshot: RaceSnapshot?) = loading || snapshot == null
 
+fun normalizeReplaySpeed(speed: Int) = speed.takeIf { it in setOf(1, 5, 10) } ?: 1
+
+fun resolvedReplayStart(requestedMs: Long, timeline: Timeline, hasDrivers: Boolean): Long {
+    if (requestedMs != 0L || hasDrivers) return requestedMs
+    return timeline.lightsOutMs.coerceIn(timeline.startMs.coerceAtLeast(0), timeline.endMs)
+}
+
+fun acceptsStreamEvent(generation: Long, currentGeneration: Long, sessionId: String, current: WatchTarget) =
+    generation == currentGeneration && current.mode == WatchMode.REPLAY && current.sessionId == sessionId
+
 fun reusableReplayTimeline(frame: WatchFrame, target: WatchTarget) = frame.timeline.takeIf {
     frame.target.mode == WatchMode.REPLAY && target.mode == WatchMode.REPLAY && frame.target.sessionId == target.sessionId
 }

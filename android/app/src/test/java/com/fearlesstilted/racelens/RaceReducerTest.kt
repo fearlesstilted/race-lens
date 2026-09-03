@@ -1,7 +1,9 @@
 package com.fearlesstilted.racelens
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RaceReducerTest {
@@ -154,5 +156,39 @@ class RaceReducerTest {
         assertEquals(FocusEdge("NOR", 16.928), focusEdge(listOf(verstappen, norris)))
         assertEquals(FocusEdge(null, 0.0), focusEdge(listOf(norris, norris.copy(id = "PIA"))))
         assertNull(focusEdge(listOf(verstappen, norris.copy(id = "PIA", position = 2, gapSeconds = null))))
+    }
+
+    @Test
+    fun replaySpeedIsLimitedToTheThreeVisibleControls() {
+        assertEquals(1, normalizeReplaySpeed(1))
+        assertEquals(5, normalizeReplaySpeed(5))
+        assertEquals(10, normalizeReplaySpeed(10))
+        assertEquals(1, normalizeReplaySpeed(2))
+    }
+
+    @Test
+    fun emptyZeroFrameFallsForwardOnlyToTheSourceBackedStart() {
+        val timeline = Timeline(-20_000, 120_000, 12_000)
+
+        assertEquals(12_000L, resolvedReplayStart(0, timeline, hasDrivers = false))
+        assertEquals(0L, resolvedReplayStart(0, timeline, hasDrivers = true))
+        assertEquals(12_000L, resolvedReplayStart(12_000, timeline, hasDrivers = false))
+    }
+
+    @Test
+    fun replayStreamUsesTheSelectedSpeedAndBoundedStart() {
+        assertEquals(
+            "/api/sessions/spa_2026_race/stream?speed=5&from_ms=0&tick_ms=1000",
+            replayStreamPath("spa_2026_race", -50, 5),
+        )
+    }
+
+    @Test
+    fun replayStreamEventCannotCrossIntoLiveWithTheSameSessionId() {
+        val replay = WatchTarget(1, WatchMode.REPLAY, "spa_2026_race", 0, emptyList())
+        val live = replay.copy(mode = WatchMode.LIVE)
+
+        assertTrue(acceptsStreamEvent(7, 7, replay.sessionId, replay))
+        assertFalse(acceptsStreamEvent(7, 7, replay.sessionId, live))
     }
 }
