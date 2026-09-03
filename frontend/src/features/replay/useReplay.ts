@@ -5,6 +5,7 @@ import type { Battle, CommentaryItem, FeedItem, Insight, RaceMarker, RaceState, 
 import type { DataSource } from '../../api/dataSource'
 import { buildStreamUrl } from '../../api/dataSource'
 import type { PositionsData } from '../../lib/liveGaps'
+import { isRetryablePositionsError } from '../../lib/liveTrack'
 import { LANG_KEY, LEVEL_KEY, NEUTRAL_STATUSES, readLang, readLevel, writePersisted } from './replayTypes'
 import type { Lang, Level, Speed } from './replayTypes'
 import type { ReplaySetters } from './replaySetters'
@@ -133,7 +134,7 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
       fetch(url)
         .then((response) => {
           if (response.ok) return response.json() as Promise<PositionsData>
-          if (response.status >= 500) throw new Error(`positions ${response.status}`)
+          if (response.status >= 500) throw new Error(`${response.status} positions unavailable`)
           return null
         })
         .then((data) => {
@@ -141,9 +142,13 @@ export const useReplay = (source: DataSource | null): ReplayModel => {
           setPositionsData(data)
           positionsLoadingRef.current = false
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (seq !== positionsRequestSeq.current) return
           positionsLoadingRef.current = false
+          if (!isRetryablePositionsError(error)) {
+            setPositionsData(null)
+            return
+          }
           positionsRetryRef.current = window.setTimeout(() => {
             positionsRetryRef.current = null
             attempt()
