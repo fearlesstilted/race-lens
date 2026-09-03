@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 const val DEFAULT_ORIGIN = "https://race-lens.onrender.com"
 
-data class SessionSummary(val id: String, val source: String)
+data class SessionSummary(val id: String)
 data class Timeline(
     val startMs: Long,
     val endMs: Long,
@@ -47,7 +47,7 @@ class RaceApi(private val origin: String) {
     fun sessions(): List<SessionSummary> = getJson("/api/sessions").let { array ->
         List(array.length()) { index ->
             val item = array.getJSONObject(index)
-            SessionSummary(item.getString("session_id"), nullableJsonString(item.opt("source")) ?: "unknown")
+            SessionSummary(item.getString("session_id"))
         }
     }
 

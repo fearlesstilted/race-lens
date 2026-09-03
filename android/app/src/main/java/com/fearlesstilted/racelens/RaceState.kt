@@ -42,12 +42,30 @@ fun reduceWatch(frame: WatchFrame, action: WatchAction): WatchFrame = when (acti
     is WatchAction.Focus -> frame.copy(target = frame.target.copy(focusedDrivers = action.drivers.focused()))
 }
 
+fun navigateWatchFrame(frame: WatchFrame, target: WatchTarget): WatchFrame {
+    val next = target.normalized()
+    val changedSession = next.sessionId != frame.target.sessionId || next.mode != frame.target.mode
+    return if (changedSession) reduceWatch(frame, WatchAction.Navigate(next))
+    else frame.copy(target = next, freshness = Freshness.STALE)
+}
+
+fun acceptSnapshot(frame: WatchFrame, snapshot: RaceSnapshot) = frame.copy(
+    snapshot = snapshot,
+    freshness = Freshness.FRESH,
+)
+
 fun acceptsReplayCompletion(generation: Long, currentGeneration: Long, requested: WatchTarget, current: WatchTarget) =
     generation == currentGeneration && requested.replayIdentity() == current.replayIdentity() && current.mode == WatchMode.REPLAY
 
 fun shouldResumeReplay(loading: Boolean, snapshot: RaceSnapshot?) = loading || snapshot == null
 
 fun normalizeReplaySpeed(speed: Int) = speed.takeIf { it in setOf(1, 5, 10) } ?: 1
+
+fun conditionsSummary(weather: Weather) = buildList {
+    add(when (weather.rainfall) { true -> "RAIN"; false -> "DRY"; null -> "UNKNOWN" })
+    weather.trackTempC?.let { add("TRACK ${it.toInt()}°") }
+    weather.airTempC?.let { add("AIR ${it.toInt()}°") }
+}.joinToString(" · ")
 
 fun resolvedReplayStart(requestedMs: Long, timeline: Timeline, hasDrivers: Boolean): Long {
     if (requestedMs != 0L || hasDrivers) return requestedMs

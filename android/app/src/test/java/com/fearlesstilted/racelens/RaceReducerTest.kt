@@ -37,6 +37,39 @@ class RaceReducerTest {
     }
 
     @Test
+    fun sameSessionSeekKeepsUsefulDataButMarksTheOldFrameStale() {
+        val timeline = Timeline(0, 60_000)
+        val snapshot = RaceSnapshot(1_000, 1, "green", emptyList())
+        val current = WatchFrame(
+            WatchTarget(1, WatchMode.REPLAY, "spa_2026_race", 1_000, emptyList()),
+            timeline = timeline,
+            snapshot = snapshot,
+        )
+
+        val moved = navigateWatchFrame(current, current.target.copy(replayMs = 2_000))
+
+        assertEquals(2_000L, moved.target.replayMs)
+        assertEquals(timeline, moved.timeline)
+        assertEquals(snapshot, moved.snapshot)
+        assertEquals(Freshness.STALE, moved.freshness)
+    }
+
+    @Test
+    fun acceptedReplayFrameRestoresFreshnessAfterASeek() {
+        val stale = WatchFrame(
+            WatchTarget(1, WatchMode.REPLAY, "spa_2026_race", 2_000, emptyList()),
+            snapshot = RaceSnapshot(1_000, 1, "green", emptyList()),
+            freshness = Freshness.STALE,
+        )
+        val accepted = RaceSnapshot(2_000, 1, "green", emptyList())
+
+        val fresh = acceptSnapshot(stale, accepted)
+
+        assertEquals(accepted, fresh.snapshot)
+        assertEquals(Freshness.FRESH, fresh.freshness)
+    }
+
+    @Test
     fun driverTapsKeepTheLatestTwoSelections() {
         var selected = emptyList<String>()
 
@@ -87,13 +120,13 @@ class RaceReducerTest {
     @Test
     fun recommendationMatchesTheWebRaceOrder() {
         val sessions = listOf(
-            SessionSummary("monaco_2024_practice", "fixture"),
-            SessionSummary("bahrain_2021_race", "fixture"),
-            SessionSummary("hungarian_2026_race", "fixture"),
+            SessionSummary("monaco_2024_practice"),
+            SessionSummary("bahrain_2021_race"),
+            SessionSummary("hungarian_2026_race"),
         )
         assertEquals("hungarian_2026_race", recommendedReplayId(sessions))
         assertEquals("bahrain_2021_race", recommendedReplayId(sessions.dropLast(1)))
-        assertEquals(null, recommendedReplayId(listOf(SessionSummary("spa_2026_practice", "fixture"))))
+        assertEquals(null, recommendedReplayId(listOf(SessionSummary("spa_2026_practice"))))
     }
 
     @Test
@@ -190,5 +223,12 @@ class RaceReducerTest {
 
         assertTrue(acceptsStreamEvent(7, 7, replay.sessionId, replay))
         assertFalse(acceptsStreamEvent(7, 7, replay.sessionId, live))
+    }
+
+    @Test
+    fun conditionsDoNotClaimDryWhenRainfallIsUnknown() {
+        assertEquals("RAIN · TRACK 18° · AIR 12°", conditionsSummary(Weather(true, 18.9, 12.4)))
+        assertEquals("DRY", conditionsSummary(Weather(false, null, null)))
+        assertEquals("UNKNOWN · AIR 20°", conditionsSummary(Weather(null, null, 20.8)))
     }
 }
